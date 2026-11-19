@@ -156,13 +156,25 @@ if (mountElement && bootstrapElement) {
         this.resetViewport();
         this.liveStatus = '拓扑已适应当前屏幕';
       },
-      /* 整块画布都能拖：以前只绑空白处，图一密就没有可抓的地方。 */
+      /* 整块画布都能拖：以前只绑空白处，图一密就没有可抓的地方。
+         不能用 setPointerCapture：捕获后 click 的目标会变成 svg，
+         节点上的 openDrawer 永远收不到事件，表现就是"点详情没反应"。 */
       startPan(event) {
         if (event.button !== 0 && event.pointerType === 'mouse') return;
-        event.currentTarget.setPointerCapture?.(event.pointerId);
         this.panMoved = false;
         this.panStart = { pointerId: event.pointerId, x: event.clientX, y: event.clientY,
           originX: this.viewport.x, originY: this.viewport.y };
+        // 指针移出画布也要继续跟着走，所以挂在 window 上而不是 svg 上。
+        const move = (evt) => this.movePan(evt);
+        const up = (evt) => {
+          this.endPan(evt);
+          window.removeEventListener('pointermove', move);
+          window.removeEventListener('pointerup', up);
+          window.removeEventListener('pointercancel', up);
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+        window.addEventListener('pointercancel', up);
       },
       movePan(event) {
         if (!this.panStart || this.panStart.pointerId !== event.pointerId) return;

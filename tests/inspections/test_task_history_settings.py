@@ -31,7 +31,7 @@ class TaskHistorySettingsTests(TestCase):
 
     def test_the_button_and_modal_render_for_admins(self):
         body = self.client.get(reverse('task_list')).content.decode()
-        self.assertIn('保留设置', body)
+        self.assertIn('保存设置', body)
         self.assertIn('id="taskHistoryModal"', body)
         for value in ('30', '90', '180'):
             self.assertIn('value="%s"' % value, body)
@@ -41,7 +41,7 @@ class TaskHistorySettingsTests(TestCase):
         self.client.logout()
         login_reader(self.client)
         body = self.client.get(reverse('task_list')).content.decode()
-        self.assertNotIn('保留设置', body)
+        self.assertNotIn('保存设置', body)
         self.assertNotIn('id="taskHistoryModal"', body)
         # ...and cannot post the change either.
         response = self.client.post(reverse('task_history_settings'),

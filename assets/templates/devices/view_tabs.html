@@ -1,0 +1,91 @@
+{% comment %}
+非 PC 资产页顶部的大方块，和 PC 页同一套结构（首页 dashboard/card.html 的排版）。
+点一下就在原地切视图，不跳页面；?object= 只用来记住当前视图。
+{% endcomment %}
+<div class="row g-3 mb-3" role="tablist" aria-label="{{ item_name }}视图">
+    <div class="col-12 col-md-4">
+        <button class="card surface-card metric-card glass-card h-100 w-100 text-start text-body d-flex flex-column{% if view == 'rows' %} border-primary{% endif %}" type="button"
+                role="tab" aria-selected="{% if view == 'rows' %}true{% else %}false{% endif %}"
+                data-view-tab="rows" data-view-url="?object=rows">
+            <div class="card-body p-4 d-flex flex-column">
+                <div class="metric-card__status-row d-flex justify-content-between align-items-start mb-3">
+                    <h2 class="h5 mb-0">{{ item_name }}</h2>
+                    <span class="metric-card__ready"><span class="status-dot status-dot--ok"></span>台账</span>
+                </div>
+                <div class="row text-center g-2 metric-card__metrics" role="list" aria-label="{{ item_name }}统计">
+                    <div class="col-4"><div class="metric">{{ overview.total|default:0 }}</div><div class="metric-label">总数</div></div>
+                    <div class="col-4"><div class="metric text-success">{{ overview.normal|default:0 }}</div><div class="metric-label">正常</div></div>
+                    <div class="col-4"><div class="metric">{{ overview.abnormal|default:0 }}</div><div class="metric-label">异常</div></div>
+                </div>
+            </div>
+            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary">
+                查看{{ item_name }}{% if view == 'rows' %} · 当前{% endif %}
+            </div>
+        </button>
+    </div>
+    {% if item_key == 'people' %}
+    <div class="col-12 col-md-4">
+        <button class="card surface-card metric-card glass-card h-100 w-100 text-start text-body d-flex flex-column{% if view == 'departments' %} border-primary{% endif %}" type="button"
+                role="tab" aria-selected="{% if view == 'departments' %}true{% else %}false{% endif %}"
+                data-view-tab="departments" data-view-url="?object=departments">
+            <div class="card-body p-4 d-flex flex-column">
+                <div class="metric-card__status-row d-flex justify-content-between align-items-start mb-3">
+                    <h2 class="h5 mb-0">部门</h2>
+                    <span class="metric-card__ready"><span class="status-dot status-dot--ok"></span>汇总</span>
+                </div>
+                <div class="row text-center g-2 metric-card__metrics" role="list" aria-label="部门统计">
+                    <div class="col-4"><div class="metric">{{ department_total|default:0 }}</div><div class="metric-label">部门数</div></div>
+                    <div class="col-4"><div class="metric text-success">{{ overview.normal|default:0 }}</div><div class="metric-label">在职</div></div>
+                    <div class="col-4"><div class="metric">{{ overview.total|default:0 }}</div><div class="metric-label">总人数</div></div>
+                </div>
+            </div>
+            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary">
+                查看部门{% if view == 'departments' %} · 当前{% endif %}
+            </div>
+        </button>
+    </div>
+    {% else %}
+    <div class="col-12 col-md-4">
+        <button class="card surface-card metric-card glass-card h-100 w-100 text-start text-body d-flex flex-column{% if view == 'records' %} border-primary{% endif %}" type="button"
+                role="tab" aria-selected="{% if view == 'records' %}true{% else %}false{% endif %}"
+                data-view-tab="records" data-view-url="?object=records">
+            <div class="card-body p-4 d-flex flex-column">
+                <div class="metric-card__status-row d-flex justify-content-between align-items-start mb-3">
+                    <h2 class="h5 mb-0">巡检记录</h2>
+                    <span class="metric-card__ready"><span class="status-dot status-dot--ok"></span>历史</span>
+                </div>
+                <div class="row text-center g-2 metric-card__metrics" role="list" aria-label="巡检记录统计">
+                    <div class="col-4"><div class="metric">{{ overview.total|default:0 }}</div><div class="metric-label">设备</div></div>
+                    <div class="col-4"><div class="metric text-success">{{ overview.normal|default:0 }}</div><div class="metric-label">正常</div></div>
+                    <div class="col-4"><div class="metric">{{ overview.abnormal|default:0 }}</div><div class="metric-label">异常</div></div>
+                </div>
+            </div>
+            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary">
+                查看巡检记录{% if view == 'records' %} · 当前{% endif %}
+            </div>
+        </button>
+    </div>
+    {% if item_key == 'weakcurrent' %}
+    <div class="col-12 col-md-4">
+        <button class="card surface-card metric-card glass-card h-100 w-100 text-start text-body d-flex flex-column{% if view == 'access' %} border-primary{% endif %}" type="button"
+                role="tab" aria-selected="{% if view == 'access' %}true{% else %}false{% endif %}"
+                data-view-tab="access" data-view-url="?object=access">
+            <div class="card-body p-4 d-flex flex-column">
+                <div class="metric-card__status-row d-flex justify-content-between align-items-start mb-3">
+                    <h2 class="h5 mb-0">门禁记录</h2>
+                    <span class="metric-card__ready"><span class="status-dot status-dot--ok"></span>进出</span>
+                </div>
+                <div class="row text-center g-2 metric-card__metrics" role="list" aria-label="门禁记录统计">
+                    <div class="col-4"><div class="metric">{{ overview.total|default:0 }}</div><div class="metric-label">设备</div></div>
+                    <div class="col-4"><div class="metric text-success">{{ overview.normal|default:0 }}</div><div class="metric-label">在线</div></div>
+                    <div class="col-4"><div class="metric">{{ overview.abnormal|default:0 }}</div><div class="metric-label">异常</div></div>
+                </div>
+            </div>
+            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary">
+                查看门禁记录{% if view == 'access' %} · 当前{% endif %}
+            </div>
+        </button>
+    </div>
+    {% endif %}
+    {% endif %}
+</div>

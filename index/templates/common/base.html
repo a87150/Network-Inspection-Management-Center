@@ -16,6 +16,7 @@
     <script defer src="{% static 'app/js/common/form_accessibility.js' %}"></script>
     <script defer src="{% static 'app/js/common/confirm_dialog.js' %}"></script>
     <script defer src="{% static 'app/js/common/form_ajax.js' %}"></script>
+    <script defer src="{% static 'app/js/common/detail_modal.js' %}"></script>
 </head>
 <body class="app-shell">
     <a class="skip-link" href="#main-content">跳至主要内容</a>
@@ -29,7 +30,7 @@
             <div class="collapse navbar-collapse" id="mainNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item dropdown" data-nav-menu="people">
-                        <button class="nav-link dropdown-toggle" id="navPeopleToggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-controls="navPeopleMenu">人员部门</button>
+                        <button class="nav-link dropdown-toggle" id="navPeopleToggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-controls="navPeopleMenu">人员·部门</button>
                         <ul class="dropdown-menu app-navbar__dropdown-menu" id="navPeopleMenu" aria-labelledby="navPeopleToggle"><li><a class="dropdown-item" href="{% url 'asset_list' 'people' %}">人员列表</a></li><li><a class="dropdown-item" href="{% url 'people_statistics' %}">人员统计</a></li></ul>
                     </li>
                     <li class="nav-item dropdown" data-nav-menu="domain">
@@ -52,9 +53,9 @@
                         <button class="nav-link dropdown-toggle" id="navMonitorsToggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-controls="navMonitorsMenu">弱电设备</button>
                         <ul class="dropdown-menu app-navbar__dropdown-menu" id="navMonitorsMenu" aria-labelledby="navMonitorsToggle"><li><a class="dropdown-item" href="{% url 'asset_list' 'weakcurrent' %}">弱电设备列表</a></li><li><a class="dropdown-item" href="{% url 'asset_list' 'weakcurrent' %}?object=records">巡检记录</a></li>{% if can_view_private %}<li><a class="dropdown-item" href="{% url 'asset_list' 'weakcurrent' %}?object=access">门禁记录</a></li>{% endif %}</ul>
                     </li>
-                    <li class="nav-item"><a class="nav-link" href="{% url 'task_list' %}">后台任务</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'task_list' %}">任务·异常</a></li>
                     <li class="nav-item dropdown" data-nav-menu="alerts">
-                        <button class="nav-link dropdown-toggle" id="navAlertsToggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-controls="navAlertsMenu">告警维护</button>
+                        <button class="nav-link dropdown-toggle" id="navAlertsToggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-controls="navAlertsMenu">告警·维护</button>
                         <ul class="dropdown-menu app-navbar__dropdown-menu" id="navAlertsMenu" aria-labelledby="navAlertsToggle"><li><a class="dropdown-item" href="{% url 'alert_list' %}">告警记录</a></li><li><a class="dropdown-item" href="{% url 'maintenance_list' %}">维护记录</a></li></ul>
                     </li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'operations_overview' %}">网络拓扑</a></li>
@@ -112,6 +113,17 @@
                     <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">取消</button>
                     <button class="btn btn-danger" type="button" data-confirm-submit>确认执行</button>
                 </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal fade" id="genericDetailModal" tabindex="-1" aria-labelledby="genericDetailTitle" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable modal-shell">
+            <div class="modal-content modal-surface">
+                <div class="modal-header">
+                    <h2 class="modal-title fs-5" id="genericDetailTitle">详情</h2>
+                    <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="关闭"></button>
+                </div>
+                <div class="modal-body modal-body--scroll" data-generic-detail-body><p class="text-secondary mb-0">加载中…</p></div>
             </div>
         </div>
     </div>

@@ -28,6 +28,6 @@
     </td>
     <td>{{ event.occurred_at|date:'Y-m-d H:i:s' }}</td>
     <td class="text-end table-actions-cell">
-        <a class="btn btn-outline-dark btn-sm" href="{% url 'alert_detail' event.pk %}">查看详情</a>
+        <button type="button" class="btn btn-outline-dark btn-sm" data-detail-modal="{% url 'alert_detail' event.pk %}">查看详情</button>
     </td>
 </tr>

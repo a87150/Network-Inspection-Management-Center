@@ -154,9 +154,11 @@ export default {
         </div>
 
         <nav v-if="totalPages > 1" class="page-pagination" aria-label="维护记录分页">
-            <button class="btn btn-outline-secondary btn-sm" type="button" :disabled="!canPrevious" @click="go(currentPage - 1)">上一页</button>
-            <span class="text-secondary">第 [[ currentPage ]] / [[ totalPages ]] 页，共 [[ total ]] 条</span>
-            <button class="btn btn-outline-secondary btn-sm" type="button" :disabled="!canNext" @click="go(currentPage + 1)">下一页</button>
+            <div class="page-pagination__actions">
+                <button class="btn btn-outline-secondary page-pagination__button" type="button" :disabled="!canPrevious" @click="go(currentPage - 1)">上一页</button>
+                <button class="btn btn-outline-secondary page-pagination__button" type="button" :disabled="!canNext" @click="go(currentPage + 1)">下一页</button>
+            </div>
+            <p class="page-pagination__info mb-0"><span class="page-pagination__range">共 [[ total ]] 条（第 [[ currentPage ]] / [[ totalPages ]] 页）</span></p>
         </nav>
     </div>`,
 };

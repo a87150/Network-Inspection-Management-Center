@@ -580,6 +580,9 @@ def computer_logs_payload(request):
         ),
         'pc_logs_definition': definition,
         'pc_logs_state': state,
+        # state 是筛选状态，没有总数；方块要的是全量计数。
+        'pc_logs_total': ComputerLogFile.objects.count(),
+        'pc_logs_computers': ComputerLogFile.objects.values('computer').distinct().count(),
     }
 
 def computer_workspace_payloads(request):
@@ -602,6 +605,8 @@ def computer_workspace_payloads(request):
         'pc_analyses_recent': ComputerAnalysis.objects.select_related('computer')
         .order_by('-analysis_date')[:8],
         'pc_analyses_total': ComputerAnalysis.objects.count(),
+        'pc_analyses_computers': ComputerAnalysis.objects.values('computer').distinct().count(),
+        'pc_errors_total': errors.count(),
         'pc_errors': table_payload(
             errors_page, errors_definition,
             table_row_payloads(

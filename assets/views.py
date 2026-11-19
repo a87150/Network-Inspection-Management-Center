@@ -98,7 +98,11 @@ def _history_url(kind, asset):
 
 
 def asset_list(request, kind, **kwargs):
-    return render(request, 'devices/list.html', _asset_list_context(request, kind, **kwargs))
+    context = _asset_list_context(request, kind, **kwargs)
+    # 方块切换走局部刷新：只要那一个视图的片段，页面本身不动。
+    if request.GET.get('fragment') == 'pane':
+        return render(request, 'devices/_pane.html', context)
+    return render(request, 'devices/list.html', context)
 
 
 def _asset_list_context(request, kind, *, integration_context=None, creation_form=None,

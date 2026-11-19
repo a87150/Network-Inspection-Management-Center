@@ -76,7 +76,7 @@ class NavigationDropdownTests(TestCase):
             },
             {
                 'people': {
-                    'toggle': '人员部门',
+                    'toggle': '人员·部门',
                     'links': [
                         ('人员列表', '/assets/people/'),
                         ('人员统计', '/people/statistics/'),
@@ -122,7 +122,7 @@ class NavigationDropdownTests(TestCase):
                     ],
                 },
                 'alerts': {
-                    'toggle': '告警维护',
+                    'toggle': '告警·维护',
                     'links': [
                         ('告警记录', '/alerts/'),
                         ('维护记录', '/maintenance/'),

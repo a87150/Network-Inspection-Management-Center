@@ -10,7 +10,7 @@ from .domain import (
     DomainOperation, DomainOU, DomainMembership,
 )
 from .integrations import PeopleSyncSource
-from .host_keys import SSHHostKey
+from .host_keys import SSHHostKey  # noqa: F401  迁移和外部按 net.models.SSHHostKey 取
 from .ipam import IpAddress, IpSubnet
 from .people import People
 from .issue_policy import IssueSeverityPolicy

@@ -16,7 +16,7 @@
         <p class="dashboard-overview__description">从资产健康、目录状态到最近任务，快速定位需要关注的区域。</p>
     </div>
     <div class="dashboard-overview__shortcut" aria-label="快捷入口">
-        <a href="{% url 'error_records' %}"><span>异常记录</span><strong>查看待处理项</strong></a>
+        <a href="{% url 'task_list' %}?object=errors"><span>异常记录</span><strong>查看待处理项</strong></a>
         <a href="{% url 'task_list' %}"><span>执行中心</span><strong>跟踪后台任务</strong></a>
     </div>
 </section>
@@ -36,3 +36,4 @@
     <div class="mt-3">{% include 'inspections/taskbar.html' %}</div>
 </details>
 {% endif %}{% endblock %}
+{% block page_scripts %}{% include 'common/scripts/inspection_workflows.html' %}{% endblock %}

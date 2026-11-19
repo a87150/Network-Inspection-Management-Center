@@ -548,7 +548,7 @@ def _task_actions(task, admin):
     return actions
 
 
-def task_list(request):
+def _task_center_context(request):
     definition = get_table_definition('task_runs')
     tasks, table_state = apply_table_filters(
         request,
@@ -567,7 +567,7 @@ def task_list(request):
     )
     page_obj = Paginator(tasks, table_state['page_size']).get_page(request.GET.get('page'))
     admin = is_admin(request.user)
-    return render(request, 'inspections/task_list.html', {
+    return {
         'page_obj': page_obj,
         'records_bootstrap': table_payload(
             page_obj, definition,
@@ -591,7 +591,50 @@ def task_list(request):
         'can_administer': is_admin(request.user),
         'task_history_retention': getattr(TaskHistoryConfig.load(), 'retention_days', '') or '90',
         'task_history_choices': TASK_HISTORY_RETENTION_CHOICES,
-    })
+    }
+
+
+def _error_center_context(request):
+    """异常中心的 context：和任务中心同页，各占一个视图。"""
+    from .records import ERROR_RECORD_BADGES, _error_records, _records_bootstrap
+
+    table_definition = get_table_definition('error_records')
+    records, table_state = apply_table_filters(
+        request, _error_records(), table_definition,
+    )
+    page_obj = Paginator(records, table_state['page_size']).get_page(
+        request.GET.get('page'),
+    )
+    # _error_records() 返回的是拼接出来的行集合，不能直接 aggregate。
+    rows = list(records)
+    metrics = {
+        'total': len(rows),
+        'pending': sum(1 for row in rows if not getattr(row, 'resolved', True)),
+    }
+    return {
+        'page_obj': page_obj,
+        'table_definition': table_definition,
+        'records_bootstrap': _records_bootstrap(
+            page_obj, table_definition, '/api/v1/error-records/', '全部异常记录',
+            ERROR_RECORD_BADGES,
+        ),
+        'table_state': table_state,
+        'page_sizes': PAGE_SIZES,
+        'table_export_path': reverse('table_export', args=['error_records']),
+        'pagination_query': query_without_page(request),
+        'error_metrics': metrics,
+    }
+
+
+def task_list(request):
+    """任务中心：任务与异常两个视图同页切换，地址栏用 ?object= 记住位置。"""
+    view = 'errors' if request.GET.get('object') == 'errors' else 'tasks'
+    context = ( _error_center_context(request) if view == 'errors'
+               else _task_center_context(request) )
+    context['view'] = view
+    if request.GET.get('fragment') == 'pane':
+        return render(request, 'inspections/_task_center_pane.html', context)
+    return render(request, 'inspections/task_center.html', context)
 
 
 @login_required

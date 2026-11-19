@@ -312,7 +312,7 @@ class TaskUiTestCase(TestCase):
         detail = self.client.get(f'/tasks/{task.pk}/')
 
         self.assertEqual(listing.status_code, 200)
-        self.assertContains(listing, '任务列表')
+        self.assertContains(listing, '任务·异常')
         self.assertContains(listing, '导出筛选结果')
         self.assertEqual(detail.status_code, 200)
         self.assertEqual([row.pk for row in listing.context['page_obj']], [task.pk])
@@ -369,8 +369,9 @@ class TaskUiTestCase(TestCase):
             'attention': 0, 'cancelled': 0,
         })
         self.assertContains(response, '任务总数')
-        self.assertContains(response, '部分成功 / 失败')
-        self.assertContains(response, 'page-metric-grid')
+        self.assertContains(response, '需关注')
+        # 统计不再是小方块阵列，改成页面顶部的大方块。
+        self.assertContains(response, 'metric-card__metrics')
 
     def test_active_task_pages_offer_authenticated_manual_stop(self):
         """Omitting the stop control would leave an operator unable to cancel stuck work."""
