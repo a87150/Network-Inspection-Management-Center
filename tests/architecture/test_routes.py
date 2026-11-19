@@ -5,7 +5,7 @@ from html.parser import HTMLParser
 from django.test import TestCase
 from django.urls import reverse
 from tests.auth import login_admin, login_reader
-from tests.payloads import payload_text
+from tests.payloads import workspace_detail_text
 from tests.devices.pc.helpers import analysis_task_url
 from django.utils import timezone
 
@@ -119,7 +119,8 @@ class DetailRouteTests(TestCase):
         response = self.client.get(detail_url)
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, self.person.employee_id)
+        # 深链落在工作区里，人还是那个人，只是详情与列表同屏。
+        self.assertIn(self.person.employee_id, workspace_detail_text(response))
 
     def test_unknown_asset_kinds_and_missing_assets_return_404(self):
         self.assertEqual(
@@ -147,7 +148,8 @@ class DetailRouteTests(TestCase):
         )
 
         history_url = reverse('record_list', args=['networks'])
-        body = payload_text(response, 'detail-bootstrap')
+        # 详情和工作区同屏：payload 在 initialDetail 里。
+        body = workspace_detail_text(response)
         self.assertIn(f'{history_url}?target={self.network.pk}', body)
         self.assertIn(self.network_record.summary, body)
 

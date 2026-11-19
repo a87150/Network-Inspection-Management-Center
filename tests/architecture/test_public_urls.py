@@ -2,7 +2,7 @@
 import csv
 
 from tests import response_body
-from tests.payloads import payload_text
+from tests.payloads import workspace_detail_text
 from io import StringIO
 
 from django.test import TestCase
@@ -39,8 +39,8 @@ class PublicURLTests(TestCase):
             with self.subTest(kind=kind):
                 response = self.client.get(reverse('asset_detail', args=[kind, asset.pk]))
                 self.assert_private_absent(response.content.decode())
-                self.assert_private_absent(payload_text(response, 'detail-bootstrap'))
-                self.assertIn(self.safe, payload_text(response, 'detail-bootstrap'))
+                self.assert_private_absent(workspace_detail_text(response))
+                self.assertIn(self.safe, workspace_detail_text(response))
 
     def test_filter_option_payloads_never_contain_raw_urls(self):
         for kind, asset in self.assets:

@@ -3,7 +3,7 @@ import json
 import re
 
 from tests import response_body
-from tests.payloads import payload_text
+from tests.payloads import payload_text, workspace_detail_text
 import uuid
 from datetime import timedelta
 from io import StringIO
@@ -810,7 +810,8 @@ class DeterministicDemoSeedTests(TestCase):
                 self.assertIn(identity, table)
                 self.assertIn(detail_url, table)
                 detail = self.client.get(detail_url)
-                body = payload_text(detail, 'detail-bootstrap')
+                # 深链落进工作区，详情在 initialDetail 里。
+                body = workspace_detail_text(detail)
                 self.assertIn(identity, body)
                 self.assertIn(detail_value, body)
                 if kind == 'computers':
@@ -843,6 +844,7 @@ class DeterministicDemoSeedTests(TestCase):
                     self.assertContains(listing, summary)
                     self.assertContains(listing, detail_url)
                 detail = self.client.get(detail_url)
+                # 巡检记录详情仍是独立页，不走资产工作区。
                 body = payload_text(detail, 'detail-bootstrap')
                 self.assertIn(summary, body)
                 self.assertIn('设备在线，但数据采集未完整成功', body)

@@ -254,6 +254,13 @@ NET_SSH_CONCURRENCY = int(os.getenv('NET_SSH_CONCURRENCY', '10'))
 # Permission for the explicit sqlite_wal maintenance command, not a startup hook.
 NET_PAGE_CACHE_ENABLED = os.getenv('NET_PAGE_CACHE_ENABLED', 'false').lower() in {'1', 'true', 'yes'}
 NET_PAGE_CACHE_SECONDS = int(os.getenv('NET_PAGE_CACHE_SECONDS', '15'))
+
+# 哪些资产类型把「列表 + 详情」渲染成一个页面。默认全开；设成空串或逗号分隔的
+# kind 列表可以逐个回退到旧的独立详情页，出问题时不用改代码。
+ENTITY_WORKSPACE_KINDS = frozenset(
+    item.strip() for item in os.getenv('NET_ENTITY_WORKSPACE', 'all').split(',')
+    if item.strip()
+)
 CACHES = {
     'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'},
     'pages': {

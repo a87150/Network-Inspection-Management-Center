@@ -1,0 +1,22 @@
+{% comment %}
+列表页顶部的指标条。数字在服务端算好，前端不发请求；原来只出现在独立的统计页，
+现在和列表同屏，少一次跳转。
+{% endcomment %}
+<section class="metric-strip" aria-label="{{ item_name }}概览">
+    {% if item_key == 'people' %}
+    <div class="metric-strip__card"><span class="metric-strip__label">总人数</span><strong class="metric-strip__value">{{ overview.total }}</strong></div>
+    <div class="metric-strip__card"><span class="metric-strip__label">在职</span><strong class="metric-strip__value">{{ overview.active }}</strong><span class="metric-strip__note">{{ overview.active_rate }}%</span></div>
+    <div class="metric-strip__card"><span class="metric-strip__label">离职</span><strong class="metric-strip__value">{{ overview.departed }}</strong></div>
+    <div class="metric-strip__card"><span class="metric-strip__label">今年入职</span><strong class="metric-strip__value">{{ overview.hires_this_year }}</strong></div>
+    <div class="metric-strip__card"><span class="metric-strip__label">今年离职</span><strong class="metric-strip__value">{{ overview.departures_this_year }}</strong></div>
+    <div class="metric-strip__card"><span class="metric-strip__label">平均司龄</span><strong class="metric-strip__value">{{ overview.average_active_tenure_years }}</strong><span class="metric-strip__note">年（{{ overview.tenure_sample_count }} 人）</span></div>
+    {% else %}
+    <div class="metric-strip__card"><span class="metric-strip__label">总数</span><strong class="metric-strip__value">{{ overview.total }}</strong></div>
+    {% if item_key == 'computers' %}
+    <div class="metric-strip__card"><span class="metric-strip__label">活跃</span><strong class="metric-strip__value">{{ overview.active }}</strong><span class="metric-strip__note">{{ overview.active_rate }}%</span></div>
+    {% else %}
+    <div class="metric-strip__card"><span class="metric-strip__label">启用</span><strong class="metric-strip__value">{{ overview.active }}</strong><span class="metric-strip__note">{{ overview.active_rate }}%</span></div>
+    <div class="metric-strip__card"><span class="metric-strip__label">{{ overview.variant_label }}</span><strong class="metric-strip__value">{{ overview.variants }}</strong></div>
+    {% endif %}
+    {% endif %}
+</section>

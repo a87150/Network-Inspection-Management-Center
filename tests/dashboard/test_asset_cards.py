@@ -3,7 +3,7 @@ from unittest.mock import patch
 from django.test import TestCase
 from django.urls import reverse
 from tests.auth import login_admin, login_reader
-from tests.payloads import payload_text
+from tests.payloads import workspace_detail_text
 
 from net.models import Computer
 
@@ -39,7 +39,8 @@ class AssetDashboardUiTests(TestCase):
             reverse('asset_detail', args=['computers', self.pc.pk]),
         )
 
-        body = payload_text(response, 'detail-bootstrap')
+        # 深链落进工作区，详情在 initialDetail 里。
+        body = workspace_detail_text(response)
         self.assertIn('PC详情', body)
         self.assertIn('CPU 型号', body)
         self.assertNotIn('是否启用', body)

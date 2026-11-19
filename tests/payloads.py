@@ -27,3 +27,12 @@ def asset_table_text(response):
     """同上，但中日韩字符保持原样，方便直接搜中文与 URL。"""
     return payload_text(response, "asset-workspace-bootstrap")
 
+def workspace_detail(response):
+    """工作区首屏预置的那条详情；深链直接落在这里。"""
+    return bootstrap(response, "asset-workspace-bootstrap").get("initialDetail") or {}
+
+
+def workspace_detail_text(response):
+    return json.dumps(workspace_detail(response), ensure_ascii=False)
+
+

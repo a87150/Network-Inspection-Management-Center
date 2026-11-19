@@ -13,6 +13,7 @@
         {% include 'common/workspace_actions.html' %}
     </div>
 </header>
+{% if overview %}{% include 'devices/overview_strip.html' with item_name=item_name item_key=item_key overview=overview %}{% endif %}
 {% if collection_hint %}<div class="alert alert-info"><strong>采集方式：</strong>{{ collection_hint }}</div>{% endif %}
 {% if data_source_note %}<div class="alert alert-info">{{ data_source_note }}</div>{% endif %}
 {% if can_administer and item_key == 'computers' and not pc_upload_config %}<div class="alert alert-warning">请先保存 PC 采集 API 配置，再下载采集包。<a href="{% url 'computer_analysis_list' %}?task_modal=profile">前往分析配置</a></div>{% endif %}

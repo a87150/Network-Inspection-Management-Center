@@ -2,6 +2,7 @@ import logging
 from dataclasses import dataclass
 from io import StringIO
 
+from django.conf import settings
 from django.contrib import messages
 from index.common.access import is_admin
 from django.core.management import call_command
@@ -15,6 +16,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from assets.overview import device_overview, people_overview
 from assets.payloads import asset_detail_payload, asset_row_actions, configuration_notice
 from index.common.table_payload import row_payloads as table_row_payloads
 from index.common.table_payload import table_payload
@@ -90,7 +92,13 @@ def _history_url(kind, asset):
     return ''
 
 
-def asset_list(request, kind, *, integration_context=None, creation_form=None, edit_device=None):
+def asset_list(request, kind, **kwargs):
+    return render(request, 'devices/list.html', _asset_list_context(request, kind, **kwargs))
+
+
+def _asset_list_context(request, kind, *, integration_context=None, creation_form=None,
+                        edit_device=None, selected_id=None):
+    """列表页的完整 context。工作区与旧渲染共用它，两边字段不会分叉。"""
     page = _asset_page(kind)
     table_definition = get_table_definition(page.table_key)
     objects, table_state = apply_table_filters(
@@ -169,11 +177,15 @@ def asset_list(request, kind, *, integration_context=None, creation_form=None, e
         ))
     # selectable 要等 task_modal_context 填过 task_allow_target_selection 才能算。
     selectable = bool(admin and context.get('task_allow_target_selection'))
+    context['overview'] = (
+        people_overview() if kind == 'people' else device_overview(kind, page.model)
+    )
     context['workspace_table'] = table_payload(
         page_obj, table_definition, context.pop('workspace_rows'),
         extra={
             'endpoint': reverse('asset-row-list', args=[kind]),
             'detailBase': reverse('asset_list', args=[kind]),
+            'initialDetail': context.pop('workspace_initial_detail', None),
             'label': page.title,
             'regionLabel': page.title + '数据表',
             'emptyTitle': '暂无 PC 数据' if kind == 'computers' else '暂无资产数据',
@@ -181,13 +193,20 @@ def asset_list(request, kind, *, integration_context=None, creation_form=None, e
             'selectAttr': 'data-device-selection-target' if selectable else '',
             'formId': 'manualTaskForm' if selectable else '',
             'csrf': get_token(request),
-            'selectedId': request.GET.get('selected', ''),
+            'selectedId': (selected_id if selected_id is not None
+                           else request.GET.get('selected', '')),
         },
     )
-    return render(request, 'devices/list.html', context)
+    return context
 
 
 SWITCHABLE_KINDS = frozenset({'networks', 'servers', 'weakcurrent'})
+
+
+def workspace_enabled(kind):
+    """NET_ENTITY_WORKSPACE=all 或逗号分隔的 kind 列表；空串回退到旧详情页。"""
+    configured = getattr(settings, 'ENTITY_WORKSPACE_KINDS', frozenset())
+    return 'all' in configured or kind in configured
 
 EMPTY_MESSAGES = {
     'computers': '请运行 PowerShell PC 信息采集脚本并上报。',
@@ -264,7 +283,25 @@ def _asset_detail_context(request, kind, pk):
 
 
 def asset_detail(request, kind, pk):
+    """深链直接落在工作区里，选中项就是路径里的这条记录。
+
+    这样 /assets/people/ 里点行换地址、和从收藏夹打开 /people/<pk>/，落的是同一个
+    页面同一处状态——不用再为了看一条详情离开列表。
+    """
+    if workspace_enabled(kind):
+        return entity_workspace(request, kind, selected_id=str(pk))
     return render(request, 'devices/detail.html', _asset_detail_context(request, kind, pk))
+
+
+def entity_workspace(request, kind, selected_id='', **kwargs):
+    """列表 + 详情同屏渲染。旧 view 名与 URL 不变，只是换了模板。"""
+    context = _asset_list_context(request, kind, selected_id=selected_id, **kwargs)
+    if selected_id:
+        detail = _asset_detail_context(request, kind, selected_id)
+        context['workspace_table']['initialDetail'] = {
+            **detail['detail'], 'notice': detail['notice'],
+        }
+    return render(request, 'devices/list.html', context)
 
 
 def asset_detail_json(request, kind, pk):
