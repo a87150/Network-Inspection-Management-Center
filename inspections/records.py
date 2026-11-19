@@ -214,6 +214,7 @@ def computer_analysis_list(request):
     context = {
         'record_type': 'computer_analysis',
         'item_name': 'PC',
+        'pc_tab': 'analyses',
     }
     context.update(_project_workspace_context(request, 'computers'))
     context['latest_analysis_statistics'] = latest_analysis_statistics(context['latest_task'])
@@ -489,6 +490,7 @@ def computer_error_list(request):
     return render(request, 'pc/error_list.html', {
         'page_obj': page_obj,
         'table_definition': table_definition,
+        'pc_tab': 'errors',
         'records_bootstrap': table_payload(
             page_obj, table_definition,
             table_row_payloads(

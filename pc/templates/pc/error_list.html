@@ -5,6 +5,7 @@
 <header class="page-heading">
     <div class="page-heading__copy"><p class="page-heading__eyebrow">PC 异常</p><h1 class="page-heading__title">PC 异常记录</h1><p class="page-heading__description">聚合 PC 日志分析记录发现的异常项。</p></div>
 </header>
+{% include 'pc/tabs.html' %}
 <div data-table-workspace data-table-key="{{ table_definition.key }}">
 <div class="table-toolbar">{% include 'common/table_workspace.html' %}</div>
 <div class="card surface-card table-scroll-shell"><p class="table-scroll-hint">可横向滚动查看完整异常信息</p>

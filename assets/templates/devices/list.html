@@ -13,6 +13,7 @@
         {% include 'common/workspace_actions.html' %}
     </div>
 </header>
+{% if pc_tab %}{% include 'pc/tabs.html' %}{% endif %}
 {% if overview %}{% include 'devices/overview_strip.html' with item_name=item_name item_key=item_key overview=overview %}{% endif %}
 {% if collection_hint %}<div class="alert alert-info"><strong>采集方式：</strong>{{ collection_hint }}</div>{% endif %}
 {% if data_source_note %}<div class="alert alert-info">{{ data_source_note }}</div>{% endif %}

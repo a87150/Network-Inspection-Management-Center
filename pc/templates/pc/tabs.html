@@ -1,0 +1,11 @@
+{% comment %}
+PC 的三份清单（资产、分析记录、异常）原本分散在三个入口，看机器、看它的分析结果、
+看它为什么采不到，中间要来回跳。这里并成一组页签，位置固定。
+{% endcomment %}
+<nav class="pc-tabs" aria-label="PC 视图">
+    <ul class="nav nav-tabs">
+        <li class="nav-item"><a class="nav-link{% if pc_tab == 'assets' %} active{% endif %}" href="{% url 'asset_list' 'computers' %}"{% if pc_tab == 'assets' %} aria-current="page"{% endif %}>PC 资产</a></li>
+        <li class="nav-item"><a class="nav-link{% if pc_tab == 'analyses' %} active{% endif %}" href="{% url 'computer_analysis_list' %}"{% if pc_tab == 'analyses' %} aria-current="page"{% endif %}>分析记录</a></li>
+        <li class="nav-item"><a class="nav-link{% if pc_tab == 'errors' %} active{% endif %}" href="{% url 'computer_error_list' %}"{% if pc_tab == 'errors' %} aria-current="page"{% endif %}>采集异常</a></li>
+    </ul>
+</nav>

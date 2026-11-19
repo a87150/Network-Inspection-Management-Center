@@ -1,0 +1,23 @@
+{% comment %}
+域控对象的三份列表原来各占一个入口，来回对照要反复进出。这里把它们并成页内的
+一组页签：切换仍是整页请求，但三个视图在同一处，路径感和位置感不丢。
+{% endcomment %}
+<nav class="domain-object-tabs" aria-label="域控对象视图">
+    <ul class="nav nav-tabs">
+        <li class="nav-item">
+            <a class="nav-link{% if domain_object_type == 'account' %} active{% endif %}"
+               href="{% url 'domain_account_list' %}"
+               {% if domain_object_type == 'account' %}aria-current="page"{% endif %}>域账户</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link{% if domain_object_type == 'computer' %} active{% endif %}"
+               href="{% url 'domain_computer_list' %}"
+               {% if domain_object_type == 'computer' %}aria-current="page"{% endif %}>域计算机</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link{% if domain_object_type == 'group' %} active{% endif %}"
+               href="{% url 'domain_group_list' %}"
+               {% if domain_object_type == 'group' %}aria-current="page"{% endif %}>域分组</a>
+        </li>
+    </ul>
+</nav>

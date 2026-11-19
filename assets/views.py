@@ -177,6 +177,7 @@ def _asset_list_context(request, kind, *, integration_context=None, creation_for
         ))
     # selectable 要等 task_modal_context 填过 task_allow_target_selection 才能算。
     selectable = bool(admin and context.get('task_allow_target_selection'))
+    context['pc_tab'] = 'assets' if kind == 'computers' else ''
     context['overview'] = (
         people_overview() if kind == 'people' else device_overview(kind, page.model)
     )

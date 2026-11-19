@@ -32,6 +32,8 @@
     </div>
 </header>
 
+{% include 'domain/object_tabs.html' %}
+
 {% if can_administer %}{% include 'domain/operation_modal.html' %}{% endif %}
 
 {% if domain_object_type == 'account' and can_manage_domain %}
