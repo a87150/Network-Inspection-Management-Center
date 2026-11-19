@@ -49,18 +49,9 @@
 </div>
 {{ access_records|json_script:"device-access-bootstrap" }}
 </div>
-{% elif view == 'records' %}
-{% comment %}设备主页面的第二个视图：巡检记录，不跳转到独立页面。{% endcomment %}
-<div data-table-workspace data-table-key="{{ record_definition.key }}">
-<div class="table-toolbar">{% include 'common/table_workspace.html' with table_definition=record_definition table_state=record_state item_key='inspection_records' %}</div>
-<div class="card surface-card table-scroll-shell">
-<p class="table-scroll-hint">可横向滚动查看完整执行记录</p>
-<div id="device-records" data-vue-page="inspection-records" data-vue-bootstrap="device-records-bootstrap">
-<noscript><p class="alert alert-warning mb-0">记录表需要启用 JavaScript。</p></noscript>
-</div>
-</div>
-{{ project_records|json_script:"device-records-bootstrap" }}
-</div>
+{% elif view == 'records' or view == 'analyses' %}
+{% comment %}巡检记录/日志分析记录并进资产页：与独立记录页共用同一份主体模板。{% endcomment %}
+{% include 'inspections/_record_body.html' %}
 {% else %}
 {% if pc_tab %}<div class="tab-content">{% endif %}
 <div class="{% if pc_tab %}tab-pane fade{% if pc_tab == 'assets' %} show active{% endif %}{% endif %}"{% if pc_tab %} id="pc-pane-assets" role="tabpanel" aria-labelledby="pc-tab-assets"{% endif %}>

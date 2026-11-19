@@ -120,7 +120,7 @@
 .topology-legend i { display: inline-block; width: 1.5rem; height: 2px; background: var(--overview-cyan); }
 .topology-legend .is-inferred i { border-top: 2px dashed #6d8798; background: none; }
 .topology-legend .is-external i { width: .65rem; height: .65rem; border: 1px solid var(--overview-amber); border-radius: 50%; background: rgba(255, 198, 109, .18); }
-.topology-canvas-shell { min-height: 32rem; max-height: 82vh; overflow: auto; border: 1px solid rgba(100, 206, 233, .12); border-radius: .85rem; background: radial-gradient(circle at center, rgba(18, 66, 83, .28), transparent 62%), rgba(2, 10, 18, .6); touch-action: none; }
+.topology-canvas-shell { min-height: 32rem; max-height: 82vh; overflow: hidden; touch-action: none; border: 1px solid rgba(100, 206, 233, .12); border-radius: .85rem; background: radial-gradient(circle at center, rgba(18, 66, 83, .28), transparent 62%), rgba(2, 10, 18, .6); touch-action: none; }
 .topology-canvas { display: block; width: 100%; height: auto; min-height: min(62vh, 38.75rem); cursor: grab; }
 .topology-canvas:active { cursor: grabbing; }
 .topology-edge { fill: none; vector-effect: non-scaling-stroke; }
@@ -135,8 +135,10 @@
 .topology-edge--physical.is-lateral { stroke-width: 1; opacity: .28; filter: none; }
 /* 场地之间的隧道：单独一种颜色，横穿场地边界，一眼能看出哪个口子在互联。 */
 .topology-edge--physical.is-vpn { stroke: var(--overview-amber); stroke-width: 2.6; stroke-dasharray: 14 7; opacity: 1; filter: none; }
-.topology-site__frame { fill: rgba(10, 32, 46, .35); stroke: rgba(116, 223, 244, .18); stroke-width: 1; }
-.topology-site__label { fill: rgba(163, 214, 233, .85); font-size: 13px; font-weight: 600; }
+/* 场地框只留一点几乎看不出的底色，靠标签区分场地；画明显边框会把
+   本来就连在一起的图切成一块块，比连线本身还抢眼。 */
+.topology-site__frame { fill: rgba(255, 255, 255, .015); stroke: none; }
+.topology-site__label { fill: rgba(163, 214, 233, .72); font-size: 12px; font-weight: 600; letter-spacing: .04em; }
 .topology-device-card { cursor: default; outline: none; }
 .topology-device-card.is-backbone[role="button"] { cursor: pointer; }
 .topology-device-card__surface { fill: rgba(12, 34, 50, .96); stroke: rgba(116, 223, 244, .62); stroke-width: 1.2; vector-effect: non-scaling-stroke; transition: fill .18s ease, stroke .18s ease, filter .18s ease; }

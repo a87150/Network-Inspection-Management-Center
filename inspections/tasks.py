@@ -734,4 +734,7 @@ def task_detail(request, pk):
         alert_processing_page=alert_processing_page,
         csrf=get_token(request),
     )
+    if request.GET.get('modal') == '1':
+        # 任务详情在列表里以弹窗打开，单独渲染一份不带站点外壳的主体。
+        return render(request, 'inspections/_task_detail_body.html', context)
     return render(request, 'inspections/task_detail.html', context)

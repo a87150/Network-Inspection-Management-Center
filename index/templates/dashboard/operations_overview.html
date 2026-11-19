@@ -76,7 +76,8 @@
             <div v-if="snapshot.topology?.mode !== 'empty'" class="topology-canvas-shell">
                 <svg class="topology-canvas" :viewBox="`0 0 ${canvasWidth} ${canvasHeight}`" :style="{ minWidth: canvasWidth + 'px' }"
                      role="img" aria-labelledby="topology-title topology-description"
-                     @pointerdown.self="startPan" @pointermove="movePan" @pointerup="endPan" @pointercancel="endPan">
+                     @pointerdown.self="startPan" @pointermove="movePan" @pointerup="endPan" @pointercancel="endPan"
+                     @wheel.prevent="wheelZoom">
                     <title id="topology-title">企业主要网络设备与 LLDP/CDP 物理拓扑</title>
                     <desc id="topology-description">按出口、核心、汇聚、接入自上而下排列；粗线是设备上下级关系，实线表示 LLDP/CDP，虚线表示网段推断。点击交换机或无线控制器可展开下联终端。</desc>
                     <g :transform="`translate(${viewport.x} ${viewport.y}) scale(${viewport.scale})`">

@@ -86,39 +86,39 @@ class NavigationDropdownTests(TestCase):
                     'toggle': '域控管理',
                     'links': [
                         ('域控管理', '/settings/domain-controller/'),
-                        ('域账户', '/domain/accounts/'),
-                        ('域计算机', '/domain/computers/'),
-                        ('域分组', '/domain/groups/'),
+                        ('域账户', '/settings/domain-controller/?object=accounts'),
+                        ('域计算机', '/settings/domain-controller/?object=computers'),
+                        ('域分组', '/settings/domain-controller/?object=groups'),
                     ],
                 },
                 'computers': {
                     'toggle': 'PC',
                     'links': [
                         ('PC 列表', '/assets/computers/'),
-                        ('日志列表', '/computers/logs/'),
-                        ('日志分析记录', '/computers/analyses/'),
+                        ('日志列表', '/assets/computers/?object=logs'),
+                        ('日志分析记录', '/assets/computers/?object=analyses'),
                     ],
                 },
                 'networks': {
                     'toggle': '网络设备',
                     'links': [
                         ('网络设备列表', '/assets/networks/'),
-                        ('巡检记录', '/records/networks/'),
+                        ('巡检记录', '/assets/networks/?object=records'),
                     ],
                 },
                 'servers': {
                     'toggle': '服务器',
                     'links': [
                         ('服务器列表', '/assets/servers/'),
-                        ('巡检记录', '/records/servers/'),
+                        ('巡检记录', '/assets/servers/?object=records'),
                     ],
                 },
                 'weakcurrent': {
                     'toggle': '弱电设备',
                     'links': [
                         ('弱电设备列表', '/assets/weakcurrent/'),
-                        ('巡检记录', '/records/weakcurrent/'),
-                        ('门禁记录', '/access/records/'),
+                        ('巡检记录', '/assets/weakcurrent/?object=records'),
+                        ('门禁记录', '/assets/weakcurrent/?object=access'),
                     ],
                 },
                 'alerts': {

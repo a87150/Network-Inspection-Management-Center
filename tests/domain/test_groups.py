@@ -114,7 +114,7 @@ class DomainGroupWorkspaceTests(TestCase):
             html=True,
         )
         self.assertContains(response, '域分组')
-        self.assertContains(response, '/domain/groups/')
+        self.assertContains(response, '?object=groups')
         self.assertContains(response, '安全组 1')
         self.assertContains(response, '通讯组 0')
 

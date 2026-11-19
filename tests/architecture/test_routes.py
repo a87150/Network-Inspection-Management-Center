@@ -244,22 +244,22 @@ class DetailRouteTests(TestCase):
             # 记录视图现在是同一个页面上的方块视图，链接带 view 参数。
             'networks': (
                 reverse('asset_list', args=['networks']),
-                reverse('asset_list', args=['networks']) + '?view=records',
+                reverse('asset_list', args=['networks']) + '?object=records',
             ),
             'servers': (
                 reverse('asset_list', args=['servers']),
-                reverse('asset_list', args=['servers']) + '?view=records',
+                reverse('asset_list', args=['servers']) + '?object=records',
             ),
             'weakcurrent': (
                 reverse('asset_list', args=['weakcurrent']),
-                reverse('asset_list', args=['weakcurrent']) + '?view=records',
+                reverse('asset_list', args=['weakcurrent']) + '?object=records',
             ),
         }
 
         # 人员和部门合并成一页的两个视图，卡片直接落到部门那份。
         self.assertEqual(
             items['people']['list_url'],
-            reverse('asset_list', args=['people']) + '?view=departments',
+            reverse('asset_list', args=['people']) + '?object=departments',
         )
         self.assertEqual(
             items['people']['detail_url'],

@@ -125,6 +125,27 @@ if (mountElement && bootstrapElement) {
         this.viewport = { ...this.viewport, scale: Number(scale.toFixed(2)) };
         this.controller?.updateUiState({ viewport: this.viewport });
       },
+      /* 滚轮缩放：以鼠标所指的点为不动点。
+         变换是 translate(x y) scale(s)，屏幕点 p 对应的内容点是 (p - t) / s；
+         缩放后要让同一个内容点还落在 p 上，所以 t' = p - (p - t) * (s'/s)。 */
+      wheelZoom(event) {
+        const canvas = event.currentTarget;
+        const rect = canvas.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;
+        const scale = Math.min(2.2, Math.max(0.6, this.viewport.scale * factor));
+        if (scale === this.viewport.scale) return;
+        const ratio = scale / this.viewport.scale;
+        // 鼠标位置换算到 SVG 用户坐标，再换回屏幕像素，避免 viewBox 与 CSS 尺寸不等。
+        const pointX = ((event.clientX - rect.left) / rect.width) * canvas.viewBox.baseVal.width;
+        const pointY = ((event.clientY - rect.top) / rect.height) * canvas.viewBox.baseVal.height;
+        this.viewport = {
+          scale: Number(scale.toFixed(3)),
+          x: Number((pointX - (pointX - this.viewport.x) * ratio).toFixed(1)),
+          y: Number((pointY - (pointY - this.viewport.y) * ratio).toFixed(1)),
+        };
+        this.controller?.updateUiState({ viewport: this.viewport });
+      },
       resetViewport() {
         this.viewport = { scale: 1, x: 0, y: 0 };
         this.controller?.updateUiState({ viewport: this.viewport });

@@ -6,7 +6,7 @@
 {% if item_key == 'people' %}
     <div class="col-12 col-md-4">
         <a class="card surface-card metric-card h-100 text-decoration-none text-body{% if view != 'departments' %} border-primary{% endif %}"
-           href="?view=rows"{% if view != 'departments' %} aria-current="page"{% endif %}>
+           href="?object=rows"{% if view != 'departments' %} aria-current="page"{% endif %}>
             <div class="card-body">
                 <div class="metric-label">人员</div>
                 <div class="metric">{{ overview.total }}</div>
@@ -19,7 +19,7 @@
     </div>
     <div class="col-12 col-md-4">
         <a class="card surface-card metric-card h-100 text-decoration-none text-body{% if view == 'departments' %} border-primary{% endif %}"
-           href="?view=departments"{% if view == 'departments' %} aria-current="page"{% endif %}>
+           href="?object=departments"{% if view == 'departments' %} aria-current="page"{% endif %}>
             <div class="card-body">
                 <div class="metric-label">部门</div>
                 <div class="metric">{{ departments|length }}</div>
@@ -32,7 +32,7 @@
 {% else %}
     <div class="col-12 col-md-4">
         <a class="card surface-card metric-card h-100 text-decoration-none text-body{% if view != 'records' %} border-primary{% endif %}"
-           href="?view=rows"{% if view != 'records' %} aria-current="page"{% endif %}>
+           href="?object=rows"{% if view != 'records' %} aria-current="page"{% endif %}>
             <div class="card-body">
                 <div class="metric-label">{{ item_name }}</div>
                 <div class="metric">{{ overview.total }}</div>
@@ -45,7 +45,7 @@
     </div>
     <div class="col-12 col-md-4">
         <a class="card surface-card metric-card h-100 text-decoration-none text-body{% if view == 'records' %} border-primary{% endif %}"
-           href="?view=records"{% if view == 'records' %} aria-current="page"{% endif %}>
+           href="?object=records"{% if view == 'records' %} aria-current="page"{% endif %}>
             <div class="card-body">
                 <div class="metric-label">巡检记录</div>
                 <div class="metric">{{ record_page_obj.paginator.count }}</div>
@@ -59,7 +59,7 @@
 {% if item_key == 'weakcurrent' %}
     <div class="col-12 col-md-4">
         <a class="card metric-card surface-card h-100 text-decoration-none{% if view == 'access' %} border-primary{% endif %}"
-           href="?view=access"{% if view == 'access' %} aria-current="page"{% endif %}>
+           href="?object=access"{% if view == 'access' %} aria-current="page"{% endif %}>
             <div class="card-body">
                 <div class="metric-label">门禁记录</div>
                 <div class="metric">{{ access_state.total }}</div>

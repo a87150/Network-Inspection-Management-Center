@@ -638,9 +638,9 @@ class DomainWorkspaceTests(TestCase):
         response = self.client.get(reverse('domain_controller_settings'))
 
         self.assertNotContains(response, '<table', html=False)
-        self.assertContains(response, reverse('domain_account_list'))
-        self.assertContains(response, reverse('domain_computer_list'))
-        self.assertContains(response, reverse('domain_group_list'))
+        # 三个对象表都在域控页里按 object 参数切换，不再各占一条路由。
+        for key in ('accounts', 'computers', 'groups'):
+            self.assertContains(response, f'?object={key}')
         self.assertContains(response, 'id="domainConfigModal"')
 
     def test_domain_account_and_computer_routes_are_separate(self):

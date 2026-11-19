@@ -186,7 +186,7 @@ def _asset_list_context(request, kind, *, integration_context=None, creation_for
         context.update(project_records_payload(kind, request))
         if kind == 'weakcurrent':
             context.update(access_records_payload(request))
-    context['view'] = request.GET.get('view', 'rows')
+    context['view'] = request.GET.get('object', 'rows')
     # 记录类视图（巡检记录、门禁记录、日志）没有设备级动作，头部按钮跟着视图走。
     if context['view'] != 'rows':
         for flag in ('action_can_manage_devices', 'action_can_import',
@@ -195,6 +195,17 @@ def _asset_list_context(request, kind, *, integration_context=None, creation_for
         context['task_project_kind'] = ''
     if kind == 'people':
         context['departments'] = department_totals()
+    # 巡检记录并进资产页：和 /records/<kind>/ 用同一份上下文，不再维护两套。
+    if context['view'] in ('records', 'analyses'):
+        from inspections.records import computer_analysis_context, record_list_context
+
+        shared = (computer_analysis_context(request) if context['view'] == 'analyses'
+                  else record_list_context(request, kind))
+        context.update(shared)
+        context['view'] = request.GET.get('object')
+        for flag in ('action_can_manage_devices', 'action_can_import',
+                     'action_issue_settings', 'action_script_download'):
+            context[flag] = False
     context['overview'] = (
         people_overview() if kind == 'people' else device_overview(kind, page.model)
     )

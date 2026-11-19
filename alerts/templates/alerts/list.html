@@ -20,7 +20,7 @@
 <div class="row g-3 mb-3" role="group" aria-label="告警维护概览">
     <div class="col-12 col-md-6">
         <a class="card metric-card surface-card h-100 text-decoration-none{% if view != 'maintenance' %} border-primary{% endif %}"
-           href="?view=alerts"{% if view != 'maintenance' %} aria-current="page"{% endif %}>
+           href="?object=alerts"{% if view != 'maintenance' %} aria-current="page"{% endif %}>
             <div class="card-body">
                 <div class="metric-label">告警记录</div>
                 <div class="metric">{{ alert_metrics.total }}</div>
@@ -33,7 +33,7 @@
     </div>
     <div class="col-12 col-md-6">
         <a class="card metric-card surface-card h-100 text-decoration-none{% if view == 'maintenance' %} border-primary{% endif %}"
-           href="?view=maintenance"{% if view == 'maintenance' %} aria-current="page"{% endif %}>
+           href="?object=maintenance"{% if view == 'maintenance' %} aria-current="page"{% endif %}>
             <div class="card-body">
                 <div class="metric-label">维护记录</div>
                 <div class="metric">{{ maintenance_metrics.total }}</div>

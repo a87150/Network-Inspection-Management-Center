@@ -145,7 +145,8 @@ def _asset_action_context(request, kind):
     return context
 
 
-def record_list(request, kind):
+def record_list_context(request, kind):
+    """记录页的全部上下文。资产页的 object=records 视图直接复用它。"""
     page = _record_page(kind)
     table_definition = project_record_definition(kind)
     target = request.GET.get('target', '').strip()
@@ -176,7 +177,11 @@ def record_list(request, kind):
     context.update(task_modal_context(request, kind, target_source='records'))
     context.update(alert_modal_context(request, profile=context['task_default_profile']))
     context.update(_asset_action_context(request, kind))
-    return render(request, 'inspections/record_list.html', context)
+    return context
+
+
+def record_list(request, kind):
+    return render(request, 'inspections/record_list.html', record_list_context(request, kind))
 
 
 def record_detail(request, kind, pk):
@@ -209,7 +214,8 @@ def record_detail(request, kind, pk):
     })
 
 
-def computer_analysis_list(request):
+def computer_analysis_context(request):
+    """PC 日志分析记录的上下文。资产页的 object=analyses 视图直接复用它。"""
     from .analysis_summary import latest_analysis_statistics
     context = {
         'record_type': 'computer_analysis',
@@ -230,7 +236,11 @@ def computer_analysis_list(request):
     context.update(task_modal_context(request, 'computers'))
     context.update(alert_modal_context(request, profile=context['task_default_profile']))
     context.update(_asset_action_context(request, 'computers'))
-    return render(request, 'inspections/record_list.html', context)
+    return context
+
+
+def computer_analysis_list(request):
+    return render(request, 'inspections/record_list.html', computer_analysis_context(request))
 
 
 def computer_analysis_detail(request, pk):

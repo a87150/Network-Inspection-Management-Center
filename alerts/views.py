@@ -207,7 +207,7 @@ def alert_list(request):
         PAGE_SIZE, STATE_CHOICES, row_payloads, window_metrics, window_queryset,
     )
 
-    context['view'] = 'maintenance' if request.GET.get('view') == 'maintenance' else 'alerts'
+    context['view'] = 'maintenance' if request.GET.get('object') == 'maintenance' else 'alerts'
     # 维护方块的数字两个视图都要有，没法只查一次列表就够。
     context['maintenance_metrics'] = window_metrics(timezone.now())
     if context['view'] == 'maintenance':

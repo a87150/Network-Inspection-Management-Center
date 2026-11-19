@@ -101,7 +101,7 @@ class PeopleStatisticsPageTests(TestCase):
         # 卡片落到部门视图；人员视图是同一页的另一个视图。
         self.assertEqual(
             people['list_url'],
-            reverse('asset_list', args=['people']) + '?view=departments',
+            reverse('asset_list', args=['people']) + '?object=departments',
         )
         # 统计并进列表页后，卡片的两个入口是同一页的两个视图。
         self.assertEqual(people['detail_label'], '查看人员')

@@ -2,13 +2,7 @@
 {% load static %}
 {% block title %}任务详情{% endblock %}
 {% block content %}
-{% if table_definition %}
-<div class="table-toolbar">{% include 'common/table_workspace.html' %}</div>
-{% endif %}
-<div id="task-detail" data-vue-page="task-detail" data-vue-bootstrap="detail-bootstrap">
-    <noscript><p class="alert alert-warning mb-0">任务详情需要启用 JavaScript。</p></noscript>
-</div>
-{{ detail|json_script:"detail-bootstrap" }}
+{% include 'inspections/_task_detail_body.html' %}
 {% endblock %}
 {% block page_scripts %}
 <script type="module" src="{% static 'app/vue/boot.mjs' %}"></script>

@@ -5,14 +5,14 @@
             <p class="page-heading__eyebrow mb-1">执行中心</p>
             <h2 class="h5 mb-0" id="inspection-taskbar-title">{{ task_section_title|default:'巡检任务栏' }}</h2>
         </div>
-        <div class="execution-workspace__header-actions"><div class="execution-workspace__summary"><span>当前任务</span><strong>{{ task_page.paginator.count }}</strong></div><a class="btn btn-outline-dark btn-sm" href="{% url 'task_list' %}">全部后台任务</a></div>
+        <div class="execution-workspace__header-actions"><div class="execution-workspace__summary"><span>当前任务</span><strong>{{ task_page.paginator.count }}</strong></div></div>
     </div>
     <div class="table-scroll-shell">
     <p class="table-scroll-hint">可横向滚动查看完整任务信息</p>
     <div class="table-responsive" role="region" aria-label="{{ task_section_title|default:'巡检任务栏' }}" tabindex="0">
         <table class="table data-table table-hover align-middle mb-0">
             <thead><tr><th>类型</th><th>配置</th><th>来源</th><th>创建时间</th><th>完成时间</th><th>目标</th><th>正常结果</th><th>异常</th><th>待处理</th><th>已取消</th><th>状态</th><th class="table-actions-column table-actions-cell"><span class="visually-hidden">操作</span></th></tr></thead>
-            <tbody>{% for summary in task_page %}<tr>
+            <tbody>{% for summary in task_page %}<tr class="inspection-taskbar__row{% if summary.task.pk == selected_task_id %} is-selected{% endif %}" data-task-row data-task-id="{{ summary.task.pk }}" tabindex="0" role="link">
                 <td class="fw-semibold">{{ summary.type_label }}</td>
                 <td>{{ summary.profile_label }}</td>
                 <td>{{ summary.source_label }}</td>
@@ -24,7 +24,7 @@
                 <td>{{ summary.pending }}</td>
                 <td>{{ summary.cancelled }}</td>
                 <td><span class="badge status-badge {% if summary.task.status == 'success' %}text-bg-success{% elif summary.task.status == 'failed' %}text-bg-danger{% elif summary.task.status == 'partial' %}text-bg-warning{% else %}text-bg-secondary{% endif %}">{{ summary.status_label }}</span></td>
-                <td class="text-end table-actions-cell"><a class="btn btn-outline-dark btn-sm" href="{% url 'task_detail' summary.task.pk %}">详情</a></td>
+                <td class="text-end table-actions-cell"><button class="btn btn-outline-dark btn-sm" type="button" data-task-modal="{{ summary.task.pk }}" data-task-detail-url="{% url 'task_detail' summary.task.pk %}?modal=1">详情</button></td>
             </tr>{% empty %}<tr><td colspan="12"><div class="empty-state"><strong>{{ task_empty_title|default:'暂无巡检任务' }}</strong><span>从资产或日志页面发起巡检、扫描或分析后，任务进度会显示在这里。</span></div></td></tr>{% endfor %}</tbody>
         </table>
     </div></div>
@@ -36,3 +36,16 @@
     </ul></nav>
     {% endif %}
 </section>
+<div class="modal fade" id="taskDetailModal" tabindex="-1" aria-labelledby="taskDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable modal-shell">
+        <div class="modal-content modal-surface">
+            <div class="modal-header">
+                <h2 class="modal-title h5" id="taskDetailModalLabel">任务详情</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body p-0">
+                <iframe class="task-detail-frame" title="任务详情内容" loading="lazy"></iframe>
+            </div>
+        </div>
+    </div>
+</div>

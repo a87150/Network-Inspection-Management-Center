@@ -239,8 +239,44 @@ function bindTaskUI(root) {
     });
 }
 if (typeof window !== 'undefined') window.AppTaskUI = {bind: bindTaskUI};
+/* 任务表：点行把下方结果换成那一次，点「详情」开弹窗。
+   行跳转保留全部现有查询参数，只改 task，翻页和筛选不会丢。 */
+function bindTaskTable(doc) {
+    const table = doc.querySelector('.inspection-taskbar');
+    if (!table || table.dataset.taskTableBound === '1') return;
+    table.dataset.taskTableBound = '1';
+    table.addEventListener('click', (event) => {
+        const detail = event.target.closest?.('[data-task-modal]');
+        if (detail) {
+            event.preventDefault();
+            const modalElement = doc.getElementById('taskDetailModal');
+            const frame = modalElement?.querySelector('.task-detail-frame');
+            if (!frame) return;
+            frame.src = detail.dataset.taskDetailUrl || '';
+            if (window.bootstrap?.Modal) {
+                window.bootstrap.Modal.getOrCreateInstance(modalElement).show();
+            }
+            return;
+        }
+        const row = event.target.closest?.('[data-task-row]');
+        if (!row) return;
+        const url = new URL(window.location.href);
+        url.searchParams.set('task', row.dataset.taskId);
+        url.searchParams.delete('page');
+        window.location.assign(url.toString());
+    });
+    table.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        const row = event.target.closest?.('[data-task-row]');
+        if (!row) return;
+        event.preventDefault();
+        row.click();
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     bindTaskUI(document);
+    bindTaskTable(document);
     document.querySelectorAll('.modal[data-auto-open="true"]').forEach((modal) => {
         if (window.bootstrap?.Modal) window.bootstrap.Modal.getOrCreateInstance(modal).show();
     });

@@ -337,7 +337,14 @@ def project_workspace_context(request, kind):
     rows = _prepare_summaries(page.object_list)
     page.object_list = [summarize_task(task) for task in rows]
     latest = rows[0] if page.number == 1 and rows else tasks.first()
+    # 点任务表里的某一条，下方结果就换成那一次，不跳页。
+    selected_id = request.GET.get('task')
+    if selected_id:
+        chosen = tasks.filter(pk=selected_id).first()
+        if chosen is not None:
+            latest = chosen
     return {'task_metrics': metrics, 'task_page': page, 'latest_task': latest,
+            'selected_task_id': latest.pk if latest else None,
             'task_section_title': '日志分析任务' if kind == 'computers' else '巡检任务',
             'task_empty_title': '暂无日志分析任务' if kind == 'computers' else '暂无巡检任务'}
 
