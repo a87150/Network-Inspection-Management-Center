@@ -1,30 +1,74 @@
 {% comment %}
-列表页顶部的指标条。数字在服务端算好，前端不发请求；原来只出现在独立的统计页，
-现在和列表同屏，少一次跳转。
+列表页顶部的指标卡片。数字在服务端算好，前端不发请求；复用仪表盘已有的
+metric-card 样式，不再另起一套。
 {% endcomment %}
-<section class="metric-strip" aria-label="{{ item_name }}概览">
-    {% if item_key == 'people' %}
-    <div class="metric-strip__card"><span class="metric-strip__label">总人数</span><strong class="metric-strip__value">{{ overview.total }}</strong></div>
-    <div class="metric-strip__card"><span class="metric-strip__label">在职</span><strong class="metric-strip__value">{{ overview.active }}</strong><span class="metric-strip__note">{{ overview.active_rate }}%</span></div>
-    <div class="metric-strip__card"><span class="metric-strip__label">离职</span><strong class="metric-strip__value">{{ overview.departed }}</strong></div>
-    <div class="metric-strip__card"><span class="metric-strip__label">今年入职</span><strong class="metric-strip__value">{{ overview.hires_this_year }}</strong></div>
-    <div class="metric-strip__card"><span class="metric-strip__label">今年离职</span><strong class="metric-strip__value">{{ overview.departures_this_year }}</strong></div>
-    <div class="metric-strip__card"><span class="metric-strip__label">平均司龄</span><strong class="metric-strip__value">{{ overview.average_active_tenure_years }}</strong><span class="metric-strip__note">年（{{ overview.tenure_sample_count }} 人）</span></div>
-    {% else %}
-    <div class="metric-strip__card"><span class="metric-strip__label">总数</span><strong class="metric-strip__value">{{ overview.total }}</strong></div>
-    {% if item_key == 'computers' %}
-    <div class="metric-strip__card"><span class="metric-strip__label">活跃</span><strong class="metric-strip__value">{{ overview.active }}</strong><span class="metric-strip__note">{{ overview.active_rate }}%</span></div>
-    {% else %}
-    <div class="metric-strip__card"><span class="metric-strip__label">启用</span><strong class="metric-strip__value">{{ overview.active }}</strong><span class="metric-strip__note">{{ overview.active_rate }}%</span></div>
-    <div class="metric-strip__card"><span class="metric-strip__label">{{ overview.variant_label }}</span><strong class="metric-strip__value">{{ overview.variants }}</strong></div>
-    {% endif %}
-    {% endif %}
-</section>
+<div class="row g-3 mb-3" role="group" aria-label="{{ item_name }}概览">
+{% if item_key == 'people' %}
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="card metric-card surface-card h-100"><div class="card-body py-3">
+            <p class="text-secondary small mb-1">总人数</p>
+            <p class="metric mb-0">{{ overview.total }}</p>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="card metric-card surface-card h-100"><div class="card-body py-3">
+            <p class="text-secondary small mb-1">在职</p>
+            <p class="metric mb-0">{{ overview.active }}</p>
+            <p class="text-secondary small mb-0">{{ overview.active_rate }}%</p>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="card metric-card surface-card h-100"><div class="card-body py-3">
+            <p class="text-secondary small mb-1">离职</p>
+            <p class="metric mb-0">{{ overview.departed }}</p>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="card metric-card surface-card h-100"><div class="card-body py-3">
+            <p class="text-secondary small mb-1">今年入职</p>
+            <p class="metric mb-0">{{ overview.hires_this_year }}</p>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="card metric-card surface-card h-100"><div class="card-body py-3">
+            <p class="text-secondary small mb-1">今年离职</p>
+            <p class="metric mb-0">{{ overview.departures_this_year }}</p>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="card metric-card surface-card h-100"><div class="card-body py-3">
+            <p class="text-secondary small mb-1">平均司龄</p>
+            <p class="metric mb-0">{{ overview.average_active_tenure_years }} 年</p>
+            <p class="text-secondary small mb-0">{{ overview.tenure_sample_count }} 人有入职日期</p>
+        </div></div>
+    </div>
+{% else %}
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="card metric-card surface-card h-100"><div class="card-body py-3">
+            <p class="text-secondary small mb-1">总数</p>
+            <p class="metric mb-0">{{ overview.total }}</p>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="card metric-card surface-card h-100"><div class="card-body py-3">
+            <p class="text-secondary small mb-1">{% if item_key == "computers" %}活跃{% else %}启用{% endif %}</p>
+            <p class="metric mb-0">{{ overview.active }}</p>
+            <p class="text-secondary small mb-0">{{ overview.active_rate }}%</p>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="card metric-card surface-card h-100"><div class="card-body py-3">
+            <p class="text-secondary small mb-1">{{ overview.variant_label }}</p>
+            <p class="metric mb-0">{{ overview.variants }}</p>
+        </div></div>
+    </div>
+{% endif %}
+</div>
 {% if departments %}
 {% comment %}部门分布原本只在 /people/statistics/ 上，和列表隔着一次跳转。{% endcomment %}
-<details class="surface-card department-summary">
-    <summary>部门分布（{{ departments|length }} 个部门）</summary>
-    <table class="table table-sm mb-0">
+<details class="card surface-card mb-3 department-summary">
+    <summary class="card-body py-2">部门分布（{{ departments|length }} 个部门）</summary>
+    <div class="table-responsive"><table class="table table-sm mb-0">
         <caption class="visually-hidden">部门人数分布</caption>
         <thead><tr><th scope="col">部门</th><th scope="col">总数</th><th scope="col">在职</th><th scope="col">离职</th><th scope="col">在职率</th></tr></thead>
         <tbody>
@@ -32,6 +76,6 @@
         <tr><td>{{ row.department }}</td><td>{{ row.total }}</td><td>{{ row.active }}</td><td>{{ row.departed }}</td><td>{{ row.active_rate }}%</td></tr>
         {% endfor %}
         </tbody>
-    </table>
+    </table></div>
 </details>
 {% endif %}

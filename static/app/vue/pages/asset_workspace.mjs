@@ -154,7 +154,7 @@ export default {
     },
     template: `
     <div class="row g-3">
-        <div :class="detail ? 'col-12 col-lg-7' : 'col-12'">
+        <div class="col-12 col-lg-7">
             <p v-if="error" class="alert alert-danger py-2" role="alert">[[ error ]]</p>
             <div class="table-responsive" role="region" :aria-label="regionLabel || (label + '数据表')" tabindex="0" :aria-busy="loading ? 'true' : 'false'">
                 <table class="table data-table table-hover align-middle mb-0">
@@ -197,13 +197,17 @@ export default {
                 <button class="btn btn-outline-secondary btn-sm" type="button" :disabled="currentPage >= totalPages || loading" @click="load(currentPage + 1)">下一页</button>
             </nav>
         </div>
-        <div v-if="detail || detailLoading || detailError" class="col-12 col-lg-5">
+        <div class="col-12 col-lg-5">
             <div class="card surface-card h-100"><div class="card-body">
                 <p v-if="detailError" class="alert alert-danger py-2 mb-2" role="alert">[[ detailError ]]</p>
                 <p v-if="detailLoading" class="text-secondary mb-0">正在加载详情…</p>
                 <resource-detail v-else-if="detail" v-bind="detail"></resource-detail>
+                <div v-else class="empty-state py-4">
+                    <strong>选择一条记录</strong>
+                    <span>点左侧任意一行，详情在这里展开，不用离开列表。</span>
+                </div>
             </div></div>
-            <button class="btn btn-outline-secondary btn-sm mt-2" type="button" @click="closeDetail">收起详情</button>
+            <button v-if="detail" class="btn btn-outline-secondary btn-sm mt-2" type="button" @click="closeDetail">收起详情</button>
         </div>
     </div>`,
 };
