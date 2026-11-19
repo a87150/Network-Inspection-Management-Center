@@ -474,8 +474,11 @@ class FilteredCsvExportTests(TestCase):
                 })
                 parser = _ExportLinkParser()
                 parser.feed(response.content.decode())
-                self.assertEqual(len(parser.links), 1)
-                export_url = urlsplit(parser.links[0])
+                # 同屏多份表格时每个工作区各有自己的导出链接，取目标那份。
+                matching = [link for link in parser.links
+                            if urlsplit(link).path == export_path]
+                self.assertEqual(len(matching), 1)
+                export_url = urlsplit(matching[0])
                 self.assertEqual(export_url.path, export_path)
                 self.assertEqual(parse_qs(export_url.query), {
                     'q': ['交换机'], 'page_size': ['50'],

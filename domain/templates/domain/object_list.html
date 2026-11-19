@@ -32,8 +32,6 @@
     </div>
 </header>
 
-{% include 'domain/object_tabs.html' %}
-
 {% if can_administer %}{% include 'domain/operation_modal.html' %}{% endif %}
 
 {% if domain_object_type == 'account' and can_manage_domain %}
@@ -51,15 +49,7 @@
 </div>
 {% endif %}
 
-<div data-table-workspace data-table-key="{{ table_definition.key }}">
-<div class="table-toolbar">{% include 'common/table_workspace.html' %}</div>
-<div class="card surface-card table-scroll-shell"><p class="table-scroll-hint">可横向滚动查看更多域对象字段</p>
-<div id="domain-objects" data-vue-page="domain-objects" data-vue-bootstrap="domain-objects-bootstrap">
-<noscript><p class="alert alert-warning mb-0">域对象表需要启用 JavaScript。</p></noscript>
-</div>
-</div>
-{{ domain_objects|json_script:"domain-objects-bootstrap" }}
-</div>
+{% include 'domain/object_tabs.html' %}
 {% endblock %}
 {% block page_scripts %}
 <script type="module" src="{% static 'app/vue/boot.mjs' %}"></script>

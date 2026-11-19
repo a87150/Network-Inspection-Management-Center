@@ -479,6 +479,44 @@ def _error_actions(analysis):
     }]
 
 
+
+
+def _first_page(queryset):
+    """页签预览只取首页：三个清单共用一套 query 参数会互相误伤。"""
+    return Paginator(queryset, PAGE_SIZES[0]).get_page(None)
+
+
+def computer_workspace_payloads(request):
+    """PC 的分析记录与采集异常首屏，供资产工作区同页展示。
+
+    两个清单各有自己的筛选与分页，和资产表共用一套 query 参数只会互相覆盖，
+    所以页签里只给首页预览，完整筛选仍在各自的独立页上。
+    """
+    from .result_query import computer_queryset
+
+    analyses_definition = get_table_definition('computer_logs')
+    analyses_page = _first_page(ComputerAnalysis.objects.all())
+    errors_definition = get_table_definition('computer_errors')
+    errors_page = _first_page(computer_queryset().filter(_error_total__gt=0))
+    return {
+        'pc_analyses': _records_bootstrap(
+            analyses_page, analyses_definition, '/api/v1/computer-analyses/', '分析记录',
+        ),
+        'pc_errors': table_payload(
+            errors_page, errors_definition,
+            table_row_payloads(
+                errors_page.object_list, errors_definition,
+                badges={'type': _error_type_badge_for_analysis},
+                actions=_error_actions,
+            ),
+            extra={
+                'endpoint': '/api/v1/computer-errors/', 'label': 'PC 异常记录',
+                'region_label': 'PC 异常记录数据表',
+                'cell_class': {'message': 'text-wrap detail-cell'},
+            },
+        ),
+    }
+
 def computer_error_list(request):
     table_definition = get_table_definition('computer_errors')
     from .result_query import computer_queryset

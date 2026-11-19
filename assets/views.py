@@ -16,7 +16,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from assets.overview import device_overview, people_overview
+from assets.overview import department_totals, device_overview, people_overview
 from assets.payloads import asset_detail_payload, asset_row_actions, configuration_notice
 from index.common.table_payload import row_payloads as table_row_payloads
 from index.common.table_payload import table_payload
@@ -178,6 +178,11 @@ def _asset_list_context(request, kind, *, integration_context=None, creation_for
     # selectable 要等 task_modal_context 填过 task_allow_target_selection 才能算。
     selectable = bool(admin and context.get('task_allow_target_selection'))
     context['pc_tab'] = 'assets' if kind == 'computers' else ''
+    if kind == 'computers':
+        from inspections.records import computer_workspace_payloads
+        context.update(computer_workspace_payloads(request))
+    if kind == 'people':
+        context['departments'] = department_totals()
     context['overview'] = (
         people_overview() if kind == 'people' else device_overview(kind, page.model)
     )

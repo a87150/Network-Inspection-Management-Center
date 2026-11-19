@@ -24,6 +24,8 @@
 {% if can_administer and personnel_api_import %}{% if can_administer %}{% include 'integrations/task_notifications.html' %}{% endif %}{% endif %}
 {% if can_administer and task_project_kind %}{% if can_administer %}{% include 'inspections/profile_modal.html' %}{% endif %}{% if can_administer %}{% include 'inspections/run_modal.html' %}{% endif %}{% if can_administer %}{% include 'alerts/policy_modal.html' %}{% endif %}{% endif %}
 
+{% if pc_tab %}<div class="tab-content">{% endif %}
+<div class="{% if pc_tab %}tab-pane fade{% if pc_tab == 'assets' %} show active{% endif %}{% endif %}"{% if pc_tab %} id="pc-pane-assets" role="tabpanel" aria-labelledby="pc-tab-assets"{% endif %}>
 <div data-table-workspace data-table-key="{{ table_definition.key }}">
     <div class="table-toolbar">{% if maintenance_enabled %}{% include 'common/table_workspace.html' with table_filter_actions_template='devices/maintenance_action.html' %}{% else %}{% include 'common/table_workspace.html' %}{% endif %}</div>
     <div class="card surface-card table-scroll-shell">
@@ -34,6 +36,16 @@
         {{ workspace_table|json_script:"asset-workspace-bootstrap" }}
     </div>
 </div>
+</div>
+{% if pc_tab %}
+<div class="tab-pane fade{% if pc_tab == 'analyses' %} show active{% endif %}" id="pc-pane-analyses" role="tabpanel" aria-labelledby="pc-tab-analyses">
+    {% include 'pc/analysis_pane.html' %}
+</div>
+<div class="tab-pane fade{% if pc_tab == 'errors' %} show active{% endif %}" id="pc-pane-errors" role="tabpanel" aria-labelledby="pc-tab-errors">
+    {% include 'pc/error_pane.html' %}
+</div>
+</div>
+{% endif %}
 {% include 'devices/maintenance_modal.html' %}
 {% endblock %}
 {% block page_scripts %}

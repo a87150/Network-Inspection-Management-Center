@@ -20,3 +20,18 @@
     {% endif %}
     {% endif %}
 </section>
+{% if departments %}
+{% comment %}部门分布原本只在 /people/statistics/ 上，和列表隔着一次跳转。{% endcomment %}
+<details class="surface-card department-summary">
+    <summary>部门分布（{{ departments|length }} 个部门）</summary>
+    <table class="table table-sm mb-0">
+        <caption class="visually-hidden">部门人数分布</caption>
+        <thead><tr><th scope="col">部门</th><th scope="col">总数</th><th scope="col">在职</th><th scope="col">离职</th><th scope="col">在职率</th></tr></thead>
+        <tbody>
+        {% for row in departments %}
+        <tr><td>{{ row.department }}</td><td>{{ row.total }}</td><td>{{ row.active }}</td><td>{{ row.departed }}</td><td>{{ row.active_rate }}%</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</details>
+{% endif %}

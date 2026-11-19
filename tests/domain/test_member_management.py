@@ -32,7 +32,7 @@ class MemberManagementTests(TransactionTestCase):
     def test_blue_entry_and_add_candidates_exclude_existing_members(self):
         page = self.client.get(reverse('domain_group_list'))
         actions = [
-            action for row in payload_rows(page, 'domain-objects-bootstrap')
+            action for row in payload_rows(page, 'domain-objects-groups-bootstrap')
             for action in row['actions']
         ]
         member_action = next(

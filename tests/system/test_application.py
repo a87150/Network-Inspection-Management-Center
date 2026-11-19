@@ -647,18 +647,30 @@ class DomainWorkspaceTests(TestCase):
         account_response = self.client.get(reverse('domain_account_list'))
         computer_response = self.client.get(reverse('domain_computer_list'))
 
-        self.assertContains(account_response, self.account.login_name)
-        self.assertNotContains(account_response, self.domain_computer.computer_name)
-        self.assertContains(computer_response, self.domain_computer.computer_name)
-        self.assertNotContains(computer_response, self.account.login_name)
+        # 三个视图现在同屏，页签只切显示；互不串数据要按各自的 payload 验。
+        accounts = payload_text(account_response, 'domain-objects-accounts-bootstrap')
+        computers = payload_text(account_response, 'domain-objects-computers-bootstrap')
+        self.assertIn(self.account.login_name, accounts)
+        self.assertNotIn(self.domain_computer.computer_name, accounts)
+        self.assertIn(self.domain_computer.computer_name, computers)
+        self.assertNotIn(self.account.login_name, computers)
+        # 打开哪个 URL 决定哪个页签是当前视图。
+        for response, pane in ((account_response, 'accounts'),
+                               (computer_response, 'computers')):
+            body = response.content.decode()
+            # 当前页签的 class 里带 show active，位置在 id 之前。
+            head = body.split(f'id="domain-pane-{pane}"')[0][-320:]
+            self.assertIn('class="tab-pane fade show active"', head)
 
     def test_domain_account_export_link_returns_csv(self):
         account_response = self.client.get(reverse('domain_account_list'))
         document = parse_response_html(account_response)
+        # 三个页签各有自己的工具栏与导出链接，取域账户那份。
         export_links = [
             attributes['href']
             for attributes in document.find('a')
             if 'data-filtered-export' in attributes
+            and 'domain_accounts' in attributes['href']
         ]
         self.assertEqual(len(export_links), 1)
 

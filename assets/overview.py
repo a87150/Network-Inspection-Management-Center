@@ -53,6 +53,27 @@ def people_overview():
     }
 
 
+
+
+def department_totals():
+    """部门分布。原来只在统计页出现，现在和人员列表同屏。"""
+    merged = {}
+    for group in People.objects.values('department').annotate(
+        total=Count('pk'),
+        active=Count('pk', filter=Q(is_active=True)),
+    ):
+        name = (group['department'] or '').strip() or '未分配部门'
+        row = merged.setdefault(name, {'department': name, 'total': 0, 'active': 0})
+        row['total'] += group['total']
+        row['active'] += group['active']
+    rows = []
+    for row in merged.values():
+        row['departed'] = row['total'] - row['active']
+        row['active_rate'] = round(row['active'] * 100 / row['total'], 1)
+        rows.append(row)
+    rows.sort(key=lambda item: (-item['total'], item['department']))
+    return rows
+
 def device_overview(kind, model):
     """总数、启用数、厂商数；People 以外三类设备共用。"""
     # Server 没有 vendor 字段，采集方式在 server_type 里。

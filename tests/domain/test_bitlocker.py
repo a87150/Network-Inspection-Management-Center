@@ -104,7 +104,7 @@ class BitLockerViewTests(TestCase):
         response = self.client.get(reverse("domain_computer_list"))
         self.assertNotContains(response, 'value="unlock"')
         # 按钮由注入的行数据渲染，断言 payload 而非 HTML。
-        actions = payload_rows(response, 'domain-objects-bootstrap')[0]['actions']
+        actions = payload_rows(response, 'domain-objects-computers-bootstrap')[0]['actions']
         self.assertIn(self.url, [action['url'] for action in actions])
         self.assertTrue(any('BitLocker' in action['label'] for action in actions))
 

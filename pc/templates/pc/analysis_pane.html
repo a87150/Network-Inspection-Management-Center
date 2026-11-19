@@ -1,0 +1,13 @@
+{% comment %}
+分析记录的首屏预览。三份清单共用一套 query 参数会互相覆盖，所以这里只给首页，
+筛选与翻页链到完整列表。
+{% endcomment %}
+<div class="d-flex justify-content-end mb-2">
+    <a class="btn btn-outline-secondary btn-sm" href="{% url 'computer_analysis_list' %}">打开完整分析记录</a>
+</div>
+<div class="card surface-card table-scroll-shell">
+<div id="pc-analyses" data-vue-page="pc-logs" data-vue-bootstrap="records-bootstrap">
+<noscript><p class="alert alert-warning mb-0">分析记录表需要启用 JavaScript。</p></noscript>
+</div>
+{{ pc_analyses|json_script:"records-bootstrap" }}
+</div>

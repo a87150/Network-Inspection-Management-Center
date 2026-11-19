@@ -1,23 +1,26 @@
 {% comment %}
-域控对象的三份列表原来各占一个入口，来回对照要反复进出。这里把它们并成页内的
-一组页签：切换仍是整页请求，但三个视图在同一处，路径感和位置感不丢。
+域控对象的三个视图现在同屏渲染，页签只切显示，不再换页；所以这里用 Bootstrap 的
+tab 按钮而不是链接。当前视图仍由 URL 决定，直接打开 /domain/groups/ 也落在对应页签。
 {% endcomment %}
 <nav class="domain-object-tabs" aria-label="域控对象视图">
-    <ul class="nav nav-tabs">
-        <li class="nav-item">
-            <a class="nav-link{% if domain_object_type == 'account' %} active{% endif %}"
-               href="{% url 'domain_account_list' %}"
-               {% if domain_object_type == 'account' %}aria-current="page"{% endif %}>域账户</a>
+    <ul class="nav nav-tabs" role="tablist">
+        {% for panel in panels %}
+        <li class="nav-item" role="presentation">
+            <button class="nav-link{% if panel.active %} active{% endif %}" type="button"
+                    id="domain-tab-{{ panel.object_type }}" data-bs-toggle="tab"
+                    data-bs-target="#domain-pane-{{ panel.object_type }}" role="tab"
+                    aria-controls="domain-pane-{{ panel.object_type }}"
+                    aria-selected="{% if panel.active %}true{% else %}false{% endif %}">{{ panel.title }}</button>
         </li>
-        <li class="nav-item">
-            <a class="nav-link{% if domain_object_type == 'computer' %} active{% endif %}"
-               href="{% url 'domain_computer_list' %}"
-               {% if domain_object_type == 'computer' %}aria-current="page"{% endif %}>域计算机</a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link{% if domain_object_type == 'group' %} active{% endif %}"
-               href="{% url 'domain_group_list' %}"
-               {% if domain_object_type == 'group' %}aria-current="page"{% endif %}>域分组</a>
-        </li>
+        {% endfor %}
     </ul>
 </nav>
+<div class="tab-content">
+    {% for panel in panels %}
+    <div class="tab-pane fade{% if panel.active %} show active{% endif %}"
+         id="domain-pane-{{ panel.object_type }}" role="tabpanel"
+         aria-labelledby="domain-tab-{{ panel.object_type }}">
+        {% include 'domain/object_panel.html' with panel=panel %}
+    </div>
+    {% endfor %}
+</div>

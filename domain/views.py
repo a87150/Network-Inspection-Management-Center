@@ -1,3 +1,4 @@
+import copy
 import logging
 from dataclasses import dataclass
 
@@ -5,7 +6,7 @@ from django.contrib import messages
 from index.common.access import admin_required, is_admin
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
-from django.http import Http404
+from django.http import Http404, QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
@@ -185,14 +186,27 @@ def domain_controller_settings(request):
     return _render_domain_settings(request, config, form)
 
 
-def domain_object_list(request, object_type, *, operation_form=None):
+def _without_filters(request):
+    """非当前页签的查询上下文：不继承任何 filter_/sort/page 参数。
+
+    三个域对象表字段各不相同，共用一套 filter_* 只会让互不认识的键互相误伤，
+    所以只有当前页签吃 request.GET，其余取默认排序与首页。
+    """
+    alias = copy.copy(request)
+    alias.GET = QueryDict()
+    return alias
+
+
+def _domain_panel(request, object_type, *, active, operation_form=None):
+    """一个域对象视图渲染所需的全部数据；三个页签各取一份。"""
     page = _domain_page(object_type)
     table_definition = get_table_definition(page.table_key)
+    source = request if active else _without_filters(request)
     objects, table_state = apply_table_filters(
-        request, page.model.objects.all(), table_definition,
+        source, page.model.objects.all(), table_definition,
     )
     page_obj = Paginator(objects, table_state['page_size']).get_page(
-        request.GET.get('page'),
+        source.GET.get('page'),
     )
     admin = is_admin(request.user)
     can_select = admin and object_type != 'groups'
@@ -232,31 +246,54 @@ def domain_object_list(request, object_type, *, operation_form=None):
             'select_value_key': 'id',
         },
     )
+
+    return {
+        'object_type': object_type,
+        'singular': {'accounts': 'account', 'computers': 'computer',
+                     'groups': 'group'}[object_type],
+        'title': page.title,
+        'active': active,
+        'payload': domain_objects,
+        'context': {
+            'domain_objects': domain_objects,
+            'item_key': page.export_key,
+            'export_key': page.export_key,
+            'item_name': page.title,
+            'table_definition': table_definition,
+            'table_state': table_state,
+            'page_obj': page_obj,
+            'page_sizes': PAGE_SIZES,
+            'table_export_path': reverse('table_export', args=[page.table_key]),
+            'pagination_query': query_without_page(request),
+            'detail_route': page.detail_route,
+            'can_manage_domain': can_manage,
+            'domain_object_type': {'accounts': 'account', 'computers': 'computer',
+                                   'groups': 'group'}[object_type],
+            'domain_operation_form': (
+                operation_form if operation_form is not None
+                else DomainOperationForm()
+            ) if is_admin(request.user) else None,
+            'domain_operation_actions': DOMAIN_OPERATION_ACTIONS.get(
+                {'accounts': 'account', 'computers': 'computer'}.get(object_type),
+                (),
+            ) if is_admin(request.user) else (),
+        },
+    }
+
+
+def domain_object_list(request, object_type, *, operation_form=None):
+    """三个域对象视图同屏渲染，页签只切显示，不再换页。"""
+    panels = [
+        _domain_panel(request, kind, active=(kind == object_type),
+                      operation_form=operation_form)
+        for kind in DOMAIN_OBJECT_PAGES
+    ]
+    active = next(panel for panel in panels if panel['active'])
     return render(request, 'domain/object_list.html', {
-        'domain_objects': domain_objects,
-        'item_key': page.export_key,
-        'export_key': page.export_key,
-        'item_name': page.title,
-        'table_definition': table_definition,
-        'table_state': table_state,
-        'page_obj': page_obj,
-        'page_sizes': PAGE_SIZES,
-        'table_export_path': reverse('table_export', args=[page.table_key]),
-        'pagination_query': query_without_page(request),
-        'detail_route': page.detail_route,
-        'can_manage_domain': (
-            object_type != 'groups'
-            and is_admin(request.user)
-        ),
-        'domain_object_type': {
-            'accounts': 'account', 'computers': 'computer', 'groups': 'group',
-        }[object_type],
-        'domain_operation_form': (operation_form if operation_form is not None else DomainOperationForm()) if is_admin(request.user) and object_type != 'groups' else None,
-        'domain_operation_actions': DOMAIN_OPERATION_ACTIONS.get(
-            {'accounts': 'account', 'computers': 'computer'}.get(object_type),
-            (),
-        ) if is_admin(request.user) else (),
+        **active['context'],
+        'panels': panels,
     })
+
 
 
 def domain_object_detail(request, object_type, pk):

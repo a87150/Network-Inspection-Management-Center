@@ -1,11 +1,26 @@
 {% comment %}
-PC 的三份清单（资产、分析记录、异常）原本分散在三个入口，看机器、看它的分析结果、
-看它为什么采不到，中间要来回跳。这里并成一组页签，位置固定。
+PC 的资产、分析记录、采集异常现在同屏渲染：页签只切显示。资产表带完整筛选，
+另外两个给首屏预览并链到各自的完整页——它们和资产表共用一套 query 参数会互相覆盖。
 {% endcomment %}
 <nav class="pc-tabs" aria-label="PC 视图">
-    <ul class="nav nav-tabs">
-        <li class="nav-item"><a class="nav-link{% if pc_tab == 'assets' %} active{% endif %}" href="{% url 'asset_list' 'computers' %}"{% if pc_tab == 'assets' %} aria-current="page"{% endif %}>PC 资产</a></li>
-        <li class="nav-item"><a class="nav-link{% if pc_tab == 'analyses' %} active{% endif %}" href="{% url 'computer_analysis_list' %}"{% if pc_tab == 'analyses' %} aria-current="page"{% endif %}>分析记录</a></li>
-        <li class="nav-item"><a class="nav-link{% if pc_tab == 'errors' %} active{% endif %}" href="{% url 'computer_error_list' %}"{% if pc_tab == 'errors' %} aria-current="page"{% endif %}>采集异常</a></li>
+    <ul class="nav nav-tabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link{% if pc_tab == 'assets' %} active{% endif %}" type="button"
+                    id="pc-tab-assets" data-bs-toggle="tab" data-bs-target="#pc-pane-assets"
+                    role="tab" aria-controls="pc-pane-assets"
+                    aria-selected="{% if pc_tab == 'assets' %}true{% else %}false{% endif %}">PC 资产</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link{% if pc_tab == 'analyses' %} active{% endif %}" type="button"
+                    id="pc-tab-analyses" data-bs-toggle="tab" data-bs-target="#pc-pane-analyses"
+                    role="tab" aria-controls="pc-pane-analyses"
+                    aria-selected="{% if pc_tab == 'analyses' %}true{% else %}false{% endif %}">分析记录</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link{% if pc_tab == 'errors' %} active{% endif %}" type="button"
+                    id="pc-tab-errors" data-bs-toggle="tab" data-bs-target="#pc-pane-errors"
+                    role="tab" aria-controls="pc-pane-errors"
+                    aria-selected="{% if pc_tab == 'errors' %}true{% else %}false{% endif %}">采集异常</button>
+        </li>
     </ul>
 </nav>
