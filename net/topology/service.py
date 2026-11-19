@@ -56,6 +56,7 @@ def complete_topology_batch(batch_id, payload, *, collection_status, collected_a
             return batch
         now = timezone.now()
         interface_rows = {}
+        interface_defaults = {}
         for candidate in payload.interfaces:
             key = stable_interface_key(candidate)
             defaults = {
@@ -66,27 +67,78 @@ def complete_topology_batch(batch_id, payload, *, collection_status, collected_a
                 'speed_bps': candidate.speed_bps, 'vlan_ids': list(candidate.vlan_ids),
                 'last_seen_at': collected_at, 'last_batch': batch, 'is_stale': False,
             }
-            row, _created = NetworkTopologyInterface.objects.update_or_create(
-                device=batch.device, stable_key=key,
-                defaults=defaults,
-                create_defaults={**defaults, 'first_seen_at': collected_at},
+            interface_defaults[key] = defaults
+            interface_rows[key] = None
+            if candidate.stable_key_hint:
+                interface_rows[candidate.stable_key_hint] = None
+            if candidate.name:
+                interface_rows['name:' + ''.join(candidate.name.casefold().split())] = None
+        # 每台设备几百个接口，逐条 update_or_create 会把行锁持有时间拉成线性的。
+        # 改成"一次查、一次建、一次改、一次回查"，查询数固定为 5 次。
+        existing_interfaces = {
+            row.stable_key: row for row in NetworkTopologyInterface.objects.filter(
+                device=batch.device, stable_key__in=list(interface_defaults),
             )
-            interface_rows[key] = row
+        }
+        to_create = []
+        to_update = []
+        for key, defaults in interface_defaults.items():
+            row = existing_interfaces.get(key)
+            if row is None:
+                to_create.append(NetworkTopologyInterface(
+                    device=batch.device, stable_key=key,
+                    first_seen_at=collected_at, **defaults,
+                ))
+            else:
+                for field, value in defaults.items():
+                    setattr(row, field, value)
+                to_update.append(row)
+        if to_create:
+            NetworkTopologyInterface.objects.bulk_create(to_create, batch_size=500)
+        if to_update:
+            NetworkTopologyInterface.objects.bulk_update(
+                to_update, list(next(iter(interface_defaults.values())).keys()), batch_size=500,
+            )
+        # bulk_create 在 MariaDB 上不回填主键，需要再查一次拿到全部行。
+        for row in NetworkTopologyInterface.objects.filter(
+            device=batch.device, stable_key__in=list(interface_defaults),
+        ):
+            interface_rows[row.stable_key] = row
+        for candidate in payload.interfaces:
+            row = interface_rows.get(stable_interface_key(candidate))
             if candidate.stable_key_hint:
                 interface_rows[candidate.stable_key_hint] = row
             if candidate.name:
                 interface_rows['name:' + ''.join(candidate.name.casefold().split())] = row
         observed_keys = set()
         resolved = unresolved = conflicts = 0
+        remote_keys = {
+            (observation.remote_device_id, observation.remote_interface_key)
+            for observation in payload.observations
+            if observation.remote_device_id and observation.remote_interface_key
+        }
+        remote_interfaces = {
+            (row.device_id, row.stable_key): row
+            for row in NetworkTopologyInterface.objects.filter(
+                device_id__in={device_id for device_id, _ in remote_keys},
+                stable_key__in={key for _, key in remote_keys},
+            )
+        } if remote_keys else {}
+        existing_links = {
+            row.stable_link_key: row for row in NetworkTopologyLink.objects.filter(
+                stable_link_key__in=[o.stable_link_key for o in payload.observations],
+            )
+        }
+        links_to_create = []
+        links_to_update = []
+        link_sequence = []
         for observation in payload.observations:
             local = interface_rows.get(observation.local_interface_key)
             if local is None:
                 continue
-            remote_interface = None
-            if observation.remote_device_id and observation.remote_interface_key:
-                remote_interface = NetworkTopologyInterface.objects.filter(
-                    device_id=observation.remote_device_id, stable_key=observation.remote_interface_key,
-                ).first()
+            remote_interface = remote_interfaces.get(
+                (observation.remote_device_id, observation.remote_interface_key),
+            ) if observation.remote_device_id and observation.remote_interface_key else None
             protocol = 'ssh_cdp' if observation.protocol == 'cdp' else (
                 'snmp_lldp' if 'snmp_lldp' in payload.protocols else 'ssh_lldp'
             )
@@ -102,7 +154,7 @@ def complete_topology_batch(batch_id, payload, *, collection_status, collected_a
                 'status': 'current', 'confidence': observation.confidence,
                 'last_seen_at': collected_at, 'last_batch': batch, 'missing_complete_batches': 0,
             }
-            link = NetworkTopologyLink.objects.filter(stable_link_key=observation.stable_link_key).first()
+            link = existing_links.get(observation.stable_link_key)
             if link:
                 if link.local_interface.device_id != batch.device_id:
                     defaults['evidence_direction'] = 'bidirectional'
@@ -117,16 +169,29 @@ def complete_topology_batch(batch_id, payload, *, collection_status, collected_a
                     defaults['remote_management_addresses'] = link.remote_management_addresses
                 for field, value in defaults.items():
                     setattr(link, field, value)
-                link.save()
+                links_to_update.append(link)
+                pending_link = ('update', link)
             else:
-                link = NetworkTopologyLink.objects.create(
+                link = NetworkTopologyLink(
                     stable_link_key=observation.stable_link_key,
                     first_seen_at=collected_at, evidence_direction='unilateral', **defaults,
                 )
-            observed_keys.add(link.stable_link_key)
+                links_to_create.append(link)
+                pending_link = ('create', link)
+            link_sequence.append((observation, local, protocol, pending_link))
+            observed_keys.add(observation.stable_link_key)
             if observation.resolution_status == 'resolved': resolved += 1
             elif observation.resolution_status == 'conflict': conflicts += 1
             else: unresolved += 1
+        if links_to_create:
+            NetworkTopologyLink.objects.bulk_create(links_to_create, batch_size=500)
+        if links_to_update:
+            NetworkTopologyLink.objects.bulk_update(
+                links_to_update, list(defaults.keys()), batch_size=500,
+            )
+        observation_rows = []
+        for observation, local, protocol, pending_link in link_sequence:
+            link = pending_link[1]
             neighbor = {
                 'remote_chassis_id': observation.remote_chassis_id,
                 'remote_port_id': observation.remote_port_id,
@@ -137,12 +202,25 @@ def complete_topology_batch(batch_id, payload, *, collection_status, collected_a
             }
             evidence = _evidence_text(observation.evidence, neighbor)
             digest = hashlib.sha256((protocol + '\n' + evidence).encode('utf-8')).hexdigest()
-            NetworkTopologyObservation.objects.get_or_create(
+            observation_rows.append(NetworkTopologyObservation(
                 batch=batch, evidence_sha256=digest,
-                defaults={'source_target': batch.source_target, 'local_device': batch.device,
-                          'local_interface': local, 'link': link, 'protocol': protocol,
-                          'neighbor': neighbor, 'evidence': evidence, 'collected_at': collected_at},
-            )
+                source_target=batch.source_target, local_device=batch.device,
+                local_interface=local, link=link, protocol=protocol,
+                neighbor=neighbor, evidence=evidence, collected_at=collected_at,
+            ))
+        if observation_rows:
+            seen_digests = set(NetworkTopologyObservation.objects.filter(
+                batch=batch,
+                evidence_sha256__in=[row.evidence_sha256 for row in observation_rows],
+            ).values_list('evidence_sha256', flat=True))
+            fresh = []
+            for row in observation_rows:
+                if row.evidence_sha256 in seen_digests:
+                    continue
+                seen_digests.add(row.evidence_sha256)
+                fresh.append(row)
+            if fresh:
+                NetworkTopologyObservation.objects.bulk_create(fresh, batch_size=500)
         authoritative = bool(payload.complete and collection_status == 'success')
         if authoritative:
             stale_candidates = NetworkTopologyLink.objects.select_for_update().filter(

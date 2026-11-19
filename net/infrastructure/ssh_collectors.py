@@ -2,6 +2,7 @@ import json
 import re
 import time
 
+from net.infrastructure import host_keys
 from net.infrastructure.collection import CollectionResult, Timer
 from net.devices.network.transport import connect_network as _connect_network
 from net.infrastructure.sanitization import sanitize
@@ -51,7 +52,9 @@ def _paramiko():
 def _connect(asset, timeout):
     paramiko = _paramiko()
     client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    # 不用 AutoAddPolicy：那等于第一次连谁就信谁，中间人截一次就把设备口令全交出去。
+    # 指纹由 host_keys 记录并比对，变了就拒绝。
+    client.set_missing_host_key_policy(host_keys.policy())
     client.connect(
         hostname=asset.ip,
         port=asset.port or 22,

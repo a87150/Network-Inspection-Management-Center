@@ -1,5 +1,7 @@
 from datetime import timedelta
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from net.models import InspectionProfile, Network_Device, NetworkTopologyLink, NetworkTopologyObservation, TaskRun, TaskTargetRun
@@ -59,5 +61,36 @@ class TopologyServiceTests(TestCase):
         link=NetworkTopologyLink.objects.get(); link.status='stale'; link.missing_complete_batches=2; link.save()
         target=self.target(); payload=self.payload(); complete_topology_batch(begin_topology_batch(target.pk,timezone.now()),payload,collection_status='success',collected_at=payload.collected_at)
         link.refresh_from_db(); self.assertEqual(link.status,'current'); self.assertEqual(link.missing_complete_batches,0)
+
+    def test_write_query_count_does_not_grow_with_interface_count(self):
+        """几百台设备时逐条 update_or_create 会把行锁持有时间拉长，批次就超时。
+
+        这里锁死"每次提交的查询数有上限"：接口和链路都批量写，
+        所以 1 个接口和 40 个接口的查询数必须一样。
+        """
+        def payload_with(count):
+            interfaces = [{'if_index': index, 'name': f'Gi1/0/{index}'} for index in range(1, count + 1)]
+            neighbors = [{
+                'local_key_hint': f'ifindex:{index}', 'remote_system_name': 'core',
+                'remote_port_id': f'Gi1/0/{index}', 'protocol': 'lldp',
+            } for index in range(1, count + 1)]
+            return build_discovery_payload(
+                self.device,
+                [{'status': 'success', 'complete': True, 'interfaces': interfaces, 'neighbors': neighbors}],
+                [self.remote], [], timezone.now(),
+            )
+
+        def count_queries(amount):
+            target = self.target()
+            payload = payload_with(amount)
+            with CaptureQueriesContext(connection) as captured:
+                complete_topology_batch(
+                    begin_topology_batch(target.pk, timezone.now()), payload,
+                    collection_status='success', collected_at=payload.collected_at,
+                )
+            return len(captured)
+
+        # 批量写之后查询数是常数级；旧实现是每个接口 2 次以上，40 个接口会到 100+。
+        self.assertLessEqual(count_queries(40), count_queries(1) + 6)
 
 
