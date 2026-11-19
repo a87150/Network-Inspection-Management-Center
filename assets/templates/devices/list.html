@@ -49,6 +49,7 @@
 {% include 'devices/maintenance_modal.html' %}
 {% endblock %}
 {% block page_scripts %}
+<script type="module" src="{% static 'app/vue/boot.mjs' %}"></script>
 {% include 'common/scripts/table_workspace.html' %}
 {% include 'common/scripts/modal_workflows.html' %}
 {% if maintenance_enabled %}<script src="{% static 'app/js/devices/maintenance_window.js' %}" defer></script>{% endif %}

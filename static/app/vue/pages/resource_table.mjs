@@ -21,6 +21,7 @@ export default {
         show_actions: {type: Boolean, default: true},
         csrf: {type: String, default: ''},
         cell_class: {type: Object, default: () => ({})},
+        page_param: {type: String, default: 'page'},
     },
     data() {
         return {
@@ -77,7 +78,7 @@ export default {
             this.error = '';
             try {
                 const params = Object.fromEntries(new URLSearchParams(window.location.search));
-                params.page = page;
+                params[this.page_param] = page;
                 const payload = await api.get(this.endpoint, params);
                 this.items = payload.results || payload.rows || [];
                 this.total = payload.count;
@@ -86,7 +87,7 @@ export default {
                 this.from = payload.start_index;
                 this.to = payload.end_index;
                 const url = new URL(window.location.href);
-                url.searchParams.set('page', payload.page);
+                url.searchParams.set(this.page_param, payload.page);
                 window.history.replaceState({}, '', url);
             } catch (failure) {
                 this.error = failure.message || '加载失败';

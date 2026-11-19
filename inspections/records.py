@@ -408,12 +408,12 @@ INSPECTION_RECORD_BADGES = {'status': _inspection_status_badge}
 ERROR_RECORD_BADGES = {'type': _error_type_badge}
 
 
-def _records_bootstrap(page_obj, definition, endpoint, label, badges=None):
+def _records_bootstrap(page_obj, definition, endpoint, label, badges=None, extra=None):
     """Rows the page hydrates with; the REST twin builds the same shape."""
     return table_payload(
         page_obj, definition,
         table_row_payloads(page_obj.object_list, definition, badges),
-        extra={'endpoint': endpoint, 'label': label},
+        extra={'endpoint': endpoint, 'label': label, **(extra or {})},
     )
 
 
@@ -481,27 +481,26 @@ def _error_actions(analysis):
 
 
 
-def _first_page(queryset):
-    """页签预览只取首页：三个清单共用一套 query 参数会互相误伤。"""
-    return Paginator(queryset, PAGE_SIZES[0]).get_page(None)
-
-
 def computer_workspace_payloads(request):
-    """PC 的分析记录与采集异常首屏，供资产工作区同页展示。
+    """PC 的分析记录与采集异常，供资产工作区同页展示。
 
-    两个清单各有自己的筛选与分页，和资产表共用一套 query 参数只会互相覆盖，
-    所以页签里只给首页预览，完整筛选仍在各自的独立页上。
+    两份清单各用带前缀的查询参数（analyses_page、errors_filter_x 之类），
+    和资产表的设备级参数互不干扰，所以页签里是完整的分页与筛选。
     """
     from .result_query import computer_queryset
 
-    analyses_definition = get_table_definition('computer_logs')
-    analyses_page = _first_page(ComputerAnalysis.objects.all())
     errors_definition = get_table_definition('computer_errors')
-    errors_page = _first_page(computer_queryset().filter(_error_total__gt=0))
+    errors, errors_state = apply_table_filters(
+        request, computer_queryset().filter(_error_total__gt=0), errors_definition,
+        prefix='errors',
+    )
+    errors_page = Paginator(errors, errors_state['page_size']).get_page(
+        request.GET.get('errors_page'),
+    )
     return {
-        'pc_analyses': _records_bootstrap(
-            analyses_page, analyses_definition, '/api/v1/computer-analyses/', '分析记录',
-        ),
+        'pc_analyses_recent': ComputerAnalysis.objects.select_related('computer')
+        .order_by('-analysis_date')[:8],
+        'pc_analyses_total': ComputerAnalysis.objects.count(),
         'pc_errors': table_payload(
             errors_page, errors_definition,
             table_row_payloads(
@@ -513,8 +512,11 @@ def computer_workspace_payloads(request):
                 'endpoint': '/api/v1/computer-errors/', 'label': 'PC 异常记录',
                 'region_label': 'PC 异常记录数据表',
                 'cell_class': {'message': 'text-wrap detail-cell'},
+                'page_param': 'errors_page',
             },
         ),
+        'pc_errors_definition': errors_definition,
+        'pc_errors_state': errors_state,
     }
 
 def computer_error_list(request):

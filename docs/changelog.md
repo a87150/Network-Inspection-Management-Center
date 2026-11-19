@@ -5,6 +5,26 @@
 本文件只记录**已经生效的变更**和**仍待处理的问题**。
 系统当前是什么样，请看导航里的架构、设备巡检、人员与域控、数据库文档，本文件不重复描述。
 
+## 1.58（2026-11-19）
+
+修掉资产列表整片空白，并把同屏多表的分页筛选做全。
+
+### 空白页的根因
+
+`list.html` 的 `page_scripts` 块在 1.54 改模板时丢了 `<script type="module" src="app/vue/boot.mjs">`。浏览器拿不到 boot 模块，Vue 岛永远不挂载，表格区就是一片空白——服务端 payload 里躺着 20 行 926 条，页面上一个也看不见。补回该标签后五类资产列表恢复正常。
+
+这个 bug 是测试抓不到的：断言全在服务端，DOM 挂载属于浏览器行为。教训记在这里——改挂载点所在模板时，`page_scripts` 也要一起看。
+
+### 表查询层的前缀已经有了，只是没用
+
+`index/common/table_query.py` 本就支持 `prefix`：`apply_table_filters(..., prefix='accounts')` 会读 `accounts_filter_*` / `accounts_page` / `accounts_sort`，`table_state['parameter_names']` 也已经按前缀生成，`common/table_workspace.html` 用的正是这套名字。所以这次没有改查询层，只是把它用起来。
+
+域控三个页签各用 `accounts` / `computers` / `groups` 前缀，PC 的采集异常用 `errors` 前缀，各自的分页、排序、筛选互不干扰。旧的无前缀链接由 `_alias_legacy_parameters()` 补成别名，书签不会失效。
+
+### PC 分析记录不是表格
+
+原以为 `/computers/analyses/` 是表格页，实际它是任务与统计视图，字段来自分析结果而非资产快照——`computer_logs` 表定义对应的是 `ComputerLogFile`，套到 `ComputerAnalysis` 上直接 `FieldError: Cannot resolve keyword 'platform'`。所以「分析记录」页签给的是最近八次分析与总数，完整视图仍在 `/computers/analyses/`。「采集异常」是真正的表格，带完整筛选与分页。
+
 ## 1.57（2026-11-19）
 
 同一实体的列表、统计、详情与专属操作面收进一个页面。

@@ -6,7 +6,7 @@ from django.contrib import messages
 from index.common.access import admin_required, is_admin
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
-from django.http import Http404, QueryDict
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
@@ -186,27 +186,42 @@ def domain_controller_settings(request):
     return _render_domain_settings(request, config, form)
 
 
-def _without_filters(request):
-    """非当前页签的查询上下文：不继承任何 filter_/sort/page 参数。
+LEGACY_TABLE_PARAMETERS = frozenset({'sort', 'order', 'page', 'page_size', 'q', 'status', 'category'})
 
-    三个域对象表字段各不相同，共用一套 filter_* 只会让互不认识的键互相误伤，
-    所以只有当前页签吃 request.GET，其余取默认排序与首页。
+
+def _alias_legacy_parameters(request, object_type):
+    """旧链接用的是无前缀参数（filter_department、page），映射到当前页签的命名空间。
+
+    三个页签共用一页后参数必须带前缀才不打架，但外部书签和旧链接还是无前缀写法；
+    这里补一层别名，两种都能用，不必要求重新发链接。
     """
+    get = request.GET
+    legacy = [key for key in get
+              if key in LEGACY_TABLE_PARAMETERS or key.startswith('filter_')]
+    if not legacy:
+        return request
     alias = copy.copy(request)
-    alias.GET = QueryDict()
+    data = get.copy()
+    for key in legacy:
+        data.setdefault(f'{object_type}_{key}', get[key])
+    alias.GET = data
     return alias
 
 
 def _domain_panel(request, object_type, *, active, operation_form=None):
-    """一个域对象视图渲染所需的全部数据；三个页签各取一份。"""
+    """一个域对象视图渲染所需的全部数据；三个页签各取一份。
+
+    三张表各用带前缀的查询参数（accounts_page、groups_filter_department 之类），
+    互不干扰——表查询层本来就有 prefix 支持，这里只是把它用起来。
+    """
     page = _domain_page(object_type)
     table_definition = get_table_definition(page.table_key)
-    source = request if active else _without_filters(request)
+    scoped = _alias_legacy_parameters(request, object_type)
     objects, table_state = apply_table_filters(
-        source, page.model.objects.all(), table_definition,
+        scoped, page.model.objects.all(), table_definition, prefix=object_type,
     )
     page_obj = Paginator(objects, table_state['page_size']).get_page(
-        source.GET.get('page'),
+        scoped.GET.get(f'{object_type}_page'),
     )
     admin = is_admin(request.user)
     can_select = admin and object_type != 'groups'
@@ -264,7 +279,7 @@ def _domain_panel(request, object_type, *, active, operation_form=None):
             'page_obj': page_obj,
             'page_sizes': PAGE_SIZES,
             'table_export_path': reverse('table_export', args=[page.table_key]),
-            'pagination_query': query_without_page(request),
+            'pagination_query': query_without_page(request, f'{object_type}_page'),
             'detail_route': page.detail_route,
             'can_manage_domain': can_manage,
             'domain_object_type': {'accounts': 'account', 'computers': 'computer',
