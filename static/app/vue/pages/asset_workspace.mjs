@@ -24,6 +24,7 @@ export default {
         csrf: {type: String, default: ''},
         selectedId: {type: String, default: ''},
         initialDetail: {type: Object, default: null},
+        departments: {type: Array, default: () => []},
     },
     data() {
         return {
@@ -40,6 +41,8 @@ export default {
             detailId: this.selectedId,
             detailLoading: false,
             detailError: '',
+            // 有部门数据时左栏多一个切换：人员列表 / 部门列表。
+            activePane: 'rows',
         };
     },
     computed: {
@@ -153,8 +156,31 @@ export default {
         },
     },
     template: `
-    <div class="row g-3">
-        <div class="col-12 col-lg-7">
+    <div class="asset-workspace">
+        <div>
+            <ul v-if="departments.length" class="nav nav-pills gap-2 mb-2" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" :class="{active: activePane === 'rows'}" type="button"
+                            role="tab" :aria-selected="activePane === 'rows'" @click="activePane = 'rows'">人员列表</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" :class="{active: activePane === 'departments'}" type="button"
+                            role="tab" :aria-selected="activePane === 'departments'" @click="activePane = 'departments'">部门列表</button>
+                </li>
+            </ul>
+            <div v-if="activePane === 'departments'" class="card surface-card"><div class="card-body p-0">
+                <table class="table table-hover align-middle mb-0">
+                    <caption class="visually-hidden">部门人数分布</caption>
+                    <thead><tr><th scope="col">部门</th><th scope="col">总数</th><th scope="col">在职</th><th scope="col">离职</th><th scope="col">在职率</th></tr></thead>
+                    <tbody>
+                    <tr v-for="row in departments" :key="row.department">
+                        <td>[[ row.department ]]</td><td>[[ row.total ]]</td><td>[[ row.active ]]</td>
+                        <td>[[ row.departed ]]</td><td>[[ row.active_rate ]]%</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div></div>
+            <div v-show="activePane === 'rows'">
             <p v-if="error" class="alert alert-danger py-2" role="alert">[[ error ]]</p>
             <div class="table-responsive" role="region" :aria-label="regionLabel || (label + '数据表')" tabindex="0" :aria-busy="loading ? 'true' : 'false'">
                 <table class="table data-table table-hover align-middle mb-0">
@@ -196,9 +222,14 @@ export default {
                 <span class="text-secondary">第 [[ currentPage ]] / [[ totalPages ]] 页，共 [[ total ]] 条（[[ from ]]–[[ to ]]）</span>
                 <button class="btn btn-outline-secondary btn-sm" type="button" :disabled="currentPage >= totalPages || loading" @click="load(currentPage + 1)">下一页</button>
             </nav>
+            </div>
         </div>
-        <div class="col-12 col-lg-5">
-            <div class="card surface-card h-100"><div class="card-body">
+        <aside v-if="detail || detailLoading || detailError" class="asset-drawer" role="dialog" aria-label="详情">
+            <div class="asset-drawer__header">
+                <span class="asset-drawer__eyebrow">详情</span>
+                <button type="button" class="asset-drawer__close" aria-label="关闭详情" @click="closeDetail">✕</button>
+            </div>
+            <div class="asset-drawer__body">
                 <p v-if="detailError" class="alert alert-danger py-2 mb-2" role="alert">[[ detailError ]]</p>
                 <p v-if="detailLoading" class="text-secondary mb-0">正在加载详情…</p>
                 <resource-detail v-else-if="detail" v-bind="detail"></resource-detail>
@@ -206,8 +237,7 @@ export default {
                     <strong>选择一条记录</strong>
                     <span>点左侧任意一行，详情在这里展开，不用离开列表。</span>
                 </div>
-            </div></div>
-            <button v-if="detail" class="btn btn-outline-secondary btn-sm mt-2" type="button" @click="closeDetail">收起详情</button>
-        </div>
+            </div>
+        </aside>
     </div>`,
 };

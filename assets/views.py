@@ -201,6 +201,7 @@ def _asset_list_context(request, kind, *, integration_context=None, creation_for
             'csrf': get_token(request),
             'selectedId': (selected_id if selected_id is not None
                            else request.GET.get('selected', '')),
+            'departments': context.get('departments') or [],
         },
     )
     return context
