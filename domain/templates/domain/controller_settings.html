@@ -4,7 +4,7 @@
 {% block content %}{% if can_administer %}
 <header class="page-heading">
     <div class="page-heading__copy"><p class="page-heading__eyebrow">目录服务</p><h1 class="page-heading__title">域控管理</h1><p class="page-heading__description">统一配置 Active Directory，并同步查看域账户、域计算机和域分组。</p></div>
-    {% if can_administer and can_manage_domain %}<div class="page-heading__actions"><form method="post" class="d-inline">{% csrf_token %}<button class="btn btn-primary" type="submit" name="action" value="sync">从域控同步</button></form><button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#domainStatisticsModal">未登录天数设置</button>{% if can_administer %}<button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#domainConfigModal">域控连接设置</button>{% endif %}</div>{% endif %}
+    {% if can_administer and can_manage_domain %}<div class="page-heading__actions"><button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#domainStatisticsModal">未登录天数设置</button>{% if can_administer %}<button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#domainConfigModal">域控连接设置</button>{% endif %}<form method="post" class="d-inline">{% csrf_token %}<button class="btn btn-primary" type="submit" name="action" value="sync">从域控同步</button></form></div>{% endif %}
 </header>
 
 <div class="row g-3 mb-4">
@@ -12,6 +12,8 @@
     <div class="col-12 col-md-4"><a class="card surface-card metric-card h-100 text-decoration-none text-body{% if selected_domain_object == 'computers' %} border-primary{% endif %}" href="?object=computers"{% if selected_domain_object == 'computers' %} aria-current="page"{% endif %}><div class="card-body"><div class="metric-label">域计算机</div><div class="metric">{{ computer_total }}</div><div class="small mt-2">启用 <span class="text-success">{{ computer_active }}</span> · <span class="{% if computer_inactive %}text-danger{% endif %}">停用 {{ computer_inactive }}</span></div><div class="small mt-2">超过 <span data-domain-inactive-days>{{ inactive_days }}</span> 天未登录 <span data-domain-stale="computer" class="{% if computer_stale %}text-danger{% else %}text-secondary{% endif %}">{{ computer_stale }}</span></div><div class="small text-secondary mt-1">缺少登录记录 {{ computer_missing_login }} <span>（以上仅统计启用计算机）</span></div><div class="small text-primary mt-2">查看域计算机{% if selected_domain_object == 'computers' %} · 当前{% endif %}</div></div></a></div>
     <div class="col-12 col-md-4"><a class="card surface-card metric-card h-100 text-decoration-none text-body{% if selected_domain_object == 'groups' %} border-primary{% endif %}" href="?object=groups"{% if selected_domain_object == 'groups' %} aria-current="page"{% endif %}><div class="card-body"><div class="metric-label">域分组</div><div class="metric">{{ group_total }}</div><div class="small mt-2">安全组 {{ security_group_total }} · 通讯组 {{ distribution_group_total }}</div><div class="small text-primary mt-2">查看域分组</div></div></a></div>
 </div>
+
+{% include 'domain/operation_modal.html' %}
 
 {% include 'domain/object_panel.html' with panel=active_domain_panel %}
 
@@ -74,6 +76,8 @@
 {% endif %}
 {% endif %}{% endblock %}
 {% block page_scripts %}
+<script type="module" src="{% static 'app/vue/boot.mjs' %}"></script>
+{% include 'common/scripts/table_workspace.html' %}
 {% include 'common/scripts/modal_workflows.html' %}
 {% include 'common/scripts/inspection_workflows.html' %}
 {% endblock %}

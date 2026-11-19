@@ -14,7 +14,7 @@
     </div>
 </header>
 {% if pc_tab %}{% include 'pc/tabs.html' %}{% endif %}
-{% if overview %}{% include 'devices/overview_strip.html' with item_name=item_name item_key=item_key overview=overview %}{% endif %}
+{% if overview and item_key != 'computers' %}{% include 'devices/overview_strip.html' with item_name=item_name item_key=item_key overview=overview %}{% endif %}
 {% if collection_hint %}<div class="alert alert-info"><strong>采集方式：</strong>{{ collection_hint }}</div>{% endif %}
 {% if data_source_note %}<div class="alert alert-info">{{ data_source_note }}</div>{% endif %}
 {% if can_administer and item_key == 'computers' and not pc_upload_config %}<div class="alert alert-warning">请先保存 PC 采集 API 配置，再下载采集包。<a href="{% url 'computer_analysis_list' %}?task_modal=profile">前往分析配置</a></div>{% endif %}
@@ -39,6 +39,16 @@
     </tbody>
 </table>
 </div></div>
+{% elif view == 'access' %}
+{% comment %}弱电设备的主页面第三个视图：门禁记录。{% endcomment %}
+<div data-table-workspace data-table-key="{{ access_definition.key }}">
+<div class="card surface-card table-scroll-shell">
+<div id="device-access" data-vue-page="access-records" data-vue-bootstrap="device-access-bootstrap">
+<noscript><p class="alert alert-warning mb-0">门禁记录需要启用 JavaScript。</p></noscript>
+</div>
+</div>
+{{ access_records|json_script:"device-access-bootstrap" }}
+</div>
 {% elif view == 'records' %}
 {% comment %}设备主页面的第二个视图：巡检记录，不跳转到独立页面。{% endcomment %}
 <div data-table-workspace data-table-key="{{ record_definition.key }}">
@@ -67,11 +77,10 @@
 </div>
 </div>
 {% if pc_tab %}
-<div class="tab-pane fade{% if pc_tab == 'analyses' %} show active{% endif %}" id="pc-pane-analyses" role="tabpanel" aria-labelledby="pc-tab-analyses">
-    {% include 'pc/analysis_pane.html' %}
-</div>
-<div class="tab-pane fade{% if pc_tab == 'errors' %} show active{% endif %}" id="pc-pane-errors" role="tabpanel" aria-labelledby="pc-tab-errors">
-    {% include 'pc/error_pane.html' %}
+<div class="tab-pane fade{% if pc_tab == 'logs' %} show active{% endif %}" id="pc-pane-logs" role="tabpanel" aria-labelledby="pc-tab-logs">
+    {% comment %}采集异常单独一栏放在日志列表上方，两者同属一个视图。{% endcomment %}
+    <div class="mb-3">{% include 'pc/error_pane.html' %}</div>
+    {% include 'pc/log_pane.html' %}
 </div>
 </div>
 {% endif %}

@@ -41,8 +41,6 @@ export default {
             detailId: this.selectedId,
             detailLoading: false,
             detailError: '',
-            // 有部门数据时左栏多一个切换：人员列表 / 部门列表。
-            activePane: 'rows',
         };
     },
     computed: {
@@ -62,9 +60,19 @@ export default {
     mounted() {
         this.syncColumnToggles();
         document.addEventListener('change', this.syncColumnToggles);
+        // 弹窗关闭事件用原生监听：Vue 模板里的事件名带点会被当成修饰符。
+        if (this.$refs.detailModal) {
+            this.$refs.detailModal.addEventListener('hidden.bs.modal', this.closeDetail);
+        }
+        if (this.selectedId && this.detailBase) {
+            this.openDetail({id: this.selectedId});
+        }
     },
     unmounted() {
         document.removeEventListener('change', this.syncColumnToggles);
+        if (this.$refs.detailModal) {
+            this.$refs.detailModal.removeEventListener('hidden.bs.modal', this.closeDetail);
+        }
     },
     methods: {
         syncColumnToggles() {
@@ -145,10 +153,16 @@ export default {
             }
         },
         showDetailModal() {
-            const element = document.getElementById('assetDetailModal');
-            if (element && window.bootstrap) {
+            const element = this.$refs.detailModal;
+            if (!element) return;
+            if (window.bootstrap && window.bootstrap.Modal) {
                 window.bootstrap.Modal.getOrCreateInstance(element).show();
+                return;
             }
+            // Bootstrap 未就绪时退回到手动展开，至少能让内容可见。
+            element.classList.add('show');
+            element.style.display = 'block';
+            element.removeAttribute('aria-hidden');
         },
         closeDetail() {
             this.detail = null;
@@ -165,29 +179,6 @@ export default {
     template: `
     <div>
         <div>
-            <ul v-if="departments.length" class="nav nav-pills gap-2 mb-2" role="tablist">
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" :class="{active: activePane === 'rows'}" type="button"
-                            role="tab" :aria-selected="activePane === 'rows'" @click="activePane = 'rows'">人员列表</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" :class="{active: activePane === 'departments'}" type="button"
-                            role="tab" :aria-selected="activePane === 'departments'" @click="activePane = 'departments'">部门列表</button>
-                </li>
-            </ul>
-            <div v-if="activePane === 'departments'" class="card surface-card"><div class="card-body p-0">
-                <table class="table table-hover align-middle mb-0">
-                    <caption class="visually-hidden">部门人数分布</caption>
-                    <thead><tr><th scope="col">部门</th><th scope="col">总数</th><th scope="col">在职</th><th scope="col">离职</th><th scope="col">在职率</th></tr></thead>
-                    <tbody>
-                    <tr v-for="row in departments" :key="row.department">
-                        <td>[[ row.department ]]</td><td>[[ row.total ]]</td><td>[[ row.active ]]</td>
-                        <td>[[ row.departed ]]</td><td>[[ row.active_rate ]]%</td>
-                    </tr>
-                    </tbody>
-                </table>
-            </div></div>
-            <div v-show="activePane === 'rows'">
             <p v-if="error" class="alert alert-danger py-2" role="alert">[[ error ]]</p>
             <div class="table-responsive" role="region" :aria-label="regionLabel || (label + '数据表')" tabindex="0" :aria-busy="loading ? 'true' : 'false'">
                 <table class="table data-table table-hover align-middle mb-0">
@@ -231,8 +222,9 @@ export default {
             </nav>
             </div>
         </div>
-        <div class="modal fade" id="assetDetailModal" tabindex="-1" aria-labelledby="assetDetailModalTitle" aria-hidden="true" @hidden.bs.modal="closeDetail">
-            <div class="modal-dialog modal-lg modal-dialog-scrollable modal-shell">
+        <Teleport to="body">
+        <div class="modal fade" id="assetDetailModal" ref="detailModal" tabindex="-1" aria-labelledby="assetDetailModalTitle" aria-hidden="true" >
+            <div class="modal-dialog modal-xl modal-dialog-scrollable modal-shell">
                 <div class="modal-content modal-surface">
                     <div class="modal-header">
                         <h2 class="modal-title fs-5" id="assetDetailModalTitle">[[ (detail && detail.title) || '详情' ]]</h2>
@@ -246,5 +238,6 @@ export default {
                 </div>
             </div>
         </div>
+        </Teleport>
     </div>`,
 };

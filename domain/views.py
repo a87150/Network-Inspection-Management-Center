@@ -186,10 +186,21 @@ def _domain_panels(request):
         _domain_panel(request, kind, active=(kind == selected))
         for kind in DOMAIN_OBJECT_PAGES
     ]
+    active = next(p for p in panels if p['active'])
+    # 批量操作栏跟着当前方块走：账户和计算机有动作清单，分组没有。
+    singular = {'accounts': 'account', 'computers': 'computer'}.get(selected)
     return {
         'domain_panels': panels,
-        'active_domain_panel': next(p for p in panels if p['active']),
+        'active_domain_panel': active,
         'selected_domain_object': selected,
+        'domain_object_type': active['context']['domain_object_type'],
+        'domain_operation_form': (
+            DomainOperationForm() if is_admin(request.user) else None
+        ),
+        'domain_operation_actions': (
+            DOMAIN_OPERATION_ACTIONS.get(singular, ())
+            if is_admin(request.user) else ()
+        ),
     }
 
 

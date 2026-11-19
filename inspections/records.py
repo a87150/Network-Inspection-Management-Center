@@ -483,6 +483,33 @@ def _error_actions(analysis):
 
 
 
+
+
+def access_records_payload(request):
+    """弱电设备页的门禁记录视图，参数前缀 access_。"""
+    from net.models.access import AccessRecord
+
+    definition = get_table_definition('access_records')
+    records, state = apply_table_filters(
+        request, AccessRecord.objects.select_related('source'), definition,
+        prefix='access',
+    )
+    page_obj = Paginator(records, state['page_size']).get_page(
+        request.GET.get('access_page'),
+    )
+    return {
+        'access_records': table_payload(
+            page_obj, definition,
+            table_row_payloads(page_obj.object_list, definition),
+            extra={
+                'endpoint': '/api/v1/access-records/', 'label': '门禁记录',
+                'region_label': '门禁记录数据表', 'page_param': 'access_page',
+            },
+        ),
+        'access_definition': definition,
+        'access_state': state,
+    }
+
 def project_records_payload(kind, request):
     """设备主页面上的「巡检记录」视图：与本页设备表共用一带前缀的参数空间。"""
     definition = project_record_definition(kind)
@@ -500,6 +527,33 @@ def project_records_payload(kind, request):
             page_obj, definition, f'/api/v1/inspection-records/{kind}/', '巡检记录',
             INSPECTION_RECORD_BADGES, extra={'page_param': 'records_page'},
         ),
+    }
+
+
+
+def computer_logs_payload(request):
+    """PC 日志文件清单，参数前缀 logs_，和资产表的参数空间分开。"""
+    from net.models.records import ComputerLogFile
+
+    definition = get_table_definition('computer_logs')
+    logs, state = apply_table_filters(
+        request, ComputerLogFile.objects.select_related('computer'), definition,
+        prefix='logs',
+    )
+    page_obj = Paginator(logs, state['page_size']).get_page(
+        request.GET.get('logs_page'),
+    )
+    return {
+        'pc_logs': table_payload(
+            page_obj, definition,
+            table_row_payloads(page_obj.object_list, definition),
+            extra={
+                'endpoint': '/api/v1/computer-logs/', 'label': 'PC 日志',
+                'region_label': 'PC 日志数据表', 'page_param': 'logs_page',
+            },
+        ),
+        'pc_logs_definition': definition,
+        'pc_logs_state': state,
     }
 
 def computer_workspace_payloads(request):
@@ -538,6 +592,7 @@ def computer_workspace_payloads(request):
         ),
         'pc_errors_definition': errors_definition,
         'pc_errors_state': errors_state,
+        **computer_logs_payload(request),
     }
 
 def computer_error_list(request):

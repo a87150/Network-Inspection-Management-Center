@@ -1,6 +1,6 @@
 {% comment %}
-PC 的资产、分析记录、采集异常同屏渲染：上方三个方块只切显示，不跳转页面。
-方块样式与域控管理、人员页保持一致，统计数字随页签变化由后端给出。
+PC 主页面顶部的三个方块：资产台账、分析记录（跳原页面）、日志（含采集异常）。
+和域控管理页同一套样式，整块可点。
 {% endcomment %}
 <div class="row g-3 mb-3" role="tablist" aria-label="PC 视图">
     <div class="col-12 col-md-4">
@@ -10,32 +10,33 @@ PC 的资产、分析记录、采集异常同屏渲染：上方三个方块只�
             <div class="card-body">
                 <div class="metric-label">PC 资产</div>
                 <div class="metric">{{ overview.total|default:'-' }}</div>
-                <div class="small mt-2">看资产台账、责任人与启用状态</div>
+                <div class="small mt-2">活跃 {{ overview.active|default:'-' }}（{{ overview.active_rate|default:'-' }}%）</div>
+                <div class="small text-secondary mt-1">资产台账、责任人与启用状态</div>
                 <div class="small text-primary mt-2">查看 PC 资产{% if pc_tab == 'assets' %} · 当前{% endif %}</div>
             </div>
         </button>
     </div>
     <div class="col-12 col-md-4">
-        <button class="card surface-card metric-card h-100 w-100 text-start text-body{% if pc_tab == 'analyses' %} border-primary{% endif %}" type="button"
-                id="pc-tab-analyses" data-bs-toggle="tab" data-bs-target="#pc-pane-analyses"
-                role="tab" aria-controls="pc-pane-analyses" aria-selected="{% if pc_tab == 'analyses' %}true{% else %}false{% endif %}">
+        <a class="card surface-card metric-card h-100 text-decoration-none text-body" href="{% url 'computer_analysis_list' %}">
             <div class="card-body">
                 <div class="metric-label">分析记录</div>
-                <div class="metric">{{ pc_analyses_total|default:'-' }}</div>
-                <div class="small mt-2">每次采集的软件与硬件快照</div>
-                <div class="small text-primary mt-2">查看分析记录{% if pc_tab == 'analyses' %} · 当前{% endif %}</div>
+                <div class="metric">{{ pc_analyses_total }}</div>
+                <div class="small mt-2">正常 {{ pc_analysis_ok|default:0 }} · 异常 {{ pc_analysis_bad|default:0 }}</div>
+                <div class="small text-secondary mt-1">最近 {{ pc_analyses_recent.0.analysis_date|date:'Y-m-d'|default:'暂无' }}</div>
+                <div class="small text-primary mt-2">查看分析记录</div>
             </div>
-        </button>
+        </a>
     </div>
     <div class="col-12 col-md-4">
-        <button class="card surface-card metric-card h-100 w-100 text-start text-body{% if pc_tab == 'errors' %} border-primary{% endif %}" type="button"
-                id="pc-tab-errors" data-bs-toggle="tab" data-bs-target="#pc-pane-errors"
-                role="tab" aria-controls="pc-pane-errors" aria-selected="{% if pc_tab == 'errors' %}true{% else %}false{% endif %}">
+        <button class="card surface-card metric-card h-100 w-100 text-start text-body{% if pc_tab == 'logs' %} border-primary{% endif %}" type="button"
+                id="pc-tab-logs" data-bs-toggle="tab" data-bs-target="#pc-pane-logs"
+                role="tab" aria-controls="pc-pane-logs" aria-selected="{% if pc_tab == 'logs' %}true{% else %}false{% endif %}">
             <div class="card-body">
-                <div class="metric-label">采集异常</div>
-                <div class="metric">{{ pc_errors_state.total|default:'-' }}</div>
-                <div class="small mt-2">采集失败的机器与原因</div>
-                <div class="small text-primary mt-2">查看采集异常{% if pc_tab == 'errors' %} · 当前{% endif %}</div>
+                <div class="metric-label">日志</div>
+                <div class="metric">{{ pc_logs_state.total|default:'-' }}</div>
+                <div class="small mt-2">采集异常 {{ pc_errors_state.total|default:0 }}</div>
+                <div class="small text-secondary mt-1">日志文件清单，上方是采集异常</div>
+                <div class="small text-primary mt-2">查看日志{% if pc_tab == 'logs' %} · 当前{% endif %}</div>
             </div>
         </button>
     </div>

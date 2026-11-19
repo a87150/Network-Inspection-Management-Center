@@ -12,6 +12,7 @@ from django.db import transaction
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
@@ -201,6 +202,30 @@ def alert_list(request):
         'pagination_query': query_without_page(request),
     }
     context.update(alert_modal_context(request))
+    # 告警与维护记录合成一个页面，用顶部方块切换。
+    context['view'] = 'maintenance' if request.GET.get('view') == 'maintenance' else 'alerts'
+    if context['view'] == 'maintenance':
+        from assets.maintenance import (
+            PAGE_SIZE, STATE_CHOICES, row_payloads, window_metrics, window_queryset,
+        )
+
+        now = timezone.now()
+        state_filter = (request.GET.get('state') or '').strip()
+        page = Paginator(window_queryset(state_filter, now), PAGE_SIZE).get_page(
+            request.GET.get('page'),
+        )
+        context['maintenance_bootstrap'] = {
+            'state': state_filter,
+            'states': [{'value': value, 'label': label} for value, label in STATE_CHOICES],
+            'endpoint': '/api/v1/maintenance-windows/',
+            'count': page.paginator.count,
+            'page': page.number,
+            'pages': page.paginator.num_pages,
+            'page_size': PAGE_SIZE,
+            'rows': row_payloads(page.object_list, now),
+            'metrics': window_metrics(now),
+            'can_administer': True,
+        }
     return render(request, 'alerts/list.html', context)
 
 

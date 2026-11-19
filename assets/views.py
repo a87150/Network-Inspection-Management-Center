@@ -182,9 +182,17 @@ def _asset_list_context(request, kind, *, integration_context=None, creation_for
         from inspections.records import computer_workspace_payloads
         context.update(computer_workspace_payloads(request))
     elif kind != 'people':
-        from inspections.records import project_records_payload
+        from inspections.records import access_records_payload, project_records_payload
         context.update(project_records_payload(kind, request))
+        if kind == 'weakcurrent':
+            context.update(access_records_payload(request))
     context['view'] = request.GET.get('view', 'rows')
+    # 记录类视图（巡检记录、门禁记录、日志）没有设备级动作，头部按钮跟着视图走。
+    if context['view'] != 'rows':
+        for flag in ('action_can_manage_devices', 'action_can_import',
+                     'action_issue_settings', 'action_script_download'):
+            context[flag] = False
+        context['task_project_kind'] = ''
     if kind == 'people':
         context['departments'] = department_totals()
     context['overview'] = (

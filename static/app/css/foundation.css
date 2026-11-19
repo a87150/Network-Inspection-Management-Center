@@ -1092,3 +1092,19 @@ details > summary {
         border-radius: .8rem .8rem 0 0;
     }
 }
+
+/* 列表页顶部的切换方块：两个方块固定同高、内容行数固定，
+   切换视图时下方列表的位置不跳，避免整页重排带来的抖动。 */
+.metric-card .card-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.metric-card a.metric-card,
+a.card.metric-card {
+    min-height: 11.5rem;
+}
+
+a.card.metric-card .card-body > .small:last-child {
+    margin-top: auto;
+}
