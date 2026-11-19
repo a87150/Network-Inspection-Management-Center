@@ -1,26 +1,42 @@
 {% comment %}
-PC 的资产、分析记录、采集异常现在同屏渲染：页签只切显示。资产表带完整筛选，
-另外两个给首屏预览并链到各自的完整页——它们和资产表共用一套 query 参数会互相覆盖。
+PC 的资产、分析记录、采集异常同屏渲染：上方三个方块只切显示，不跳转页面。
+方块样式与域控管理、人员页保持一致，统计数字随页签变化由后端给出。
 {% endcomment %}
-<nav class="pc-tabs" aria-label="PC 视图">
-    <ul class="nav nav-tabs" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link{% if pc_tab == 'assets' %} active{% endif %}" type="button"
-                    id="pc-tab-assets" data-bs-toggle="tab" data-bs-target="#pc-pane-assets"
-                    role="tab" aria-controls="pc-pane-assets"
-                    aria-selected="{% if pc_tab == 'assets' %}true{% else %}false{% endif %}">PC 资产</button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link{% if pc_tab == 'analyses' %} active{% endif %}" type="button"
-                    id="pc-tab-analyses" data-bs-toggle="tab" data-bs-target="#pc-pane-analyses"
-                    role="tab" aria-controls="pc-pane-analyses"
-                    aria-selected="{% if pc_tab == 'analyses' %}true{% else %}false{% endif %}">分析记录</button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link{% if pc_tab == 'errors' %} active{% endif %}" type="button"
-                    id="pc-tab-errors" data-bs-toggle="tab" data-bs-target="#pc-pane-errors"
-                    role="tab" aria-controls="pc-pane-errors"
-                    aria-selected="{% if pc_tab == 'errors' %}true{% else %}false{% endif %}">采集异常</button>
-        </li>
-    </ul>
-</nav>
+<div class="row g-3 mb-3" role="tablist" aria-label="PC 视图">
+    <div class="col-12 col-md-4">
+        <button class="card surface-card metric-card h-100 w-100 text-start text-body{% if pc_tab == 'assets' %} border-primary{% endif %}" type="button"
+                id="pc-tab-assets" data-bs-toggle="tab" data-bs-target="#pc-pane-assets"
+                role="tab" aria-controls="pc-pane-assets" aria-selected="{% if pc_tab == 'assets' %}true{% else %}false{% endif %}">
+            <div class="card-body">
+                <div class="metric-label">PC 资产</div>
+                <div class="metric">{{ overview.total|default:'-' }}</div>
+                <div class="small mt-2">看资产台账、责任人与启用状态</div>
+                <div class="small text-primary mt-2">查看 PC 资产{% if pc_tab == 'assets' %} · 当前{% endif %}</div>
+            </div>
+        </button>
+    </div>
+    <div class="col-12 col-md-4">
+        <button class="card surface-card metric-card h-100 w-100 text-start text-body{% if pc_tab == 'analyses' %} border-primary{% endif %}" type="button"
+                id="pc-tab-analyses" data-bs-toggle="tab" data-bs-target="#pc-pane-analyses"
+                role="tab" aria-controls="pc-pane-analyses" aria-selected="{% if pc_tab == 'analyses' %}true{% else %}false{% endif %}">
+            <div class="card-body">
+                <div class="metric-label">分析记录</div>
+                <div class="metric">{{ pc_analyses_total|default:'-' }}</div>
+                <div class="small mt-2">每次采集的软件与硬件快照</div>
+                <div class="small text-primary mt-2">查看分析记录{% if pc_tab == 'analyses' %} · 当前{% endif %}</div>
+            </div>
+        </button>
+    </div>
+    <div class="col-12 col-md-4">
+        <button class="card surface-card metric-card h-100 w-100 text-start text-body{% if pc_tab == 'errors' %} border-primary{% endif %}" type="button"
+                id="pc-tab-errors" data-bs-toggle="tab" data-bs-target="#pc-pane-errors"
+                role="tab" aria-controls="pc-pane-errors" aria-selected="{% if pc_tab == 'errors' %}true{% else %}false{% endif %}">
+            <div class="card-body">
+                <div class="metric-label">采集异常</div>
+                <div class="metric">{{ pc_errors_state.total|default:'-' }}</div>
+                <div class="small mt-2">采集失败的机器与原因</div>
+                <div class="small text-primary mt-2">查看采集异常{% if pc_tab == 'errors' %} · 当前{% endif %}</div>
+            </div>
+        </button>
+    </div>
+</div>

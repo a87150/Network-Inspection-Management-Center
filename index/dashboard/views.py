@@ -77,16 +77,18 @@ def index(request):
     items = [
         {
             'key': 'people',
-            'name': '人员',
+            'name': '人员部门',
             **_card_summary_values(summaries['people'], static=True),
             'total_label': '人员总数',
             'normal_label': '在职人数',
             'abnormal_label': '离职人数',
             'checked_label': '在职人数',
             'bad_label': '离职人数',
-            'list_url': reverse('asset_list', args=['people']),
-            'detail_url': reverse('people_statistics'),
-            'detail_label': '人员统计',
+            # 人员和部门现在是同一页的两个视图，卡片直接落到部门视图。
+            'list_url': reverse('asset_list', args=['people']) + '?view=departments',
+            'list_label': '查看部门',
+            'detail_url': reverse('asset_list', args=['people']),
+            'detail_label': '查看人员',
         },
         {
             'key': 'domain',

@@ -24,6 +24,34 @@
 {% if can_administer and personnel_api_import %}{% if can_administer %}{% include 'integrations/task_notifications.html' %}{% endif %}{% endif %}
 {% if can_administer and task_project_kind %}{% if can_administer %}{% include 'inspections/profile_modal.html' %}{% endif %}{% if can_administer %}{% include 'inspections/run_modal.html' %}{% endif %}{% if can_administer %}{% include 'alerts/policy_modal.html' %}{% endif %}{% endif %}
 
+{% if view == 'departments' %}
+{% comment %}部门视图没有筛选：部门表不由表查询层驱动，套人员表的筛选栏只会误导。{% endcomment %}
+<div class="card surface-card"><div class="table-responsive">
+<table class="table table-hover align-middle mb-0">
+    <caption class="visually-hidden">{{ item_name }}部门分布</caption>
+    <thead><tr><th scope="col">部门</th><th scope="col">总数</th><th scope="col">在职</th><th scope="col">离职</th><th scope="col">在职率</th></tr></thead>
+    <tbody>
+    {% for row in departments %}
+    <tr><td>{{ row.department }}</td><td>{{ row.total }}</td><td>{{ row.active }}</td><td>{{ row.departed }}</td><td>{{ row.active_rate }}%</td></tr>
+    {% empty %}
+    <tr><td colspan="5"><div class="empty-state"><strong>暂无部门数据</strong><span>导入人员后按部门自动汇总。</span></div></td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div></div>
+{% elif view == 'records' %}
+{% comment %}设备主页面的第二个视图：巡检记录，不跳转到独立页面。{% endcomment %}
+<div data-table-workspace data-table-key="{{ record_definition.key }}">
+<div class="table-toolbar">{% include 'common/table_workspace.html' with table_definition=record_definition table_state=record_state item_key='inspection_records' %}</div>
+<div class="card surface-card table-scroll-shell">
+<p class="table-scroll-hint">可横向滚动查看完整执行记录</p>
+<div id="device-records" data-vue-page="inspection-records" data-vue-bootstrap="device-records-bootstrap">
+<noscript><p class="alert alert-warning mb-0">记录表需要启用 JavaScript。</p></noscript>
+</div>
+</div>
+{{ project_records|json_script:"device-records-bootstrap" }}
+</div>
+{% else %}
 {% if pc_tab %}<div class="tab-content">{% endif %}
 <div class="{% if pc_tab %}tab-pane fade{% if pc_tab == 'assets' %} show active{% endif %}{% endif %}"{% if pc_tab %} id="pc-pane-assets" role="tabpanel" aria-labelledby="pc-tab-assets"{% endif %}>
 <div data-table-workspace data-table-key="{{ table_definition.key }}">
@@ -35,6 +63,7 @@
         </div>
         {{ workspace_table|json_script:"asset-workspace-bootstrap" }}
     </div>
+{% endif %}
 </div>
 </div>
 {% if pc_tab %}

@@ -173,7 +173,24 @@ def _render_domain_settings(request, config, form, *, open_domain_modal=False, s
         'inactivity_form': inactivity_form if inactivity_form is not None else DomainInactivityForm(initial={'inactive_days': config.inactive_days if config else 60}),
         'open_inactivity_modal': inactivity_form is not None or request.GET.get('inactivity_modal') == '1',
         **get_domain_statistics(inactive_days=config.inactive_days if config else 60),
+        **_domain_panels(request),
     })
+
+
+def _domain_panels(request):
+    """页面上方三个方块对应的三份列表，点哪个就显示哪个。"""
+    selected = request.GET.get('object', 'accounts')
+    if selected not in DOMAIN_OBJECT_PAGES:
+        selected = 'accounts'
+    panels = [
+        _domain_panel(request, kind, active=(kind == selected))
+        for kind in DOMAIN_OBJECT_PAGES
+    ]
+    return {
+        'domain_panels': panels,
+        'active_domain_panel': next(p for p in panels if p['active']),
+        'selected_domain_object': selected,
+    }
 
 
 def domain_controller_settings(request):

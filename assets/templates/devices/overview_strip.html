@@ -3,12 +3,48 @@
 metric-card 样式，不再另起一套。
 {% endcomment %}
 <div class="row g-3 mb-3" role="group" aria-label="{{ item_name }}概览">
-{% if item_key == 'people' %}
+{% if item_key != 'people' %}
     <div class="col-6 col-md-4 col-xl-2">
-        <div class="card metric-card surface-card h-100"><div class="card-body py-3">
-            <p class="text-secondary small mb-1">总人数</p>
-            <p class="metric mb-0">{{ overview.total }}</p>
-        </div></div>
+        <a class="card metric-card surface-card h-100 text-decoration-none{% if view != 'records' %} border-primary{% endif %}"
+           href="?view=rows" {% if view != 'records' %}aria-current="page"{% endif %}>
+            <div class="card-body py-3">
+                <p class="text-secondary small mb-1">设备</p>
+                <p class="metric mb-0">{{ overview.total }}</p>
+                <p class="text-secondary small mb-0">台{% if view != 'records' %} · 当前{% endif %}</p>
+            </div>
+        </a>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <a class="card metric-card surface-card h-100 text-decoration-none{% if view == 'records' %} border-primary{% endif %}"
+           href="?view=records" {% if view == 'records' %}aria-current="page"{% endif %}>
+            <div class="card-body py-3">
+                <p class="text-secondary small mb-1">巡检记录</p>
+                <p class="metric mb-0">{{ record_page_obj.paginator.count }}</p>
+                <p class="text-secondary small mb-0">条{% if view == 'records' %} · 当前{% endif %}</p>
+            </div>
+        </a>
+    </div>
+{% else %}
+    {# 两个切换方块和统计卡并列：点人员看人员表，点部门看部门表。 #}
+    <div class="col-6 col-md-4 col-xl-2">
+        <a class="card metric-card surface-card h-100 text-decoration-none{% if view != 'departments' %} border-primary{% endif %}"
+           href="?view=rows" {% if view != 'departments' %}aria-current="page"{% endif %}>
+            <div class="card-body py-3">
+                <p class="text-secondary small mb-1">人员</p>
+                <p class="metric mb-0">{{ overview.total }}</p>
+                <p class="text-secondary small mb-0">人{% if view != 'departments' %} · 当前{% endif %}</p>
+            </div>
+        </a>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <a class="card metric-card surface-card h-100 text-decoration-none{% if view == 'departments' %} border-primary{% endif %}"
+           href="?view=departments" {% if view == 'departments' %}aria-current="page"{% endif %}>
+            <div class="card-body py-3">
+                <p class="text-secondary small mb-1">部门</p>
+                <p class="metric mb-0">{{ departments|length }}</p>
+                <p class="text-secondary small mb-0">个{% if view == 'departments' %} · 当前{% endif %}</p>
+            </div>
+        </a>
     </div>
     <div class="col-6 col-md-4 col-xl-2">
         <div class="card metric-card surface-card h-100"><div class="card-body py-3">
@@ -42,7 +78,9 @@ metric-card 样式，不再另起一套。
             <p class="text-secondary small mb-0">{{ overview.tenure_sample_count }} 人有入职日期</p>
         </div></div>
     </div>
-{% else %}
+{% endif %}
+{% if item_key != 'people' %}
+    {# 设备类：总数卡片后面接各型号/厂商分布。 #}
     <div class="col-6 col-md-4 col-xl-2">
         <div class="card metric-card surface-card h-100"><div class="card-body py-3">
             <p class="text-secondary small mb-1">总数</p>

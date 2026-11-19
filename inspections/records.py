@@ -481,6 +481,27 @@ def _error_actions(analysis):
 
 
 
+
+
+def project_records_payload(kind, request):
+    """设备主页面上的「巡检记录」视图：与本页设备表共用一带前缀的参数空间。"""
+    definition = project_record_definition(kind)
+    records, state = apply_table_filters(
+        request, _infrastructure_records(kind), definition, prefix='records',
+    )
+    page_obj = Paginator(records, state['page_size']).get_page(
+        request.GET.get('records_page'),
+    )
+    return {
+        'record_definition': definition,
+        'record_state': state,
+        'record_page_obj': page_obj,
+        'project_records': _records_bootstrap(
+            page_obj, definition, f'/api/v1/inspection-records/{kind}/', '巡检记录',
+            INSPECTION_RECORD_BADGES, extra={'page_param': 'records_page'},
+        ),
+    }
+
 def computer_workspace_payloads(request):
     """PC 的分析记录与采集异常，供资产工作区同页展示。
 

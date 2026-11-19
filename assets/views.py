@@ -181,6 +181,10 @@ def _asset_list_context(request, kind, *, integration_context=None, creation_for
     if kind == 'computers':
         from inspections.records import computer_workspace_payloads
         context.update(computer_workspace_payloads(request))
+    elif kind != 'people':
+        from inspections.records import project_records_payload
+        context.update(project_records_payload(kind, request))
+    context['view'] = request.GET.get('view', 'rows')
     if kind == 'people':
         context['departments'] = department_totals()
     context['overview'] = (

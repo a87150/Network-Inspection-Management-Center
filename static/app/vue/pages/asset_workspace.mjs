@@ -141,6 +141,13 @@ export default {
                 this.detailError = failure.message || '详情加载失败';
             } finally {
                 this.detailLoading = false;
+                this.showDetailModal();
+            }
+        },
+        showDetailModal() {
+            const element = document.getElementById('assetDetailModal');
+            if (element && window.bootstrap) {
+                window.bootstrap.Modal.getOrCreateInstance(element).show();
             }
         },
         closeDetail() {
@@ -156,7 +163,7 @@ export default {
         },
     },
     template: `
-    <div class="asset-workspace">
+    <div>
         <div>
             <ul v-if="departments.length" class="nav nav-pills gap-2 mb-2" role="tablist">
                 <li class="nav-item" role="presentation">
@@ -224,20 +231,20 @@ export default {
             </nav>
             </div>
         </div>
-        <aside v-if="detail || detailLoading || detailError" class="asset-drawer" role="dialog" aria-label="详情">
-            <div class="asset-drawer__header">
-                <span class="asset-drawer__eyebrow">详情</span>
-                <button type="button" class="asset-drawer__close" aria-label="关闭详情" @click="closeDetail">✕</button>
-            </div>
-            <div class="asset-drawer__body">
-                <p v-if="detailError" class="alert alert-danger py-2 mb-2" role="alert">[[ detailError ]]</p>
-                <p v-if="detailLoading" class="text-secondary mb-0">正在加载详情…</p>
-                <resource-detail v-else-if="detail" v-bind="detail"></resource-detail>
-                <div v-else class="empty-state py-4">
-                    <strong>选择一条记录</strong>
-                    <span>点左侧任意一行，详情在这里展开，不用离开列表。</span>
+        <div class="modal fade" id="assetDetailModal" tabindex="-1" aria-labelledby="assetDetailModalTitle" aria-hidden="true" @hidden.bs.modal="closeDetail">
+            <div class="modal-dialog modal-lg modal-dialog-scrollable modal-shell">
+                <div class="modal-content modal-surface">
+                    <div class="modal-header">
+                        <h2 class="modal-title fs-5" id="assetDetailModalTitle">[[ (detail && detail.title) || '详情' ]]</h2>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+                    </div>
+                    <div class="modal-body modal-body--scroll">
+                        <p v-if="detailError" class="alert alert-danger py-2 mb-2" role="alert">[[ detailError ]]</p>
+                        <p v-if="detailLoading" class="text-secondary mb-0">正在加载详情…</p>
+                        <resource-detail v-else-if="detail" v-bind="detail"></resource-detail>
+                    </div>
                 </div>
             </div>
-        </aside>
+        </div>
     </div>`,
 };

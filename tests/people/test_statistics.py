@@ -98,9 +98,13 @@ class PeopleStatisticsPageTests(TestCase):
             item for item in response.context['items'] if item['key'] == 'people'
         )
 
-        self.assertEqual(people['list_url'], reverse('asset_list', args=['people']))
-        self.assertEqual(people['detail_url'], '/people/statistics/')
-        self.assertEqual(people['detail_label'], '人员统计')
+        # 卡片落到部门视图；人员视图是同一页的另一个视图。
+        self.assertEqual(
+            people['list_url'],
+            reverse('asset_list', args=['people']) + '?view=departments',
+        )
+        # 统计并进列表页后，卡片的两个入口是同一页的两个视图。
+        self.assertEqual(people['detail_label'], '查看人员')
         self.assertContains(response, 'href="/people/statistics/"')
 
     def test_empty_statistics_page_returns_zero_values(self):

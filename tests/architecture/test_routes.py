@@ -255,13 +255,14 @@ class DetailRouteTests(TestCase):
             ),
         }
 
+        # 人员和部门合并成一页的两个视图，卡片直接落到部门那份。
         self.assertEqual(
             items['people']['list_url'],
-            reverse('asset_list', args=['people']),
+            reverse('asset_list', args=['people']) + '?view=departments',
         )
         self.assertEqual(
             items['people']['detail_url'],
-            reverse('people_statistics'),
+            reverse('asset_list', args=['people']),
         )
         for key, (list_url, record_url) in expected.items():
             with self.subTest(key=key):

@@ -39,10 +39,9 @@ class DomainSyncTaskTests(TestCase):
         schedule = Schedule.objects.get()
         self.assertEqual(schedule.domain_config_id, self.config.pk)
         self.assertIsNotNone(schedule.next_run_at)
+        # 同步任务面板已按要求从域控首页移除，只保留调度本身的结果。
         page = self.client.get(response['Location'])
-        self.assertContains(page, 'id="domain-schedule-kind"')
-        self.assertContains(page, '保存定时同步设置')
-        self.assertContains(page, '域控同步任务')
+        self.assertEqual(page.status_code, 200)
 
     def test_due_schedule_enqueues_once_and_executes_local_snapshot(self):
         Schedule.objects.create(domain_config=self.config, kind='daily', daily_time='08:00',

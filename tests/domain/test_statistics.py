@@ -114,9 +114,7 @@ class DomainStatisticsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['account_total'], 1)
         self.assertEqual(response.context.get('account_stale'), 1)
-        self.assertContains(response, '本地同步数据')
-        self.assertContains(response, 'lastLogonTimestamp')
-        self.assertContains(response, '暂无成功同步记录')
+        # 同步区已按要求移除，对象卡片上的计数保留。
         self.assertContains(response, '缺少登录记录')
         login_reader(self.client)
         self.assertEqual(self.client.get(reverse('domain_controller_settings')).status_code, 403)
@@ -128,15 +126,12 @@ class DomainStatisticsTests(TestCase):
         login_admin(self.client)
         response = self.client.get(reverse('domain_controller_settings'))
         html = response.content.decode()
-        for route, count in (('domain_account_list', 2), ('domain_computer_list', 1)):
-            cards = re.findall(r'<a\b[^>]*href="' + re.escape(reverse(route)) + r'"[^>]*>(.*?)</a>', html, re.S)
+        # 方块改成同页切换后，href 是 ?object=...，不再是列表页路由。
+        for slug, count in (('accounts', 2), ('computers', 1)):
+            cards = re.findall(r'<a\b[^>]*href="\?object=' + slug + r'"[^>]*>(.*?)</a>', html, re.S)
             card = next((item for item in cards if 'metric-label' in item), '')
             card_text = re.sub(r'<[^>]+>', '', card)
             self.assertIn('超过 60 天未登录 ' + str(count), card_text)
-        sections = re.findall(r'<section\b[^>]*>(.*?)</section>', html, re.S)
-        sync_card = next((item for item in sections if '同步域控对象' in item), '')
-        self.assertIn('统计来自本地同步数据', sync_card)
-        self.assertIn('最近成功同步', sync_card)
         self.assertNotContains(response, '对象所在目录路径')
         self.assertNotContains(response, '计算机系统分布')
         self.assertNotContains(response, '本地同步数据概览')
