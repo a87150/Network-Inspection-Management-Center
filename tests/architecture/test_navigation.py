@@ -76,7 +76,7 @@ class NavigationDropdownTests(TestCase):
             },
             {
                 'people': {
-                    'toggle': '人员',
+                    'toggle': '人员部门',
                     'links': [
                         ('人员列表', '/assets/people/'),
                         ('人员统计', '/people/statistics/'),

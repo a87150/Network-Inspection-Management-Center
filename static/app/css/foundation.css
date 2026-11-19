@@ -690,10 +690,14 @@ th[aria-sort="descending"] .table-sort-link::after { color: var(--color-primary)
 
 /* 任务行整行可点：下方结果会换成这一条，所以在行上给出手型和选中态。 */
 .inspection-taskbar__row { cursor: pointer; }
-.inspection-taskbar__row:hover > td { background: rgba(85, 222, 246, .06); }
-.inspection-taskbar__row.is-selected > td { background: rgba(85, 222, 246, .12); box-shadow: inset 3px 0 0 var(--overview-cyan, #55def6); }
-.inspection-taskbar__row:focus-visible { outline: 2px solid var(--overview-cyan, #55def6); outline-offset: -2px; }
+.inspection-taskbar__row:hover > td { background: rgba(15, 23, 42, .035); }
+.inspection-taskbar__row.is-selected > td { background: rgba(15, 23, 42, .06); }
+.inspection-taskbar__row.is-selected > td:first-child { box-shadow: inset 3px 0 0 rgba(15, 23, 42, .22); }
+.inspection-taskbar__row:focus-visible { outline: 2px solid rgba(15, 23, 42, .35); outline-offset: -2px; }
 .task-detail-frame { display: block; width: 100%; height: min(72vh, 46rem); border: 0; background: transparent; }
+/* 换任务只换这一块的内容，所以给它一个加载态，别让旧数据静悄悄留着。 */
+#task-results-region { transition: opacity .15s ease; }
+#task-results-region.is-loading { opacity: .45; pointer-events: none; }
 
 .inspection-taskbar__header {
     display: flex;

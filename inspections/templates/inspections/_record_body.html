@@ -17,10 +17,5 @@
 {% if record_type == 'computer_analysis' %}
 {% include 'inspections/latest_analysis_statistics.html' %}
 {% else %}
-<div class="d-flex align-items-end justify-content-between mb-3">
-    <div><p class="page-heading__eyebrow mb-1">最新结果</p><h2 class="h5 mb-0">最新任务巡检记录</h2></div>
-    {% if latest_task %}<span class="small text-secondary">任务创建于 {{ latest_task.created_at|date:'Y-m-d H:i:s' }}</span>{% endif %}
-</div>
-
-{% include 'inspections/results_table.html' %}
+<div id="task-results-region">{% include 'inspections/_record_results.html' %}</div>
 {% endif %}

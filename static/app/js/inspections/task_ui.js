@@ -241,6 +241,37 @@ function bindTaskUI(root) {
 if (typeof window !== 'undefined') window.AppTaskUI = {bind: bindTaskUI};
 /* 任务表：点行把下方结果换成那一次，点「详情」开弹窗。
    行跳转保留全部现有查询参数，只改 task，翻页和筛选不会丢。 */
+async function selectTask(row) {
+    const region = document.getElementById('task-results-region');
+    if (!region) return;
+    const table = row.closest('.inspection-taskbar');
+    const url = new URL(window.location.href);
+    url.searchParams.set('task', row.dataset.taskId);
+    url.searchParams.set('fragment', 'results');
+    url.searchParams.delete('page');
+    region.classList.add('is-loading');
+    try {
+        const response = await fetch(url.toString(), {
+            headers: {'X-Requested-With': 'XMLHttpRequest'}, credentials: 'same-origin',
+        });
+        if (!response.ok) throw new Error(String(response.status));
+        // 只换结果区的内容：滚动位置、筛选栏、任务表都留在原地。
+        region.innerHTML = await response.text();
+        table.querySelectorAll('[data-task-row]').forEach((item) => {
+            item.classList.toggle('is-selected', item === row);
+        });
+        const clean = new URL(window.location.href);
+        clean.searchParams.set('task', row.dataset.taskId);
+        clean.searchParams.delete('fragment');
+        clean.searchParams.delete('page');
+        window.history.replaceState({}, '', clean.toString());
+    } catch (error) {
+        region.classList.remove('is-loading');
+        return;
+    }
+    region.classList.remove('is-loading');
+}
+
 function bindTaskTable(doc) {
     const table = doc.querySelector('.inspection-taskbar');
     if (!table || table.dataset.taskTableBound === '1') return;
@@ -260,10 +291,7 @@ function bindTaskTable(doc) {
         }
         const row = event.target.closest?.('[data-task-row]');
         if (!row) return;
-        const url = new URL(window.location.href);
-        url.searchParams.set('task', row.dataset.taskId);
-        url.searchParams.delete('page');
-        window.location.assign(url.toString());
+        selectTask(row);
     });
     table.addEventListener('keydown', (event) => {
         if (event.key !== 'Enter' && event.key !== ' ') return;

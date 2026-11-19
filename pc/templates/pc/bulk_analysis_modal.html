@@ -10,7 +10,7 @@
                 <p>可分析 PC：<strong>{{ bulk_count }}</strong> 台。</p>
                 <p class="small text-secondary">按全部筛选结果选择 PC，再取每台 PC 当前保留的最新日志；不受当前页限制。</p>
                 {% if bulk_profile %}
-                <form method="get" action="{% url 'computer_log_list' %}" class="mb-3">
+                <form method="get" action="{% url 'asset_list' 'computers' %}?object=logs" class="mb-3">
                     {% for key, value in bulk_get_params %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
                     <input type="hidden" name="bulk_mode" value="filtered">
                     <label class="form-label" for="bulk-profile">分析配置</label>

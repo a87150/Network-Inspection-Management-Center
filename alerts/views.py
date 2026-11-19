@@ -76,10 +76,10 @@ def _failure_redirect(request, next_url, modal, *, state, message='', **query):
     path = urlsplit(next_url).path
     allowed_paths = {reverse('alert_list')}
     if modal == 'policy':
-        allowed_paths.add(reverse('computer_analysis_list'))
+        allowed_paths.add(reverse('asset_list', args=['computers']) + '?object=analyses')
         allowed_paths.update(reverse('asset_list', args=[kind])
                              for kind in ('computers', 'networks', 'servers', 'weakcurrent'))
-        allowed_paths.update(reverse('record_list', args=[kind])
+        allowed_paths.update(reverse('asset_list', args=[kind]) + '?object=records'
                              for kind in ('networks', 'servers', 'weakcurrent'))
     if path not in allowed_paths:
         path = reverse('alert_list')

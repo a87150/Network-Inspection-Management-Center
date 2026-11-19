@@ -85,11 +85,16 @@ def _display_value(obj, field):
 
 
 def _history_url(kind, asset):
-    if kind == 'computers':
-        return f"{reverse('computer_analysis_list')}?target={asset.pk}"
-    if kind in {'networks', 'servers', 'weakcurrent'}:
-        return f"{reverse('record_list', args=[kind])}?target={asset.pk}"
-    return ''
+    # 记录视图现在挂在资产页的 object 参数下，target 必须用 & 接。
+    from urllib.parse import urlencode
+
+    view = {'computers': 'analyses'}.get(kind)
+    if view is None and kind in {'networks', 'servers', 'weakcurrent'}:
+        view = 'records'
+    if view is None:
+        return ''
+    query = urlencode({'object': view, 'target': asset.pk})
+    return f"{reverse('asset_list', args=[kind])}?{query}"
 
 
 def asset_list(request, kind, **kwargs):
@@ -177,7 +182,12 @@ def _asset_list_context(request, kind, *, integration_context=None, creation_for
         ))
     # selectable 要等 task_modal_context 填过 task_allow_target_selection 才能算。
     selectable = bool(admin and context.get('task_allow_target_selection'))
-    context['pc_tab'] = 'assets' if kind == 'computers' else ''
+    # PC 三个视图都在同一页的 tab 里，object 参数决定默认打开哪一个。
+    _requested = request.GET.get('object', '')
+    context['pc_tab'] = (
+        {'logs': 'logs', 'analyses': 'analyses'}.get(_requested, 'assets')
+        if kind == 'computers' else ''
+    )
     if kind == 'computers':
         from inspections.records import computer_workspace_payloads
         context.update(computer_workspace_payloads(request))
@@ -195,8 +205,18 @@ def _asset_list_context(request, kind, *, integration_context=None, creation_for
         context['task_project_kind'] = ''
     if kind == 'people':
         context['departments'] = department_totals()
+        # 首页"手动同步人员"直接落到这里，把导入弹窗打开到人员同步。
+        if request.GET.get('sync_modal'):
+            context['open_import_modal'] = True
+    # PC 的分析记录在自己的 tab 里，但它和独立记录页要同一份上下文，
+    # 否则 tab 里渲染的是设备巡检那套标题和结果表。
+    if kind == 'computers' and context['view'] == 'analyses':
+        from inspections.records import computer_analysis_context
+
+        context.update(computer_analysis_context(request))
+        context['pc_tab'] = 'analyses'
     # 巡检记录并进资产页：和 /records/<kind>/ 用同一份上下文，不再维护两套。
-    if context['view'] in ('records', 'analyses'):
+    if context['view'] in ('records', 'analyses') and kind != 'computers':
         from inspections.records import computer_analysis_context, record_list_context
 
         shared = (computer_analysis_context(request) if context['view'] == 'analyses'

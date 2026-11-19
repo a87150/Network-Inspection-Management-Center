@@ -64,7 +64,7 @@ def computer_logs_analyze_bulk(request):
     except (ValidationError, ValueError, TypeError) as exc:
         error = '；'.join(exc.messages) if isinstance(exc, ValidationError) else '无法创建批量分析任务，请检查选择。'
         if wants_json(request):
-            return form_errors([error], reverse('computer_log_list'))
+            return form_errors([error], reverse('asset_list', args=['computers']) + '?object=logs')
         from .logs import computer_log_list
         return computer_log_list(request, bulk=bulk_context(request, error=error, bound_form=form))
     if wants_json(request):

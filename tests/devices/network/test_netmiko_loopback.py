@@ -4,7 +4,7 @@ import threading
 from contextlib import contextmanager
 from types import SimpleNamespace
 import paramiko
-from django.test import SimpleTestCase
+from django.test import TransactionTestCase
 from net.infrastructure.ssh_collectors import collect_network_ssh, collect_linux_ssh
 
 CONFIG = 'hostname edge\r\n username fixture secret preserved\r\nend\r\n'
@@ -107,7 +107,9 @@ def loopback_peer():
             raise state['error']
 
 
-class LoopbackSSHTests(SimpleTestCase):
+class LoopbackSSHTests(TransactionTestCase):
+    """要跑真实 SSH 握手，而握手会校验主机密钥指纹（要走数据库），所以不能用 SimpleTestCase。"""
+
     def test_netmiko_collects_cpu_over_real_ssh(self):
         with loopback_peer() as device:
             result = collect_network_ssh(device, timeout=3, selected_items=['cpu'])

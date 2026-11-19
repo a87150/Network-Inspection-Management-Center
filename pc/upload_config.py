@@ -45,7 +45,7 @@ class PCUploadConfigForm(forms.ModelForm):
 
 
 def _config_redirect():
-    return redirect(f'{reverse("computer_analysis_list")}?task_modal=profile')
+    return redirect(f'{reverse('asset_list', args=['computers']) + '?object=analyses'}?task_modal=profile')
 
 
 @require_POST
@@ -59,11 +59,11 @@ def pc_upload_config_save(request):
         form.save()
     except ValidationError as exc:
         if wants_json(request):
-            return form_errors(exc.messages, reverse('computer_analysis_list'))
+            return form_errors(exc.messages, reverse('asset_list', args=['computers']) + '?object=analyses')
         messages.error(request, '采集 API 配置未保存：' + '；'.join(exc.messages))
         return _config_redirect()
     if wants_json(request):
-        return form_saved('PC 采集 API 配置已保存。', reverse('computer_analysis_list'))
+        return form_saved('PC 采集 API 配置已保存。', reverse('asset_list', args=['computers']) + '?object=analyses')
     messages.success(request, 'PC 采集 API 配置已保存。')
     return _config_redirect()
 

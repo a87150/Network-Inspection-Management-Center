@@ -35,6 +35,7 @@ if (mountElement && bootstrapElement) {
         ambientEffects: null,
         requestAbortController: null,
         panStart: null,
+      panMoved: false,
       };
     },
     computed: {
@@ -155,23 +156,38 @@ if (mountElement && bootstrapElement) {
         this.resetViewport();
         this.liveStatus = '拓扑已适应当前屏幕';
       },
+      /* 整块画布都能拖：以前只绑空白处，图一密就没有可抓的地方。 */
       startPan(event) {
+        if (event.button !== 0 && event.pointerType === 'mouse') return;
         event.currentTarget.setPointerCapture?.(event.pointerId);
+        this.panMoved = false;
         this.panStart = { pointerId: event.pointerId, x: event.clientX, y: event.clientY,
           originX: this.viewport.x, originY: this.viewport.y };
       },
       movePan(event) {
         if (!this.panStart || this.panStart.pointerId !== event.pointerId) return;
+        const dx = event.clientX - this.panStart.x;
+        const dy = event.clientY - this.panStart.y;
+        // 超过阈值才算拖动，否则一次抖动就把点击吃掉了。
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) this.panMoved = true;
+        if (!this.panMoved) return;
         this.viewport = {
           ...this.viewport,
-          x: this.panStart.originX + event.clientX - this.panStart.x,
-          y: this.panStart.originY + event.clientY - this.panStart.y,
+          x: this.panStart.originX + dx,
+          y: this.panStart.originY + dy,
         };
       },
       endPan(event) {
         if (!this.panStart || this.panStart.pointerId !== event.pointerId) return;
         this.panStart = null;
         this.controller?.updateUiState({ viewport: this.viewport });
+      },
+      /* 拖动结束那一下的 click 不该当成点节点。 */
+      suppressClickAfterPan(event) {
+        if (!this.panMoved) return;
+        event.stopPropagation();
+        event.preventDefault();
+        this.panMoved = false;
       },
       /* 卡片上下边缘：连线从这里出发，不穿卡片。和模板里的 rect 尺寸保持一致。 */
       nodeTop(node) {

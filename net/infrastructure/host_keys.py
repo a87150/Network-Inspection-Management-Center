@@ -3,21 +3,15 @@
 设备管理员口令是同型号设备一套传一套，被中间人接住一次就等于丢一片，
 所以这里不提供"自动接受新密钥"的无条件路径：
 
-* 默认 TOFU —— 第一次见到某台主机时把密钥指纹记进 runtime/host_keys.json，
+* 默认 TOFU —— 第一次见到某台主机时把密钥指纹写进 net.SSHHostKey，
   之后每次比对。指纹不一致直接拒绝连接，不会静默覆盖。
 * 严格模式（NET_SSH_HOST_KEY_STRICT=1）—— 只认已经记过的指纹，未知主机拒绝，
   录入靠运维显式 trust()。几十台设备要认这个成本，由部署方决定。
 * 指纹不符永远拒绝，没有开关能绕过；换设备后要人工 forget() 再重连。
 
-known_hosts 存的是指纹不是口令，但仍是可信边界数据：文件权限跟着 runtime 走。
+存的是指纹不是口令，但仍是可信边界数据：谁能改它，谁就能冒充设备。
 """
-import json
 import os
-import threading
-from pathlib import Path
-
-_LOCK = threading.Lock()
-_CACHE = None
 
 
 class HostKeyError(RuntimeError):
@@ -26,13 +20,6 @@ class HostKeyError(RuntimeError):
 
 class HostKeyChanged(HostKeyError):
     """记录的指纹和这次拿到的对不上，可能是换设备，也可能是中间人。"""
-
-
-def store_path() -> Path:
-    override = os.getenv('NET_SSH_KNOWN_HOSTS')
-    if override:
-        return Path(override)
-    return Path(__file__).resolve().parents[2] / 'runtime' / 'host_keys.json'
 
 
 def strict_mode() -> bool:
@@ -52,106 +39,161 @@ def fingerprint(key) -> str:
     return 'sha256:' + base64.b64encode(digest).decode('ascii').rstrip('=')
 
 
-def _read() -> dict:
-    global _CACHE
-    if _CACHE is not None:
-        return _CACHE
-    path = store_path()
-    if not path.exists():
-        _CACHE = {}
-        return _CACHE
-    try:
-        data = json.loads(path.read_text(encoding='utf-8'))
-    except (OSError, json.JSONDecodeError):
-        data = {}
-    _CACHE = data if isinstance(data, dict) else {}
-    return _CACHE
+def _model():
+    from net.models import SSHHostKey
+
+    return SSHHostKey
 
 
-def _write(data: dict):
-    global _CACHE
-    path = store_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix('.tmp')
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True), encoding='utf-8')
-    tmp.replace(path)
-    _CACHE = data
-
-
-def entries() -> dict:
-    return dict(_read())
+def entries() -> list:
+    return list(_model().objects.all())
 
 
 def recorded(host, port):
-    return _read().get(host_id(host, port))
+    row = _model().objects.filter(host=host, port=int(port or 22)).first()
+    if row is None:
+        return None
+    return {'key_type': row.key_type, 'fingerprint': row.fingerprint, 'source': row.source}
 
 
-def trust(host, port, key):
+def trust(host, port, key, user=None):
     """显式信任一台主机（严格模式下的录入入口）。"""
-    with _LOCK:
-        data = dict(_read())
-        data[host_id(host, port)] = {
+    model = _model()
+    row, _created = model.objects.update_or_create(
+        host=host, port=int(port or 22),
+        defaults={
             'key_type': key.get_name() if hasattr(key, 'get_name') else '',
             'fingerprint': fingerprint(key),
-            'source': 'manual',
-        }
-        _write(data)
-        return data[host_id(host, port)]
+            'source': model.Source.MANUAL,
+            'trusted_by': user if getattr(user, 'pk', None) else None,
+        },
+    )
+    return row
 
 
 def forget(host, port) -> bool:
-    with _LOCK:
-        data = dict(_read())
-        removed = data.pop(host_id(host, port), None)
-        if removed is not None:
-            _write(data)
-        return removed is not None
+    deleted, _rows = _model().objects.filter(host=host, port=int(port or 22)).delete()
+    return bool(deleted)
 
 
-def verify(host, port, key):
+def verify(host, port, key, user=None):
     """返回 'known' / 'trusted'（首次记录）；不可信时抛异常。"""
+    from django.utils import timezone
+
+    model = _model()
+    port = int(port or 22)
     current = fingerprint(key)
-    entry = recorded(host, port)
-    if entry is None:
+    row = model.objects.filter(host=host, port=port).first()
+    if row is None:
         if strict_mode():
-            raise HostKeyError(
-                f'{host_id(host, port)} 尚未录入主机密钥指纹，严格模式拒绝连接。'
-            )
-        with _LOCK:
-            data = dict(_read())
-            data[host_id(host, port)] = {
-                'key_type': key.get_name() if hasattr(key, 'get_name') else '',
-                'fingerprint': current,
-                'source': 'tofu',
-            }
-            _write(data)
+            raise HostKeyError(f'{host_id(host, port)} 尚未录入主机密钥指纹，严格模式拒绝连接。')
+        model.objects.create(
+            host=host, port=port,
+            key_type=key.get_name() if hasattr(key, 'get_name') else '',
+            fingerprint=current, source=model.Source.TOFU,
+            trusted_by=user if getattr(user, 'pk', None) else None,
+        )
         return 'trusted'
-    if entry.get('fingerprint') != current:
+    if row.fingerprint != current:
         raise HostKeyChanged(
             f'{host_id(host, port)} 主机密钥指纹与记录不符：'
-            f'记录 {entry.get("fingerprint")}，本次 {current}。'
+            f'记录 {row.fingerprint}，本次 {current}。'
             '确认设备已更换后先 forget() 再重连；否则可能有人在中间。'
         )
+    # 校验时间单独更新，避免整行写。
+    model.objects.filter(pk=row.pk).update(verified_at=timezone.now())
     return 'known'
 
 
-def policy():
-    """paramiko 的 MissingHostKeyPolicy：不自动接受，只按 verify() 的结论走。"""
+def load_map() -> dict:
+    """连接前在主线程读一次，避免在 SSH 握手线程里碰 ORM。"""
+    return {
+        (row.host, row.port): {
+            'key_type': row.key_type, 'fingerprint': row.fingerprint, 'source': row.source,
+        }
+        for row in _model().objects.all()
+    }
+
+
+class _PendingPolicy:
+    """只在内存里比对；首次信任的记录攒起来，回主线程再落库。
+
+    paramiko 在握手线程里回调这里，那里既没有 Django 的数据库连接，
+    也不该为了写一行指纹去开一条。所以判断全在内存，写库延后。
+    """
+
+    def __init__(self, known=None):
+        # known=None 表示推迟到真正握手时再读库：没建立连接就不该碰数据库。
+        self.known = None if known is None else dict(known)
+        self.pending = []
+        self.rejected = None
+
+    def _ensure_loaded(self):
+        if self.known is None:
+            self.known = load_map()
+
+    def check(self, host, port, key):
+        self._ensure_loaded()
+        port = int(port or 22)
+        current = fingerprint(key)
+        entry = self.known.get((host, port))
+        if entry is None:
+            if strict_mode():
+                raise HostKeyError(f'{host_id(host, port)} 尚未录入主机密钥指纹，严格模式拒绝连接。')
+            record = {
+                'host': host, 'port': port,
+                'key_type': key.get_name() if hasattr(key, 'get_name') else '',
+                'fingerprint': current,
+            }
+            self.known[(host, port)] = {**record, 'source': 'tofu'}
+            self.pending.append(record)
+            return 'trusted'
+        if entry.get('fingerprint') != current:
+            raise HostKeyChanged(
+                f'{host_id(host, port)} 主机密钥指纹与记录不符：'
+                f'记录 {entry.get("fingerprint")}，本次 {current}。'
+                '确认设备已更换后先 forget() 再重连；否则可能有人在中间。'
+            )
+        return 'known'
+
+    def flush(self):
+        """把本次首次信任的主机写进库。连接成功后调用。"""
+        if not self.pending:
+            return
+        model = _model()
+        for record in self.pending:
+            model.objects.update_or_create(
+                host=record['host'], port=record['port'],
+                defaults={
+                    'key_type': record['key_type'],
+                    'fingerprint': record['fingerprint'],
+                    'source': model.Source.TOFU,
+                },
+            )
+        self.pending.clear()
+
+
+def policy(known=None):
+    """paramiko 的 MissingHostKeyPolicy：不自动接受，只按内存里的记录比对。"""
     import paramiko
 
+    inner = _PendingPolicy(known)
+
     class ToFuPolicy(paramiko.MissingHostKeyPolicy):
+        pending = inner.pending
+
         def missing_host_key(self, client, hostname, key):
-            # client 是 paramiko 的 Transport；端口只能从对端地址拿。
             try:
                 port = client.sock.getpeername()[1]
             except (AttributeError, OSError, IndexError):
                 port = 22
-            verify(hostname, port, key)
+            try:
+                inner.check(hostname, port, key)
+            except HostKeyError as exc:
+                inner.rejected = exc
+                raise
+
+        def flush(self):
+            inner.flush()
 
     return ToFuPolicy()
-
-
-def reset_cache():
-    """测试用：清掉进程内缓存。"""
-    global _CACHE
-    _CACHE = None

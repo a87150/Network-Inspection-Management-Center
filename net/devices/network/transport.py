@@ -34,11 +34,15 @@ def connect_network(device, timeout, vendor):
     client = ConnectHandler(**arguments)
     # netmiko 只在 AutoAddPolicy 和 RejectPolicy 之间二选一，两个都不合用：
     # 前者谁来都信，后者每次都要人工录入。连接建立前换成会比对指纹的策略。
-    if protocol != 'telnet':
-        client.key_policy = host_keys.policy()
+    # 指纹库在真正握手时再读，没连上就不查数据库。
+    guard = host_keys.policy() if protocol != 'telnet' else None
+    if guard is not None:
+        client.key_policy = guard
     try:
         client.establish_connection()
         client.session_preparation()
+        if guard is not None:
+            guard.flush()
     except BaseException:
         client.disconnect()
         raise

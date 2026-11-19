@@ -59,8 +59,14 @@ def _with_card_actions(item):
     item = dict(item)
     secondary = []
     if item.get('manual_action_label'):
-        primary = {'label': item['manual_action_label'], 'url': f"{item['list_url']}?task_modal=run"}
-        secondary.append({'label': f"{item['name']}列表", 'url': item['list_url']})
+        primary = {
+            'label': item['manual_action_label'],
+            'url': item.get('manual_action_url') or f"{item['list_url']}?task_modal=run",
+        }
+        if item.get('list_label'):
+            secondary.append({'label': item['list_label'], 'url': item['list_url']})
+        else:
+            secondary.append({'label': f"{item['name']}列表", 'url': item['list_url']})
     elif item.get('target_url'):
         primary = {'label': '进入管理', 'url': item['target_url']}
     else:
@@ -73,6 +79,8 @@ def _with_card_actions(item):
         secondary.append({'label': item.get('access_label', '门禁记录'), 'url': item['access_url']})
     if item.get('department_url'):
         secondary.append({'label': '部门', 'url': item['department_url']})
+    if item.get('detail_url') and item.get('detail_label'):
+        secondary.append({'label': item['detail_label'], 'url': item['detail_url']})
     if item.get('object_urls'):
         for label, key in (('域账户', 'accounts'), ('域计算机', 'computers'), ('域分组', 'groups')):
             secondary.append({'label': label, 'url': item['object_urls'][key]})
@@ -97,13 +105,14 @@ def index(request):
             'checked_label': '在职人数',
             'bad_label': '离职人数',
             # 人员和部门现在是同一页的两个视图，卡片直接落到部门视图。
-            'list_url': reverse('asset_list', args=['people']) + '?object=departments',
-            'list_label': '查看部门',
-            'detail_url': reverse('asset_list', args=['people']),
-            'detail_label': '查看人员',
+            'list_url': reverse('asset_list', args=['people']),
+            'list_label': '人员',
             'department_url': reverse('asset_list', args=['people']) + '?object=departments',
             'department_total': _people_department_total(),
             'note': '',
+            # 人员没有"巡检"这种一次性任务，蓝色按钮给的是目录同步。
+            'manual_action_label': '手动同步人员',
+            'manual_action_url': reverse('asset_list', args=['people']) + '?sync_modal=1',
         },
         {
             'key': 'domain',
@@ -135,7 +144,7 @@ def index(request):
             'list_url': reverse('asset_list', args=['computers']),
             'log_url': reverse('asset_list', args=['computers']) + '?object=logs',
             'log_label': '日志列表',
-            'record_url': reverse('computer_analysis_list'),
+            'record_url': reverse('asset_list', args=['computers']) + '?object=analyses',
             'record_label': '日志分析记录',
             'manual_action_label': '手动执行分析',
         },

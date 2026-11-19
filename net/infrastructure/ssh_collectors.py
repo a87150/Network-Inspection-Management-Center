@@ -54,7 +54,8 @@ def _connect(asset, timeout):
     client = paramiko.SSHClient()
     # 不用 AutoAddPolicy：那等于第一次连谁就信谁，中间人截一次就把设备口令全交出去。
     # 指纹由 host_keys 记录并比对，变了就拒绝。
-    client.set_missing_host_key_policy(host_keys.policy())
+    guard = host_keys.policy()
+    client.set_missing_host_key_policy(guard)
     client.connect(
         hostname=asset.ip,
         port=asset.port or 22,
@@ -66,6 +67,8 @@ def _connect(asset, timeout):
         look_for_keys=False,
         allow_agent=False,
     )
+    # 首次信任的主机回到当前线程再落库，握手线程里不碰 ORM。
+    guard.flush()
     return client
 
 

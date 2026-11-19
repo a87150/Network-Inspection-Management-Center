@@ -343,8 +343,12 @@ def project_workspace_context(request, kind):
         chosen = tasks.filter(pk=selected_id).first()
         if chosen is not None:
             latest = chosen
+    # 结果区标题跟着选中项走：点哪条就说哪条，没点就还是"最新"。
+    newest = tasks.first()
+    is_latest = newest is None or latest is None or latest.pk == newest.pk
     return {'task_metrics': metrics, 'task_page': page, 'latest_task': latest,
             'selected_task_id': latest.pk if latest else None,
+            'results_is_latest': is_latest,
             'task_section_title': '日志分析任务' if kind == 'computers' else '巡检任务',
             'task_empty_title': '暂无日志分析任务' if kind == 'computers' else '暂无巡检任务'}
 

@@ -466,7 +466,7 @@ def computer_analysis_profile_configure(request):
 
 
 def _computer_analysis_profile_configure(request):
-    next_url = _safe_next(request, request.POST.get('next'), reverse('computer_analysis_list'))
+    next_url = _safe_next(request, request.POST.get('next'), reverse('asset_list', args=['computers']) + '?object=analyses')
     existing = None
     if request.POST.get('profile_id'):
         existing = get_object_or_404(ComputerAnalysisProfile, pk=request.POST['profile_id'])

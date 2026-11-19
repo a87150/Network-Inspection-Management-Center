@@ -1,0 +1,5 @@
+<div class="d-flex align-items-end justify-content-between mb-3">
+    <div><p class="page-heading__eyebrow mb-1">{% if results_is_latest %}最新结果{% else %}所选任务{% endif %}</p><h2 class="h5 mb-0">{% if results_is_latest %}最新任务巡检记录{% else %}所选任务巡检记录{% endif %}</h2></div>
+    {% if latest_task %}<span class="small text-secondary">任务创建于 {{ latest_task.created_at|date:'Y-m-d H:i:s' }}</span>{% endif %}
+</div>
+{% include 'inspections/results_table.html' %}

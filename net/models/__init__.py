@@ -10,6 +10,7 @@ from .domain import (
     DomainOperation, DomainOU, DomainMembership,
 )
 from .integrations import PeopleSyncSource
+from .host_keys import SSHHostKey
 from .ipam import IpAddress, IpSubnet
 from .people import People
 from .issue_policy import IssueSeverityPolicy

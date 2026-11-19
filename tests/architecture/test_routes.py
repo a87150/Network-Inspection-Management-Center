@@ -147,10 +147,10 @@ class DetailRouteTests(TestCase):
             reverse('asset_detail', args=['networks', self.network.pk]),
         )
 
-        history_url = reverse('record_list', args=['networks'])
+        history_url = reverse('asset_list', args=['networks']) + '?object=records'
         # 详情和工作区同屏：payload 在 initialDetail 里。
         body = workspace_detail_text(response)
-        self.assertIn(f'{history_url}?target={self.network.pk}', body)
+        self.assertIn(f'{history_url}&target={self.network.pk}', body)
         self.assertIn(self.network_record.summary, body)
 
     def test_infrastructure_history_filter_submission_keeps_asset_scope(self):
@@ -160,10 +160,10 @@ class DetailRouteTests(TestCase):
         Network_Device_Inspection.objects.create(
             device=other, summary='另一台设备巡检完成',
         )
-        history_url = reverse('record_list', args=['networks'])
-        initial = self.client.get(history_url, {'target': self.network.pk})
+        history_url = reverse('asset_list', args=['networks'])
+        initial = self.client.get(history_url, {'object': 'records', 'target': self.network.pk})
         submitted = submitted_hidden_fields(initial)
-        submitted.update({'filter_asset': 'SW-ROUTE', 'page_size': '50'})
+        submitted.update({'filter_asset': 'SW-ROUTE', 'page_size': '50', 'object': 'records'})
 
         response = self.client.get(history_url, submitted)
 
@@ -239,7 +239,7 @@ class DetailRouteTests(TestCase):
         expected = {
             'computers': (
                 reverse('asset_list', args=['computers']),
-                reverse('computer_analysis_list'),
+                reverse('asset_list', args=['computers']) + '?object=analyses',
             ),
             # 记录视图现在是同一个页面上的方块视图，链接带 view 参数。
             'networks': (
@@ -256,14 +256,14 @@ class DetailRouteTests(TestCase):
             ),
         }
 
-        # 人员和部门合并成一页的两个视图，卡片直接落到部门那份。
+        # 人员和部门合并成一页的两个视图：主按钮走人员，灰色按钮给部门。
         self.assertEqual(
             items['people']['list_url'],
-            reverse('asset_list', args=['people']) + '?object=departments',
+            reverse('asset_list', args=['people']),
         )
         self.assertEqual(
-            items['people']['detail_url'],
-            reverse('asset_list', args=['people']),
+            items['people']['department_url'],
+            reverse('asset_list', args=['people']) + '?object=departments',
         )
         for key, (list_url, record_url) in expected.items():
             with self.subTest(key=key):

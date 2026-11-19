@@ -37,7 +37,7 @@ def computer_log_detail_payload(*, log, analyses):
         title='日志详情 #%s' % log.pk,
         eyebrow='PC 日志',
         description='日志内容只读；分析由手动或定时任务按每台 PC 最新日志执行。',
-        actions=[link_action('返回日志列表', reverse('computer_log_list'))],
+        actions=[link_action('返回日志列表', reverse('asset_list', args=['computers']) + '?object=logs')],
         sections=sections,
         disclosure={
             'heading': '已脱敏日志内容',

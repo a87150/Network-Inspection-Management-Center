@@ -25,7 +25,6 @@ export default {
             items: this.rows,
             total: this.count,
             totalPages: this.pages,
-            cards: this.metricCards(this.metrics),
             loading: false,
             error: '',
             deleting: '',
@@ -40,14 +39,6 @@ export default {
         },
     },
     methods: {
-        metricCards(values) {
-            return [
-                {label: '窗口总数', value: values.total || 0, hint: '全部登记', tone: ''},
-                {label: '进行中', value: values.active || 0, hint: '正在抑制外发', tone: 'page-metric-card--warning'},
-                {label: '未开始', value: values.pending || 0, hint: '等待生效', tone: ''},
-                {label: '已结束', value: values.ended || 0, hint: '历史窗口', tone: 'page-metric-card--success'},
-            ];
-        },
         async load(page = 1) {
             this.loading = true;
             this.error = '';
@@ -60,19 +51,10 @@ export default {
                 this.totalPages = this.pageCount(payload.count, payload.page_size);
                 this.currentPage = page;
                 this.syncUrl();
-                await this.refreshMetrics();
             } catch (error) {
                 this.error = error instanceof ApiError ? error.message : '列表加载失败。';
             } finally {
                 this.loading = false;
-            }
-        },
-        async refreshMetrics() {
-            try {
-                const meta = await api.get(this.endpoint + 'meta/');
-                this.cards = this.metricCards(meta.metrics || {});
-            } catch (error) {
-                /* 指标是辅助信息，取不到就保留上一次的值 */
             }
         },
         pageCount(count, size) {
@@ -122,12 +104,6 @@ export default {
     },
     template: `
     <div class="maintenance-page">
-        <section class="page-metric-grid" aria-label="维护窗口统计">
-            <article v-for="card in cards" :key="card.label" :class="'page-metric-card glass-card ' + card.tone">
-                <span>[[ card.label ]]</span><strong>[[ card.value ]]</strong><small>[[ card.hint ]]</small>
-            </article>
-        </section>
-
         <div class="table-toolbar">
             <form class="table-filter-bar" @submit.prevent="applyFilter">
                 <div class="table-filter-field">

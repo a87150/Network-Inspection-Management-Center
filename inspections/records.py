@@ -181,7 +181,11 @@ def record_list_context(request, kind):
 
 
 def record_list(request, kind):
-    return render(request, 'inspections/record_list.html', record_list_context(request, kind))
+    context = record_list_context(request, kind)
+    # 换任务时只取结果区，页面不重载、不滚动。
+    if request.GET.get('fragment') == 'results':
+        return render(request, 'inspections/_record_results.html', context)
+    return render(request, 'inspections/record_list.html', context)
 
 
 def record_detail(request, kind, pk):
@@ -209,7 +213,7 @@ def record_detail(request, kind, pk):
             inspection_errors=(
                 list(error_manager.all()) if error_manager is not None else []
             ),
-            back_url=reverse('record_list', args=[kind]),
+            back_url=reverse('asset_list', args=[kind]) + '?object=records',
         ),
     })
 
@@ -240,7 +244,10 @@ def computer_analysis_context(request):
 
 
 def computer_analysis_list(request):
-    return render(request, 'inspections/record_list.html', computer_analysis_context(request))
+    context = computer_analysis_context(request)
+    if request.GET.get('fragment') == 'results':
+        return render(request, 'inspections/latest_analysis_statistics.html', context)
+    return render(request, 'inspections/record_list.html', context)
 
 
 def computer_analysis_detail(request, pk):
@@ -255,7 +262,7 @@ def computer_analysis_detail(request, pk):
         'detail': analysis_detail_payload(
             analysis=analysis,
             detail_fields=list((analysis.details or {}).items()),
-            back_url=reverse('computer_analysis_list'),
+            back_url=reverse('asset_list', args=['computers']) + '?object=analyses',
         ),
     })
 

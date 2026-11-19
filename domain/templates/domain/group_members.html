@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}成员管理{% endblock %}
 {% block content %}
-<a class="btn btn-link domain-members-back" href="{% url 'domain_group_list' %}">← 返回域分组列表</a>
+<a class="btn btn-link domain-members-back" href="{% url 'domain_controller_settings' %}?object=groups">← 返回域分组列表</a>
 <div class="modal fade domain-members-modal" id="domainGroupMembersModal" data-auto-open="true" tabindex="-1" aria-labelledby="domainGroupMembersLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable modal-shell">
         <div class="modal-content modal-surface" id="domain-members-island" data-candidate-count="{{ candidate_total }}" data-member-locked="{% if group.is_available %}false{% else %}true{% endif %}">

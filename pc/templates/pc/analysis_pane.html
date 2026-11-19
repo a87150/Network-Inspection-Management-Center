@@ -6,7 +6,7 @@
     <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <p class="mb-0 text-secondary">共 {{ pc_analyses_total }} 次分析</p>
-            <a class="btn btn-outline-secondary btn-sm" href="{% url 'computer_analysis_list' %}">打开完整分析记录</a>
+            <a class="btn btn-outline-secondary btn-sm" href="{% url 'asset_list' 'computers' %}?object=analyses">打开完整分析记录</a>
         </div>
         <div class="list-group list-group-flush">
         {% for analysis in pc_analyses_recent %}

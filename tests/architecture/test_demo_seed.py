@@ -89,7 +89,8 @@ class DashboardActionTests(TestCase):
             reverse('asset_list', args=['computers']),
         )
         self.assertEqual(
-            items['computers']['record_url'], reverse('computer_analysis_list'),
+            items['computers']['record_url'],
+            reverse('asset_list', args=['computers']) + '?object=analyses',
         )
         for kind in ('networks', 'servers', 'weakcurrent'):
             with self.subTest(kind=kind):
@@ -816,13 +817,14 @@ class DeterministicDemoSeedTests(TestCase):
                 self.assertIn(detail_value, body)
                 if kind == 'computers':
                     self.assertIn(
-                        f'{reverse("computer_analysis_list")}?target={asset.pk}', body,
+                        f'{reverse("asset_list", args=["computers"])}'
+                        f'?object=analyses&target={asset.pk}', body,
                     )
                 elif kind in {'networks', 'servers', 'weakcurrent'}:
-                    self.assertContains(
-                        detail,
-                        f'{reverse("record_list", args=[kind])}?target={asset.pk}',
-                    )
+                    # json_script 用 ensure_ascii，& 在页面里是 \u0026，所以分段断言。
+                    body_text = detail.content.decode()
+                    self.assertIn(f'{reverse("asset_list", args=[kind])}?object=records', body_text)
+                    self.assertIn(f'target={asset.pk}', body_text)
                 if kind == 'computers':
                     self.assertNotContains(listing, 'id="importModal"')
                 else:
@@ -836,7 +838,7 @@ class DeterministicDemoSeedTests(TestCase):
             with self.subTest(records=kind):
                 record = model.objects.get(summary=summary)
                 detail_url = reverse('record_detail', args=[kind, record.pk])
-                listing = self.client.get(reverse('record_list', args=[kind]))
+                listing = self.client.get(reverse('asset_list', args=[kind]) + '?object=records')
                 if kind in {'networks', 'servers'}:
                     # These records predate the newest seeded task for the project.
                     self.assertNotContains(listing, summary)
@@ -853,7 +855,9 @@ class DeterministicDemoSeedTests(TestCase):
             summary='发现异常：系统盘空间不足',
         )
         analysis_url = reverse('computer_analysis_detail', args=[analysis.pk])
-        analysis_list = self.client.get(reverse('computer_analysis_list'))
+        analysis_list = self.client.get(
+            reverse('asset_list', args=['computers']), {'object': 'analyses'},
+        )
         # The project landing page shows task statistics; standalone historical
         # analyses remain reachable in the global records list and detail page.
         self.assertContains(analysis_list, '最新任务统计')
