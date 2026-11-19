@@ -137,20 +137,27 @@
     grid-column: 1 / -1;
 }
 
+/* 复选框改成普通内联项：原来画成带边框的卡片，落在两列表单里会和旁边的
+   输入框顶不齐，一行高一行矮。这里只保留图标与文字的横向排列。 */
 .config-toggle-card {
     display: flex;
     width: 100%;
-    gap: .7rem;
+    gap: .5rem;
     align-items: flex-start;
-    padding: .85rem;
-    border: 1px solid rgba(128, 149, 184, .22);
-    border-radius: .85rem;
-    background: rgba(255, 255, 255, .48);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+.config-toggle-card .form-check-input {
+    margin-top: .3rem;
+    flex: none;
 }
 
 .config-toggle-card .form-check-label {
     display: grid;
-    gap: .18rem;
+    gap: .1rem;
 }
 
 .config-toggle-card .form-check-label span {

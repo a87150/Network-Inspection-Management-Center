@@ -217,6 +217,15 @@ def computer_analysis_list(request):
         'pc_tab': 'analyses',
     }
     context.update(_project_workspace_context(request, 'computers'))
+    # 点任务列表里的某一条，就把它自己的统计放到上面那块，不用跳页。
+    requested_task = request.GET.get('task')
+    if requested_task:
+        from net.models import TaskRun
+
+        chosen = TaskRun.objects.filter(pk=requested_task).first()
+        if chosen is not None:
+            context['latest_task'] = chosen
+            context['selected_task_id'] = chosen.pk
     context['latest_analysis_statistics'] = latest_analysis_statistics(context['latest_task'])
     context.update(task_modal_context(request, 'computers'))
     context.update(alert_modal_context(request, profile=context['task_default_profile']))

@@ -8,7 +8,7 @@
         <h1 class="page-heading__title">告警记录</h1>
         <p class="page-heading__description">任务总结、异常与恢复事件及渠道送达状态均可追溯。</p>
     </div>
-    {% if can_administer %}
+    {% if can_administer and view != 'maintenance' %}
     <div class="page-heading__actions">
         <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#alertTemplateModal">模板配置</button>
         <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#alertPolicyModal">默认策略</button>
@@ -24,8 +24,9 @@
             <div class="card-body">
                 <div class="metric-label">告警记录</div>
                 <div class="metric">{{ alert_metrics.total }}</div>
-                <div class="small mt-2">任务总结、异常与恢复事件</div>
-                <div class="small text-secondary mt-1">渠道送达状态可追溯</div>
+                <div class="small mt-2">待发送 <span class="text-secondary">{{ alert_metrics.pending }}</span> · 已送达 <span class="text-success">{{ alert_metrics.delivered }}</span></div>
+                <div class="small mt-2">部分送达 <span class="text-warning">{{ alert_metrics.partial }}</span> · 发送失败 <span class="{% if alert_metrics.failed %}text-danger{% endif %}">{{ alert_metrics.failed }}</span></div>
+                <div class="small text-secondary mt-1">仅记录 {{ alert_metrics.recorded }}（未要求发送）· 当前筛选范围</div>
                 <div class="small text-primary mt-2">查看告警记录{% if view != 'maintenance' %} · 当前{% endif %}</div>
             </div>
         </a>
@@ -35,8 +36,9 @@
            href="?view=maintenance"{% if view == 'maintenance' %} aria-current="page"{% endif %}>
             <div class="card-body">
                 <div class="metric-label">维护记录</div>
-                <div class="metric">{% if maintenance_bootstrap %}{{ maintenance_bootstrap.count }}{% else %}-{% endif %}</div>
-                <div class="small mt-2">计划变更时间窗</div>
+                <div class="metric">{{ maintenance_metrics.total }}</div>
+                <div class="small mt-2">进行中 <span class="text-warning">{{ maintenance_metrics.active }}</span> · 未开始 <span class="text-secondary">{{ maintenance_metrics.pending }}</span></div>
+                <div class="small mt-2">已结束 <span class="text-success">{{ maintenance_metrics.finished }}</span></div>
                 <div class="small text-secondary mt-1">窗口内告警照常入库，但不外发</div>
                 <div class="small text-primary mt-2">查看维护记录{% if view == 'maintenance' %} · 当前{% endif %}</div>
             </div>
@@ -52,14 +54,6 @@
 </div>
 {{ maintenance_bootstrap|json_script:"maintenance-bootstrap" }}
 {% else %}
-<section class="page-metric-grid" aria-label="当前筛选告警统计">
-    <article class="page-metric-card glass-card"><span>告警总数</span><strong>{{ alert_metrics.total }}</strong><small>当前筛选范围</small></article>
-    <article class="page-metric-card glass-card"><span>待发送 / 发送中</span><strong>{{ alert_metrics.pending }}</strong><small>正在处理</small></article>
-    <article class="page-metric-card glass-card page-metric-card--success"><span>已送达</span><strong>{{ alert_metrics.delivered }}</strong><small>渠道发送成功</small></article>
-    <article class="page-metric-card glass-card page-metric-card--warning"><span>部分送达</span><strong>{{ alert_metrics.partial }}</strong><small>部分渠道失败</small></article>
-    <article class="page-metric-card glass-card page-metric-card--danger"><span>发送失败</span><strong>{{ alert_metrics.failed }}</strong><small>全部渠道失败</small></article>
-    <article class="page-metric-card glass-card"><span>仅记录</span><strong>{{ alert_metrics.recorded }}</strong><small>未要求发送</small></article>
-</section>
 {% if can_administer %}
     {% include 'alerts/template_modal.html' %}
     {% include 'alerts/channel_modal.html' %}

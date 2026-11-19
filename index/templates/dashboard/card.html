@@ -19,7 +19,13 @@
         <div class="row text-center g-2 metric-card__metrics" role="list" aria-label="{{ item.name }}状态统计">
             <div class="col-4"><div class="metric">{{ item.total }}</div><div class="metric-label">{{ item.total_label }}</div></div>
             <div class="col-4"><div class="metric text-success">{{ item.normal }}</div><div class="metric-label">{{ item.normal_label }}</div></div>
-            <div class="col-4"><div class="metric {% if item.abnormal %}text-danger{% endif %}">{{ item.abnormal }}</div><div class="metric-label">{{ item.abnormal_label }}</div></div>
+            <div class="col-4">
+                {% if item.department_total %}
+                <div class="metric">{{ item.department_total }}</div><div class="metric-label">部门数</div>
+                {% else %}
+                <div class="metric {% if item.abnormal %}text-danger{% endif %}">{{ item.abnormal }}</div><div class="metric-label">{{ item.abnormal_label }}</div>
+                {% endif %}
+            </div>
         </div>
         {% endif %}
     </div>

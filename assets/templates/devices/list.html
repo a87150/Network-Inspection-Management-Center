@@ -77,6 +77,9 @@
 </div>
 </div>
 {% if pc_tab %}
+<div class="tab-pane fade{% if pc_tab == 'analyses' %} show active{% endif %}" id="pc-pane-analyses" role="tabpanel" aria-labelledby="pc-tab-analyses">
+    {% include 'pc/analysis_pane.html' %}
+</div>
 <div class="tab-pane fade{% if pc_tab == 'logs' %} show active{% endif %}" id="pc-pane-logs" role="tabpanel" aria-labelledby="pc-tab-logs">
     {% comment %}采集异常单独一栏放在日志列表上方，两者同属一个视图。{% endcomment %}
     <div class="mb-3">{% include 'pc/error_pane.html' %}</div>

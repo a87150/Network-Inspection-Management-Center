@@ -17,15 +17,17 @@ PC 主页面顶部的三个方块：资产台账、分析记录（跳原页面�
         </button>
     </div>
     <div class="col-12 col-md-4">
-        <a class="card surface-card metric-card h-100 text-decoration-none text-body" href="{% url 'computer_analysis_list' %}">
+        <button class="card surface-card metric-card h-100 w-100 text-start text-body{% if pc_tab == 'analyses' %} border-primary{% endif %}" type="button"
+                id="pc-tab-analyses" data-bs-toggle="tab" data-bs-target="#pc-pane-analyses"
+                role="tab" aria-controls="pc-pane-analyses" aria-selected="{% if pc_tab == 'analyses' %}true{% else %}false{% endif %}">
             <div class="card-body">
                 <div class="metric-label">分析记录</div>
                 <div class="metric">{{ pc_analyses_total }}</div>
-                <div class="small mt-2">正常 {{ pc_analysis_ok|default:0 }} · 异常 {{ pc_analysis_bad|default:0 }}</div>
+                <div class="small mt-2">每次采集的软件与硬件快照</div>
                 <div class="small text-secondary mt-1">最近 {{ pc_analyses_recent.0.analysis_date|date:'Y-m-d'|default:'暂无' }}</div>
-                <div class="small text-primary mt-2">查看分析记录</div>
+                <div class="small text-primary mt-2">查看分析记录{% if pc_tab == 'analyses' %} · 当前{% endif %}</div>
             </div>
-        </a>
+        </button>
     </div>
     <div class="col-12 col-md-4">
         <button class="card surface-card metric-card h-100 w-100 text-start text-body{% if pc_tab == 'logs' %} border-primary{% endif %}" type="button"

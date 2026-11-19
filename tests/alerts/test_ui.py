@@ -332,9 +332,11 @@ class AlertUiTests(TestCase):
             'total': 1, 'pending': 0, 'delivered': 0,
             'partial': 1, 'failed': 0, 'recorded': 0,
         })
-        self.assertContains(response, '告警总数')
-        self.assertContains(response, '待发送 / 发送中')
-        self.assertContains(response, 'page-metric-grid')
+        # 统计已并进顶部大方块，不再单独一排小卡。
+        self.assertContains(response, '告警记录')
+        self.assertContains(response, '待发送')
+        self.assertContains(response, '部分送达')
+        self.assertNotContains(response, 'page-metric-grid')
 
     def test_delivery_filter_and_csv_use_channel_rows_independent_of_event_status(self):
         """Aggregate status or a non-distinct delivery join must not change event membership."""

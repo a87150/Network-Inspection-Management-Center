@@ -48,6 +48,13 @@ def _domain_summary_values(account_summary, computer_summary, group_summary):
 
 
 
+def _people_department_total():
+    """首页人员卡片要显示部门数，和人员页部门视图同源。"""
+    from assets.overview import department_totals
+
+    return len(department_totals())
+
+
 def _with_card_actions(item):
     item = dict(item)
     secondary = []
@@ -62,8 +69,13 @@ def _with_card_actions(item):
         secondary.append({'label': item['log_label'], 'url': item['log_url']})
     if item.get('record_url'):
         secondary.append({'label': item['record_label'], 'url': item['record_url']})
-    if item.get('key') == 'weakcurrent':
-        secondary.append({'label': '门禁记录', 'url': reverse('access_record_list')})
+    if item.get('access_url'):
+        secondary.append({'label': item.get('access_label', '门禁记录'), 'url': item['access_url']})
+    if item.get('department_url'):
+        secondary.append({'label': '部门', 'url': item['department_url']})
+    if item.get('object_urls'):
+        for label, key in (('域账户', 'accounts'), ('域计算机', 'computers'), ('域分组', 'groups')):
+            secondary.append({'label': label, 'url': item['object_urls'][key]})
     if item.get('detail_url'):
         secondary.append({'label': item['detail_label'], 'url': item['detail_url']})
     item['primary_action'] = primary
@@ -89,6 +101,9 @@ def index(request):
             'list_label': '查看部门',
             'detail_url': reverse('asset_list', args=['people']),
             'detail_label': '查看人员',
+            'department_url': reverse('asset_list', args=['people']) + '?view=departments',
+            'department_total': _people_department_total(),
+            'note': '',
         },
         {
             'key': 'domain',
@@ -98,6 +113,12 @@ def index(request):
                 summaries['domain_groups'],
             ),
             'target_url': reverse('domain_controller_settings'),
+            # 三个对象列表现在是域控页里的方块视图，链接直接带 object 参数。
+            'object_urls': {
+                'accounts': reverse('domain_controller_settings') + '?object=accounts',
+                'computers': reverse('domain_controller_settings') + '?object=computers',
+                'groups': reverse('domain_controller_settings') + '?object=groups',
+            },
         },
         {
             'key': 'computers',
@@ -132,7 +153,7 @@ def index(request):
             'checked_label': '已巡检设备',
             'bad_label': '巡检异常',
             'list_url': reverse('asset_list', args=['networks']),
-            'record_url': reverse('record_list', args=['networks']),
+            'record_url': reverse('asset_list', args=['networks']) + '?view=records',
             'record_label': '巡检记录',
         },
         {
@@ -149,7 +170,7 @@ def index(request):
             'checked_label': '已巡检设备',
             'bad_label': '巡检异常',
             'list_url': reverse('asset_list', args=['servers']),
-            'record_url': reverse('record_list', args=['servers']),
+            'record_url': reverse('asset_list', args=['servers']) + '?view=records',
             'record_label': '巡检记录',
         },
         {
@@ -166,8 +187,10 @@ def index(request):
             'checked_label': '已巡检设备',
             'bad_label': '巡检异常',
             'list_url': reverse('asset_list', args=['weakcurrent']),
-            'record_url': reverse('record_list', args=['weakcurrent']),
+            'record_url': reverse('asset_list', args=['weakcurrent']) + '?view=records',
             'record_label': '巡检记录',
+            'access_url': reverse('asset_list', args=['weakcurrent']) + '?view=access',
+            'access_label': '门禁记录',
         },
     ]
     items = [_with_card_actions(item) for item in items]

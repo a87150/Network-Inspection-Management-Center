@@ -83,9 +83,10 @@ class SharedInterfaceContractTests(TestCase):
         self.assertIn('blur(18px) saturate(135%)', foundation)
         self.assertIn('blur(18px) saturate(135%)', operations)
 
-    def test_task_and_alert_summary_blocks_use_the_glass_class(self):
+    def test_task_summary_blocks_use_the_glass_class(self):
+        # 告警页的统计已并进顶部大方块（metric-card），不再有独立的小方块。
         template_root = TemplateRoot.default()
-        for relative in ('inspections/task_list.html', 'alerts/list.html'):
+        for relative in ('inspections/task_list.html',):
             source = (template_root / relative).read_text(encoding='utf-8')
             blocks = re.findall(r'<article class="[^"]*page-metric-card[^"]*"', source)
             self.assertTrue(blocks, relative + ' 没有总结方块')

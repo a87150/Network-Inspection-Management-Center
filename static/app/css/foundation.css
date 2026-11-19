@@ -1108,3 +1108,45 @@ a.card.metric-card {
 a.card.metric-card .card-body > .small:last-child {
     margin-top: auto;
 }
+
+/* 分页控件：左边两行说明（页码 / 条数区间），右边一组等宽按钮，
+   按钮高度盖住两行文字，避免一行文字和按钮基线互相错位。 */
+.page-pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem 1rem;
+    padding: .85rem 1rem;
+    border-top: 1px solid rgba(15, 23, 42, .08);
+}
+
+.page-pagination__info {
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+    line-height: 1.35;
+}
+
+.page-pagination__page {
+    font-size: .9rem;
+    font-weight: 600;
+    color: var(--color-text, #1f2937);
+}
+
+.page-pagination__range {
+    font-size: .8rem;
+    color: var(--color-text-muted, #6b7280);
+}
+
+.page-pagination__actions {
+    display: flex;
+    gap: .5rem;
+}
+
+.page-pagination .page-pagination__button {
+    min-width: 5.5rem;
+    min-height: 2.5rem;
+    padding: .45rem 1rem;
+    font-size: .9rem;
+}

@@ -241,17 +241,18 @@ class DetailRouteTests(TestCase):
                 reverse('asset_list', args=['computers']),
                 reverse('computer_analysis_list'),
             ),
+            # 记录视图现在是同一个页面上的方块视图，链接带 view 参数。
             'networks': (
                 reverse('asset_list', args=['networks']),
-                reverse('record_list', args=['networks']),
+                reverse('asset_list', args=['networks']) + '?view=records',
             ),
             'servers': (
                 reverse('asset_list', args=['servers']),
-                reverse('record_list', args=['servers']),
+                reverse('asset_list', args=['servers']) + '?view=records',
             ),
             'weakcurrent': (
                 reverse('asset_list', args=['weakcurrent']),
-                reverse('record_list', args=['weakcurrent']),
+                reverse('asset_list', args=['weakcurrent']) + '?view=records',
             ),
         }
 

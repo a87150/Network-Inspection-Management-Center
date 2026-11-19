@@ -536,7 +536,7 @@ def _task_status_badge(task):
 
 def _task_actions(task, admin):
     actions = [{
-        'kind': 'link', 'label': '查看进度',
+        'kind': 'link', 'label': '查看详情',
         'url': reverse('task_detail', args=[task.pk]),
     }]
     if admin and task.status in task.ACTIVE_STATUSES:

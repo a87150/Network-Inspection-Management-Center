@@ -187,9 +187,14 @@ export default {
             </table>
         </div>
         <nav v-if="totalPages > 1" class="page-pagination" :aria-label="label + '分页'">
-            <button class="btn btn-outline-secondary btn-sm" type="button" :disabled="currentPage <= 1 || loading" @click="load(currentPage - 1)">上一页</button>
-            <span class="text-secondary">第 [[ currentPage ]] / [[ totalPages ]] 页，共 [[ total ]] 条（[[ from ]]–[[ to ]]）</span>
-            <button class="btn btn-outline-secondary btn-sm" type="button" :disabled="currentPage >= totalPages || loading" @click="load(currentPage + 1)">下一页</button>
+            <div class="page-pagination__info">
+                <span class="page-pagination__page">第 [[ currentPage ]] / [[ totalPages ]] 页</span>
+                <span class="page-pagination__range">共 [[ total ]] 条（[[ from ]]–[[ to ]]）</span>
+            </div>
+            <div class="page-pagination__actions">
+                <button class="btn btn-outline-secondary page-pagination__button" type="button" :disabled="currentPage <= 1 || loading" @click="load(currentPage - 1)">上一页</button>
+                <button class="btn btn-outline-secondary page-pagination__button" type="button" :disabled="currentPage >= totalPages || loading" @click="load(currentPage + 1)">下一页</button>
+            </div>
         </nav>
     </div>`,
 };

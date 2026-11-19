@@ -4,8 +4,9 @@
  <div class="row g-3">
  {% for field in domain_schedule_form %}
  {% if field.name == 'is_enabled' %}
- <div class="col-md-4 d-flex align-items-center">
- <div class="form-check config-toggle-card w-100">{{ field }}<label class="form-check-label" for="{{ field.id_for_label }}"><strong>{{ field.label }}</strong></label></div>
+ <div class="col-md-4">
+ <label class="form-label d-none d-md-block" aria-hidden="true">&nbsp;</label>
+ <div class="form-check config-toggle-card">{{ field }}<label class="form-check-label" for="{{ field.id_for_label }}"><strong>{{ field.label }}</strong></label></div>
  {% for error in field.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
  </div>
  {% else %}

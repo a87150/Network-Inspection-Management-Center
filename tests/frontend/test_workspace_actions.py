@@ -4,8 +4,8 @@ from django.urls import reverse
 from net.models import Network_Device, Server, WeakCurrentDevice
 from tests.auth import login_admin
 
-# Every action either page must offer, per asset kind. '返回列表' is the one
-# deliberate difference: only a record page has a list to go back to.
+# Every action either page must offer, per asset kind. 返回列表 已从页头移除：
+# 顶部导航和方块都能回到列表，页头留这个按钮只是占位置。
 SHARED_LABELS = ('配置模板', '下载 Windows 脚本', '添加设备', '导入设备',
                  '告警配置')
 
@@ -35,7 +35,7 @@ class WorkspaceActionParityTests(TestCase):
                 self.assertContains(listing, '>' + label + '<', msg_prefix=kind + ' 列表页 ' + label)
                 self.assertContains(records, '>' + label + '<', msg_prefix=kind + ' 记录页 ' + label)
             self.assertNotContains(listing, '返回列表', msg_prefix=kind)
-            self.assertContains(records, '返回列表', msg_prefix=kind)
+            self.assertNotContains(records, '返回列表', msg_prefix=kind)
 
     def test_pc_pages_match_and_offer_the_pc_only_actions(self):
         listing = self.labels(reverse('asset_list', args=['computers']))
@@ -46,7 +46,7 @@ class WorkspaceActionParityTests(TestCase):
         for page, name in ((listing, '列表页'), (records, '记录页')):
             self.assertNotContains(page, '>添加设备<', msg_prefix=name)
             self.assertNotContains(page, '>导入设备<', msg_prefix=name)
-        self.assertContains(records, '返回列表')
+        self.assertNotContains(records, '返回列表')
 
     def test_weak_current_record_page_offers_add_and_import(self):
         """The record page gained the add/import modals; prove the buttons work."""

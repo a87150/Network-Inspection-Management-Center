@@ -20,4 +20,4 @@ Button rule, applied everywhere this bar renders. The bar is a plain flex row, s
     {% if action_can_import %}<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#importModal">{% if action_kind == 'people' %}导入人员{% else %}导入设备{% endif %}</button>{% endif %}
     {% if task_project_kind %}<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#runTaskModal">{{ task_action_label }}</button>{% endif %}
 {% endif %}
-{% if action_back_url %}<a class="btn btn-outline-secondary" href="{{ action_back_url }}">返回列表</a>{% endif %}
+{# 「返回列表」已移除：顶部导航和方块都能回到列表，页头留这个只会占位置。 #}

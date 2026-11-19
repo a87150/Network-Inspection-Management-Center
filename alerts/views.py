@@ -203,12 +203,14 @@ def alert_list(request):
     }
     context.update(alert_modal_context(request))
     # 告警与维护记录合成一个页面，用顶部方块切换。
-    context['view'] = 'maintenance' if request.GET.get('view') == 'maintenance' else 'alerts'
-    if context['view'] == 'maintenance':
-        from assets.maintenance import (
-            PAGE_SIZE, STATE_CHOICES, row_payloads, window_metrics, window_queryset,
-        )
+    from assets.maintenance import (
+        PAGE_SIZE, STATE_CHOICES, row_payloads, window_metrics, window_queryset,
+    )
 
+    context['view'] = 'maintenance' if request.GET.get('view') == 'maintenance' else 'alerts'
+    # 维护方块的数字两个视图都要有，没法只查一次列表就够。
+    context['maintenance_metrics'] = window_metrics(timezone.now())
+    if context['view'] == 'maintenance':
         now = timezone.now()
         state_filter = (request.GET.get('state') or '').strip()
         page = Paginator(window_queryset(state_filter, now), PAGE_SIZE).get_page(
