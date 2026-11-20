@@ -20,8 +20,10 @@ const pages = {
     'asset-workspace': () => import('./pages/asset_workspace.mjs'),
 };
 
-export function readBootstrap(id) {
-    const node = document.getElementById(id);
+/* scope 用来避开弹窗里的同位 id：详情片段塞进弹窗后，
+   它的 bootstrap 脚本和主页面上同名，必须先在本地区域里找。 */
+export function readBootstrap(id, scope) {
+    const node = (scope && scope.querySelector(`[id="${id}"]`)) || document.getElementById(id);
     if (!node) return {};
     try {
         return JSON.parse(node.textContent);
@@ -41,7 +43,7 @@ export async function mountPages(root = document) {
             continue;
         }
         const module = await loader();
-        const props = readBootstrap(host.dataset.vueBootstrap || '');
+        const props = readBootstrap(host.dataset.vueBootstrap || '', host.parentElement);
         const app = createApp(module.default, props);
         app.config.errorHandler = (error) => console.error(error);
         app.mount(host);

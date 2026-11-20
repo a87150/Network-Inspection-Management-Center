@@ -38,6 +38,13 @@
             const parsed = new DOMParser().parseFromString(await response.text(), 'text/html');
             const content = parsed.getElementById('main-content') || parsed.body;
             box.innerHTML = content ? content.innerHTML : '<p class="mb-0">没有可显示的内容。</p>';
+            // 详情正文是 Vue 渲染的，塞进来之后要在这里重新挂一遍。
+            const { mountPages } = await import('/static/app/vue/boot.mjs');
+            await mountPages(box);
+            // 片段里如果带了表格（比如任务的目标明细），它的表格行为也要重新初始化。
+            if (window.AppTableWorkspace && window.AppTableWorkspace.initializeAll) {
+                window.AppTableWorkspace.initializeAll(box, window.localStorage, window.location);
+            }
         } catch (error) {
             box.innerHTML = '<p class="text-danger mb-0">详情加载失败，请稍后再试。</p>';
             return;

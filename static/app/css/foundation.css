@@ -1152,6 +1152,44 @@ a.card.metric-card .card-body > .small:last-child {
     text-align: center;
 }
 
+/* 方块里的指标格：两列 key/value，从左到右、从上到下；长的单独占一行。
+   不用竖线做分隔，靠留白对齐。 */
+.metric-kv {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .45rem 1.5rem;
+    margin: 0;
+}
+
+.metric-kv__item {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: .75rem;
+    min-width: 0;
+}
+
+.metric-kv__item--wide {
+    grid-column: 1 / -1;
+}
+
+.metric-kv__item dt {
+    font-size: .85rem;
+    font-weight: 400;
+    color: var(--color-text-muted, #6b7280);
+    white-space: nowrap;
+}
+
+.metric-kv__item dd {
+    margin: 0;
+    min-width: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text, #1f2937);
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
 .page-pagination__page {
     font-size: .9rem;
     font-weight: 600;
