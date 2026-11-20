@@ -176,28 +176,28 @@
         }
     }
 
+    // 换每页条数时把地址换成干净的一串：只带真正有值的参数。
+    // 走表单提交会把表单里十几个没填的筛选框一起序列化成 xxx=，地址栏就没法看了。
+    function cleanSearch(url) {
+        const kept = Array.from(url.searchParams.entries()).filter(([, value]) => String(value).trim() !== '');
+        return new URLSearchParams(kept).toString();
+    }
+
     function replacePageSizeQuery(location, pageSize, value) {
         if (!location?.href || typeof location.replace !== 'function' || !pageSize) return;
         const parameter = pageSize.name || 'page_size';
         const url = new URL(location.href);
-        if (url.searchParams.get(parameter) === String(value)) return;
         const pageParameter = parameter === 'page_size'
             ? 'page'
             : parameter.replace(/_page_size$/, '_page');
         url.searchParams.set(parameter, String(value));
         url.searchParams.delete(pageParameter);
-        location.replace(url.toString());
+        const search = cleanSearch(url);
+        location.replace(location.pathname + (search ? '?' + search : ''));
     }
 
-    function submitPageSize(pageSize) {
-        if (typeof pageSize?.form?.requestSubmit === 'function') {
-            pageSize.form.requestSubmit();
-            return true;
-        }
-        if (typeof pageSize?.form?.submit === 'function') {
-            pageSize.form.submit();
-            return true;
-        }
+    function submitPageSize() {
+        // 交给 replacePageSizeQuery 走整页跳转，不再用表单提交。
         return false;
     }
 
@@ -314,8 +314,10 @@
         elements.reset?.addEventListener('click', () => {
             removePreferences(storage, key);
             applyPreferences(elements, defaults);
-            if (!submitPageSize(elements.pageSize)) {
+            if (elements.pageSize && defaults.pageSize) {
                 replacePageSizeQuery(location, elements.pageSize, defaults.pageSize);
+            } else if (elements.pageSize?.form) {
+                elements.pageSize.form.requestSubmit();
             }
         });
     }

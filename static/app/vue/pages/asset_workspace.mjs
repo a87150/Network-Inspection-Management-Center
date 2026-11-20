@@ -103,9 +103,7 @@ export default {
                 this.totalPages = payload.pages;
                 this.from = payload.start_index;
                 this.to = payload.end_index;
-                const url = new URL(window.location.href);
-                url.searchParams.set('page', payload.page);
-                window.history.replaceState({}, '', url);
+                this.syncUrl({ page: payload.page });
             } catch (failure) {
                 this.error = failure.message || '加载失败';
             } finally {
@@ -114,12 +112,24 @@ export default {
         },
         async sortBy(column) {
             if (!column.sortable) return;
-            const url = new URL(window.location.href);
-            url.searchParams.set('sort', column.key);
-            url.searchParams.set('order', this.nextOrder(column));
-            url.searchParams.delete('page');
-            window.history.replaceState({}, '', url);
+            this.syncUrl({ sort: column.key, order: this.nextOrder(column), page: null });
             await this.load(1);
+        },
+        // 地址栏只留真正有值的参数：空筛选项和默认值一律不写。
+        syncUrl(changes) {
+            if (!window.history.replaceState) return;
+            const params = new URLSearchParams(window.location.search);
+            Object.keys(changes).forEach((key) => {
+                const value = changes[key];
+                if (value === null || value === undefined || String(value).trim() === '' || value === 1 || value === '1') {
+                    params.delete(key);
+                } else {
+                    params.set(key, String(value));
+                }
+            });
+            const kept = Array.from(params.entries()).filter(([, value]) => String(value).trim() !== '');
+            const search = new URLSearchParams(kept).toString();
+            window.history.replaceState({}, '', window.location.pathname + (search ? '?' + search : ''));
         },
         nextOrder(column) {
             return this.sort === column.key && this.order === 'asc' ? 'desc' : 'asc';

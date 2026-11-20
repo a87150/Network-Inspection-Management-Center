@@ -3,6 +3,7 @@ from datetime import date, datetime
 
 from django import template
 from django.utils import timezone
+from urllib.parse import urlencode
 
 register = template.Library()
 
@@ -95,13 +96,18 @@ def group_delivery_outcomes(deliveries):
 
 @register.simple_tag
 def query_transform(request, **changes):
+    """生成链接用的查询串。
+
+    只保留真正有值的参数：表单里没填的筛选项、翻页过程中的临时参数都不进地址栏，
+    否则改一次每页条数就会把十几个 xxx= 的空键一起写进 URL。
+    """
     query = request.GET.copy()
     for key, value in changes.items():
         if value is None:
             query.pop(key, None)
         else:
             query[key] = value
-    return query.urlencode()
+    return urlencode([(key, value) for key, value in query.items() if str(value).strip()])
 
 
 @register.simple_tag
