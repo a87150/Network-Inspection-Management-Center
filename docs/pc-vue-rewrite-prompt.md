@@ -2,7 +2,11 @@
 
 ## 一句话目标
 
-把现在的「Django 模板渲染 + Vue 局部增强」混合结构，改成**一个 Vue 单页组件驱动的完整页面**：外观、交互、功能与现在**完全一致**，一处都不许改。新模板文件名就叫 `pc`，即 `pc/templates/pc/pc.html`。
+把现在的「Django 模板渲染 + Vue 局部增强」混合结构，改成**一个 Vue 单页组件驱动的完整页面**：外观、交互、功能与现在**完全一致**，一处都不许改。
+
+新模板文件名就叫 `pc`，即 `pc/templates/pc/pc.html`。
+
+**PC 页面按独立 app 来做**：视图、模板、路由、接口全部收进 `pc` app，不再往 `assets` 里塞。怎么顺手怎么来，不用迁就现有分层。只保留一条：对外 URL 路径不变，理由见「app 边界」那一节。
 
 ## 硬约束（违反任何一条都算没做完）
 
@@ -11,6 +15,7 @@
 3. **不许新增依赖，不许引入构建步骤**。项目是 vendored Vue 3 ESM，直接 `import` 浏览器版，没有 npm、没有 bundler、没有 SFC 编译器。组件只能是 `.mjs` 里导出带 `template` 字符串的对象。
 4. **不许动后端语义**。可以把上下文换个方式序列化，但查询逻辑、统计口径、字段格式化一律沿用现有函数。
 5. **做完要能跑测试**。至少 `python manage.py test tests.frontend tests.system tests.inspections --noinput` 全绿。
+6. **app 边界清楚**。新代码写进 `pc/`，`assets/` 里的文件除非删旧路由否则不要改。
 
 ## 必须先读的文件（按这个顺序）
 
@@ -324,15 +329,101 @@ PC 资料由终端采集器通过 API 上报日志后自动建立，无需导入
 
 字号三档变量：`--fs-lg: 22px`（标题/强调数字）、`--fs-md: 16px`（正文/表格）、`--fs-sm: 14px`（辅助说明/时间戳）。
 
-## 后端要动的地方（尽量少）
+## app 边界：PC 当成独立 app 做
 
-1. 新增视图 `pc_workspace`（或在 `asset_list` 里加分支），渲染 `pc/templates/pc/pc.html`，把上面那份 bootstrap JSON 一次算好塞进去。**复用现有函数**：`_asset_list_context`、`computer_workspace_payloads`、`computer_analysis_context`、`latest_analysis_statistics`、`table_payload`、`table_row_payloads`。
-2. `pc/templates/pc/pc.html` 只保留：`{% extends 'common/base.html' %}`、`page-heading`、一个 `<div data-vue-page="pc-workspace" data-vue-bootstrap="pc-workspace-bootstrap">`、`{{ bootstrap|json_script:"pc-workspace-bootstrap" }}`、以及必须保留的弹窗 include（`issue_settings_modal`、`profile_modal`、`run_modal`、`policy_modal`、`import_modal`、`add_modal`、`collection_template_modal`、`maintenance_modal`）。
-3. 在 `static/app/vue/boot.mjs` 的 `pages` 里注册 `'pc-workspace': () => import('./pages/pc_workspace.mjs')`。
-4. 新建 `static/app/vue/pages/pc_workspace.mjs`，这是主体，估计 700-1000 行。
-5. `index/templates/common/base.html` 里静态资源版本号 `?v=` 往上加一位，否则浏览器用旧缓存。
+不要再往 `assets` app 里塞。PC 页从视图到模板全部收进 `pc` app，`assets` 那边一行不改。`pc` 已经在 `INSTALLED_APPS` 里（`net/settings.py` 第 148 行附近），`APP_DIRS = True`，加文件就能用。
 
-**不要删旧的路由和模板**。旧的 `/computers/analyses/`、`/computers/logs/` 留着做备用，等新结构验证通过再清理。
+目标结构：
+
+```
+pc/
+  views.py                    ← 新建，整个页面的视图全在这
+  payloads.py                 ← 新建，bootstrap JSON 的组装逻辑
+  urls.py                     ← 新建，PC 自己的路由
+  templates/pc/pc.html        ← 新建，页面骨架
+  templates/pc/              ← 已有的 tabs.html / log_pane.html / config_modal.html 等 11 个文件原地不动
+static/app/vue/pages/pc_workspace.mjs   ← 新建，Vue 主体
+```
+
+### 路由：路径不变，代码独立
+
+`pc/urls.py` 里注册的 URL **继续用现在的路径**，不要换：
+
+```python
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    path('assets/computers/', views.pc_workspace, name='pc_workspace'),
+    path('assets/computers/<uuid:pk>/detail.json', views.pc_detail_json, name='pc_detail_json'),
+    path('api/v1/pc/rows/', views.pc_rows_api, name='pc-rows'),
+    path('api/v1/pc/logs/', views.pc_logs_api, name='pc-logs'),
+]
+```
+
+然后在 `index/urls.py` 里 `path('', include('pc.urls'))`，并把原来那几行指向 `assets.views` 的同名 `path` **删掉或注释**，避免重复匹配。
+
+为什么路径不换：导航栏「PC」、详情里的「查看日志分析记录」、任务的 `history_url`、告警里的跳转，全站有十几处硬编码或 `reverse('asset_list', args=['computers'])` 指着 `/assets/computers/`。换路径要动十几处，收益为零，风险全是你的。**代码归 pc app，路径保持原样**，这是两边都占的方案。
+
+### 视图职责
+
+`pc/views.py`：
+
+- `pc_workspace(request)` —— 渲染 `pc/pc.html`，一次算好 bootstrap
+- `pc_detail_json(request, pk)` —— 原来的 `/assets/computers/<pk>/detail.json`，直接转调 `assets.views.asset_detail_json` 或把那段逻辑抄过来（它依赖 `_asset_detail_context`，抄过来更干净）
+- `pc_rows_api` / `pc_logs_api` —— 翻页接口。**优先复用**现有 `index/api/viewsets.py` 里的 `AssetViewSet` 和 `ComputerLogViewSet`，把它们的 `list` 直接挂到新路由上；实在接不上再自己写 DRF `ListAPIView`
+
+### 可以照抄的东西（别重写）
+
+这些函数现在就在 `assets/views.py` 和 `inspections/records.py` 里，**import 过来用**，不要重新实现：
+
+| 函数 | 位置 | 干什么 |
+|---|---|---|
+| `_asset_page('computers')` | `assets/views.py:68` | 拿到 model、表 key、标题 |
+| `apply_table_filters` | `index/common/table_query.py` | 筛选 + 排序 + 分页状态 |
+| `table_row_payloads` | `index/common/table_payload.py` | 行 → `{id, cells, actions}` |
+| `table_payload` | `index/common/table_payload.py` | 整页 → `{columns, rows, count, page, pages, ...}` |
+| `asset_row_actions` | `assets/payloads.py` | 操作列按钮定义 |
+| `computer_workspace_payloads` | `inspections/records.py:634` | 日志、异常、分析计数、三个方块的数字 |
+| `computer_logs_payload` | `inspections/records.py:560` | 日志表 bootstrap |
+| `computer_analysis_context` | `inspections/records.py:221` | 分析记录 tab 的上下文 |
+| `latest_analysis_statistics` | `inspections/analysis_summary.py:70` | 六格 + 问题类型分布 |
+| `build_project_task_metrics` / `project_task_queryset` | `net/inspections/task_summary.py` | 分析方块的任务统计 |
+| `device_overview` | `assets/overview.py` | 资产方块的总数/活跃/活跃率 |
+| `workspace_action_context` | `index/common/workspace_actions.py` | 头部六个按钮的开关 |
+| `task_modal_context` | `inspections/tasks.py` | 分析配置 / 手动执行分析弹窗 |
+
+`_project_workspace_context(request, 'computers')` 是 `computer_analysis_context` 内部调的，提供 `task_page`、`latest_task`、`task_section_title` 等——如果你要拆开算，看 `inspections/records.py` 里它的定义。
+
+### 模板
+
+`pc/templates/pc/pc.html` 只保留这些：
+
+1. `{% extends 'common/base.html' %}` + `{% block page_scripts %}` 里挂 `app/vue/boot.mjs`
+2. `page-heading`（标题、副标题、六个按钮）—— 可以继续 `{% include 'common/workspace_actions.html' %}`，也可以照着那 23 行在 Vue 里渲染，**后者更彻底，推荐**
+3. `<div data-vue-page="pc-workspace" data-vue-bootstrap="pc-workspace-bootstrap"></div>`
+4. `{{ pc_bootstrap|json_script:"pc-workspace-bootstrap" }}`
+5. 弹窗 include，这些必须留在模板里（它们有 Django 表单和 CSRF，不适合搬进 Vue）：
+   - `inspections/issue_settings_modal.html`
+   - `inspections/profile_modal.html`
+   - `inspections/run_modal.html`
+   - `alerts/policy_modal.html`
+   - `common/import_modal.html`
+   - `devices/add_modal.html`
+   - `devices/collection_template_modal.html`
+   - `devices/maintenance_modal.html`
+
+`json_script` 用 `ensure_ascii=True`，中文会变成 `\uXXXX`，测试里断言中文必须解析 JSON，不能直接 grep。
+
+### 前端
+
+1. `static/app/vue/boot.mjs` 的 `pages` 加一行：`'pc-workspace': () => import('./pages/pc_workspace.mjs')`
+2. 新建 `static/app/vue/pages/pc_workspace.mjs`，主体，估计 700-1000 行
+3. `index/templates/common/base.html` 的静态资源版本号 `?v=` 加一，否则浏览器吃旧缓存
+
+### 不要删的东西
+
+旧的 `/computers/analyses/`、`/computers/logs/`、`/assets/computers/toggle-enabled/` 这些路由留着。`assets/templates/devices/list.html` 留着，网络设备 / 服务器 / 弱电设备 / 人员还在用它。这次只新建，不清理。
 
 ## 验收清单（自己先跑一遍，别交半成品）
 
@@ -351,6 +442,9 @@ PC 资料由终端采集器通过 API 上报日志后自动建立，无需导入
 - [ ] 分析记录：点某个问题类型，弹窗列出该类型的明细，可翻页
 - [ ] 头顶六个按钮全部可用，点「问题等级设置」弹窗打开而不是跳页
 - [ ] 所有弹窗垂直居中
+- [ ] 地址栏里 `/assets/computers/` 这个路径没变（导航栏「PC」点进来还是这里）
+- [ ] `pc/` 下新增的文件齐全：`views.py`、`payloads.py`、`urls.py`、`templates/pc/pc.html`
+- [ ] `git diff --stat` 里 `assets/` 的改动是零（除了可能删掉的旧路由行）
 - [ ] `python manage.py test tests.frontend tests.system tests.inspections --noinput` 全绿
 
 ## 已知坑（别重犯）
