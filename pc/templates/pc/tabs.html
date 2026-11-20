@@ -18,7 +18,7 @@ PC 主页面顶部的三个方块。指标按 key/value 两列从上到下排，
                     <div class="metric-kv__item"><dt>活跃率</dt><dd>{{ overview.active_rate|default:0 }}%</dd></div>
                 </dl>
             </div>
-            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary">查看 PC 资产{% if pc_tab == 'assets' %} · 当前{% endif %}</div>
+            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary text-end">查看 PC 资产{% if pc_tab == 'assets' %} · 当前{% endif %}</div>
         </button>
     </div>
     <div class="col-12 col-md-4">
@@ -36,7 +36,7 @@ PC 主页面顶部的三个方块。指标按 key/value 两列从上到下排，
                     <div class="metric-kv__item"><dt>采集异常</dt><dd>{{ pc_errors_total|default:0 }}</dd></div>
                 </dl>
             </div>
-            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary">查看分析记录{% if pc_tab == 'analyses' %} · 当前{% endif %}</div>
+            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary text-end">查看分析记录{% if pc_tab == 'analyses' %} · 当前{% endif %}</div>
         </button>
     </div>
     <div class="col-12 col-md-4">
@@ -54,7 +54,7 @@ PC 主页面顶部的三个方块。指标按 key/value 两列从上到下排，
                     <div class="metric-kv__item"><dt>采集异常</dt><dd>{{ pc_errors_total|default:0 }}</dd></div>
                 </dl>
             </div>
-            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary">查看日志{% if pc_tab == 'logs' %} · 当前{% endif %}</div>
+            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary text-end">查看日志{% if pc_tab == 'logs' %} · 当前{% endif %}</div>
         </button>
     </div>
 </div>

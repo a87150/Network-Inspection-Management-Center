@@ -1155,21 +1155,19 @@ a.card.metric-card .card-body > .small:last-child {
 /* 方块里的指标格：两列 key/value，key 和 value 紧挨着，整体左对齐。
    不要 justify-content: space-between —— 那会把数字推到行尾，
    中间空一大片，右边还是空的。 */
+/* 指标按内容宽度自然排列：短的并排、长的自动换行独占一行。
+   键和值之间是固定的 6px，不随卡片宽度变化。 */
 .metric-kv {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1rem 2.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .85rem 2rem;
     margin: 0;
 }
 
-/* key 贴格左、value 贴格右，两列各自撑满一半宽度，
-   这样整块卡片的宽度都用上了，不会挤在左边留一大片空白。 */
 .metric-kv__item {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
+    display: flex;
     align-items: baseline;
     gap: .6rem;
-    min-width: 0;
 }
 
 .metric-kv__item dt {
@@ -1180,14 +1178,12 @@ a.card.metric-card .card-body > .small:last-child {
 }
 
 .metric-kv__item dd {
-    justify-self: end;
     margin: 0;
-    min-width: 0;
     font-size: 1.5rem;
     font-weight: 700;
     line-height: 1.2;
     color: var(--color-text, #1f2937);
-    overflow-wrap: anywhere;
+    white-space: nowrap;
 }
 
 .page-pagination__page {

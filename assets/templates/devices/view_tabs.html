@@ -18,7 +18,7 @@
                     <div class="metric-kv__item"><dt>异常</dt><dd>{{ overview.abnormal|default:0 }}</dd></div>
                 </dl>
             </div>
-            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary">查看{{ item_name }}{% if view == 'rows' %} · 当前{% endif %}</div>
+            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary text-end">查看{{ item_name }}{% if view == 'rows' %} · 当前{% endif %}</div>
         </button>
     </div>
     {% if item_key == 'people' %}
@@ -37,7 +37,7 @@
                     <div class="metric-kv__item"><dt>总人数</dt><dd>{{ overview.total|default:0 }}</dd></div>
                 </dl>
             </div>
-            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary">查看部门{% if view == 'departments' %} · 当前{% endif %}</div>
+            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary text-end">查看部门{% if view == 'departments' %} · 当前{% endif %}</div>
         </button>
     </div>
     {% else %}
@@ -56,7 +56,7 @@
                     <div class="metric-kv__item"><dt>异常</dt><dd>{{ overview.abnormal|default:0 }}</dd></div>
                 </dl>
             </div>
-            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary">查看巡检记录{% if view == 'records' %} · 当前{% endif %}</div>
+            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary text-end">查看巡检记录{% if view == 'records' %} · 当前{% endif %}</div>
         </button>
     </div>
     {% if item_key == 'weakcurrent' %}
@@ -75,7 +75,7 @@
                     <div class="metric-kv__item"><dt>异常</dt><dd>{{ overview.abnormal|default:0 }}</dd></div>
                 </dl>
             </div>
-            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary">查看门禁记录{% if view == 'access' %} · 当前{% endif %}</div>
+            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary text-end">查看门禁记录{% if view == 'access' %} · 当前{% endif %}</div>
         </button>
     </div>
     {% endif %}

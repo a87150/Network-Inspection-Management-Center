@@ -195,7 +195,15 @@ body.app-shell {
 }
 
 .metric-card__status-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    width: 100%;
     min-height: 2rem;
+}
+
+.metric-card__status-row > h2 {
+    margin-right: auto;
 }
 
 .metric-card__ready {
