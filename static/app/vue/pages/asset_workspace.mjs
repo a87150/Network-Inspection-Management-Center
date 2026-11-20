@@ -147,6 +147,9 @@ export default {
             if (!id || !this.detailBase || this.detailLoading) return;
             this.detailLoading = true;
             this.detailError = '';
+            // 先把弹窗支起来，让点下去立刻有反馈，数据回来再填进去。
+            this.detail = null;
+            this.showDetailModal();
             try {
                 this.detail = await api.get(this.detailBase + id + '/detail.json');
                 this.detailId = id;
@@ -157,7 +160,6 @@ export default {
                 this.detailError = failure.message || '详情加载失败';
             } finally {
                 this.detailLoading = false;
-                this.showDetailModal();
             }
         },
         showDetailModal() {
@@ -215,7 +217,8 @@ export default {
                                     <button :class="actionClass(action)" type="submit">[[ action.label ]]</button>
                                 </form>
                                 <button v-else-if="action.kind === 'modal'" type="button" :class="actionClass(action)" data-bs-toggle="modal" :data-bs-target="action.modal_target ? '#' + action.modal_target : null">[[ action.label ]]</button>
-                                <a v-else :class="actionClass(action)" :href="action.url" :data-modal-load="action.modal_target || null" :data-detail-modal="action.detail_modal ? action.url : null">[[ action.label ]]</a>
+                                <button v-else-if="action.detail_modal" type="button" :class="actionClass(action)" @click.stop.prevent="openDetail(row)">[[ action.label ]]</button>
+                                <a v-else :class="actionClass(action)" :href="action.url" :data-modal-load="action.modal_target || null">[[ action.label ]]</a>
                             </template>
                         </div></td>
                     </tr>
@@ -236,7 +239,7 @@ export default {
         </div>
         <Teleport to="body">
         <div class="modal fade" id="assetDetailModal" ref="detailModal" tabindex="-1" aria-labelledby="assetDetailModalTitle" aria-hidden="true" >
-            <div class="modal-dialog modal-xl modal-dialog-scrollable modal-shell">
+            <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable modal-shell">
                 <div class="modal-content modal-surface">
                     <div class="modal-header">
                         <h2 class="modal-title fs-5" id="assetDetailModalTitle">[[ (detail && detail.title) || '详情' ]]</h2>

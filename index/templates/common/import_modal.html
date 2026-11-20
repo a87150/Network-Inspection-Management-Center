@@ -1,6 +1,6 @@
 {% if can_administer %}
 <div class="modal fade import-config-modal" id="importModal" data-auto-open="{{ open_import_modal|yesno:'true,false' }}" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="importModalLabel" aria-describedby="importModalDescription" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable modal-shell"><div class="modal-content modal-surface">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable modal-shell"><div class="modal-content modal-surface">
         <div class="modal-header"><h2 class="modal-title fs-5" id="importModalLabel">导入{{ item_name }}</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
         <div class="modal-body modal-body--scroll d-grid gap-4">
             <p class="visually-hidden" id="importModalDescription">向当前{{ item_name }}列表导入数据。</p>

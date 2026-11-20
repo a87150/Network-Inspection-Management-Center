@@ -361,7 +361,7 @@ class SharedInterfaceContractTests(TestCase):
         people = self.client.get(reverse('asset_list', args=['people']))
 
         self.assertContains(domain, 'modal-dialog-scrollable modal-shell')
-        self.assertContains(people, 'class="modal-dialog modal-lg modal-dialog-scrollable modal-shell')
+        self.assertContains(people, 'class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable modal-shell')
 
     def test_alert_configuration_modals_use_glass_sections_and_persistent_actions(self):
         response = self.client.get(reverse('alert_list'))
@@ -389,7 +389,7 @@ class SharedInterfaceContractTests(TestCase):
         self.assertIn('class="form-select"', body)
         self.assertIn('打开模板', body)
         self.assertNotIn('class="interactive-list"', body)
-        self.assertIn('modal-dialog modal-xl modal-dialog-scrollable modal-shell', modal)
+        self.assertIn('modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable modal-shell', modal)
         self.assertIn('modal-footer modal-footer--sticky', modal)
         self.assertIn('id="collectionSettingsForm"', body)
         self.assertIn('form="collectionSettingsForm"', modal)

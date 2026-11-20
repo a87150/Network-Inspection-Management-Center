@@ -63,7 +63,7 @@ export default {
         <button v-if="can_administer" class="btn btn-primary" type="button" @click="show">增加 IP 段</button>
 
         <div v-if="open" class="modal fade show d-block" role="dialog" aria-modal="true" aria-labelledby="ip-subnet-modal-title" @click.self="hide">
-            <div class="modal-dialog modal-dialog-scrollable modal-shell">
+            <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-shell">
                 <div class="modal-content modal-surface">
                     <form @submit.prevent="submit">
                         <div class="modal-header">

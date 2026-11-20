@@ -65,7 +65,7 @@ class DomainGroupMemberInterfaceTests(TestCase):
         self.assertContains(response, 'id="domainGroupMembersModal"')
         self.assertContains(
             response,
-            'class="modal-dialog modal-xl modal-dialog-scrollable modal-shell"',
+            'class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable modal-shell"',
         )
         self.assertContains(response, 'class="modal-content modal-surface"')
         self.assertContains(response, 'class="modal-loading-state"')

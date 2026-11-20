@@ -1,6 +1,6 @@
 {% if can_administer %}
 <div class="modal fade inspection-config-modal" id="profileConfigModal" data-auto-open="{{ profile_modal_auto_open|yesno:'true,false' }}" tabindex="-1" aria-labelledby="profileConfigModalLabel" aria-hidden="true">
- <div class="modal-dialog modal-xl modal-dialog-scrollable modal-shell"><div class="modal-content modal-surface">
+ <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable modal-shell"><div class="modal-content modal-surface">
   <div class="modal-header"><h2 class="modal-title fs-5" id="profileConfigModalLabel">PC API 与分析配置</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
   <div class="modal-body modal-body--scroll">
    <p class="text-secondary small">终端通过 API 将日志直接写入数据库。手动和定时执行都只分析每台 PC 当前保留的最新日志。</p>

@@ -1,6 +1,6 @@
 {% if can_administer %}
 <div class="modal fade import-preview-modal" id="peoplePreviewModal" data-auto-open="true" tabindex="-1" aria-labelledby="peoplePreviewLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable modal-shell"><div class="modal-content modal-surface">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable modal-shell"><div class="modal-content modal-surface">
         <div class="modal-header"><h2 class="modal-title fs-5" id="peoplePreviewLabel">{{ people_operation.get_task_type_display }}</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
         <div class="modal-body modal-body--scroll d-grid gap-3">
             {% if people_operation_error %}<div class="alert alert-danger mb-0" role="alert">{{ people_operation_error }}</div>{% endif %}

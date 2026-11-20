@@ -1,6 +1,6 @@
 {% if can_administer %}
 <div class="modal fade task-run-modal" id="runTaskModal" data-auto-open="{{ task_modal_auto_open|yesno:'true,false' }}" tabindex="-1" aria-labelledby="runTaskModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable modal-shell"><div class="modal-content modal-surface">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable modal-shell"><div class="modal-content modal-surface">
         <form id="manualTaskForm" method="post" action="{% if task_single_asset %}{% url 'single_device_task_create' task_project_kind task_single_asset.pk %}{% else %}{% url 'manual_task_create' %}{% endif %}">
             {% csrf_token %}
             <div class="modal-header"><h2 class="modal-title fs-5" id="runTaskModalLabel">{{ task_action_label }}</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>

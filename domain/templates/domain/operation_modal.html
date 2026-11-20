@@ -20,7 +20,7 @@
 </section>
 
 <div class="modal fade domain-operation-modal" id="domainOperationModal" data-auto-open="{% if request.GET.domain_modal == 'operation' %}true{% else %}false{% endif %}" tabindex="-1" aria-labelledby="domainOperationModalLabel" aria-describedby="domainOperationModalDescription" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable modal-shell"><div class="modal-content modal-surface">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable modal-shell"><div class="modal-content modal-surface">
         <form method="post" action="{% url 'domain_operation_create' %}" data-domain-operation-form>
             {% csrf_token %}
             <input type="hidden" name="object_type" value="{{ domain_object_type }}">

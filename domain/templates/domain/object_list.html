@@ -4,7 +4,7 @@
 {% block content %}
 {% if domain_object_type == 'group' and can_administer %}
 <div class="modal fade domain-members-modal" id="domainGroupMembersModal" tabindex="-1" aria-labelledby="domainGroupMembersLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable modal-shell">
+    <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable modal-shell">
         <div class="modal-content modal-surface">
             <div class="modal-header domain-members-header">
                 <div>
@@ -36,7 +36,7 @@
 
 {% if domain_object_type == 'account' and can_manage_domain %}
 <div class="modal fade domain-account-import-modal" id="domainAccountImportModal" data-auto-open="{% if request.GET.domain_modal == 'account_import' %}true{% else %}false{% endif %}" tabindex="-1" aria-labelledby="domainAccountImportModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-scrollable modal-shell"><div class="modal-content modal-surface"><form method="post" action="{% url 'domain_account_import' %}" enctype="multipart/form-data">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-shell"><div class="modal-content modal-surface"><form method="post" action="{% url 'domain_account_import' %}" enctype="multipart/form-data">
         {% csrf_token %}
         <div class="modal-header"><h2 class="modal-title fs-5" id="domainAccountImportModalLabel">批量导入域账户</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
         <div class="modal-body modal-body--scroll d-grid gap-3">

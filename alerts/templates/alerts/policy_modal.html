@@ -1,6 +1,6 @@
 {% if can_administer %}
 <div class="modal fade alert-policy-modal" id="alertPolicyModal" data-auto-open="{{ alert_policy_modal_auto_open|yesno:'true,false' }}" tabindex="-1" aria-labelledby="alertPolicyModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable modal-shell">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable modal-shell">
 <div class="modal-content modal-surface">
         <form method="post" action="{% url 'alert_policy_save' %}" data-alert-policy-form data-form-ajax>
 {% csrf_token %}
