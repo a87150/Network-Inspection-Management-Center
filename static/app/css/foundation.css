@@ -1171,7 +1171,7 @@ a.card.metric-card .card-body > .small:last-child {
 }
 
 .metric-kv__item dt {
-    font-size: 1rem;
+    font-size: 1.15rem;
     font-weight: 400;
     color: var(--color-text-muted, #6b7280);
     white-space: nowrap;
@@ -1179,9 +1179,9 @@ a.card.metric-card .card-body > .small:last-child {
 
 .metric-kv__item dd {
     margin: 0;
-    font-size: 1.5rem;
+    font-size: 1.6rem;
     font-weight: 700;
-    line-height: 1.2;
+    line-height: 1.15;
     color: var(--color-text, #1f2937);
     white-space: nowrap;
 }

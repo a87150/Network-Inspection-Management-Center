@@ -8,9 +8,9 @@
                 role="tab" aria-selected="{% if view == 'rows' %}true{% else %}false{% endif %}"
                 data-view-tab="rows" data-view-url="?object=rows">
             <div class="card-body p-4 d-flex flex-column">
-                <div class="metric-card__status-row d-flex justify-content-between align-items-start mb-3">
+                <div class="metric-card__status-row d-flex justify-content-between align-items-start mb-3" style="display:flex;justify-content:space-between;align-items:center;width:100%">
                     <h2 class="h5 mb-0">{{ item_name }}</h2>
-                    <span class="metric-card__ready ms-auto"><span class="status-dot status-dot--ok"></span>台账</span>
+                    <span class="metric-card__ready" style="margin-left:auto"><span class="status-dot status-dot--ok"></span>台账</span>
                 </div>
                 <dl class="metric-kv">
                     <div class="metric-kv__item"><dt>总数</dt><dd>{{ overview.total|default:0 }}</dd></div>
@@ -18,7 +18,7 @@
                     <div class="metric-kv__item"><dt>异常</dt><dd>{{ overview.abnormal|default:0 }}</dd></div>
                 </dl>
             </div>
-            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary text-end">查看{{ item_name }}{% if view == 'rows' %} · 当前{% endif %}</div>
+            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary d-flex justify-content-end">查看{{ item_name }}{% if view == 'rows' %} · 当前{% endif %}</div>
         </button>
     </div>
     {% if item_key == 'people' %}
@@ -27,9 +27,9 @@
                 role="tab" aria-selected="{% if view == 'departments' %}true{% else %}false{% endif %}"
                 data-view-tab="departments" data-view-url="?object=departments">
             <div class="card-body p-4 d-flex flex-column">
-                <div class="metric-card__status-row d-flex justify-content-between align-items-start mb-3">
+                <div class="metric-card__status-row d-flex justify-content-between align-items-start mb-3" style="display:flex;justify-content:space-between;align-items:center;width:100%">
                     <h2 class="h5 mb-0">部门</h2>
-                    <span class="metric-card__ready ms-auto"><span class="status-dot status-dot--ok"></span>汇总</span>
+                    <span class="metric-card__ready" style="margin-left:auto"><span class="status-dot status-dot--ok"></span>汇总</span>
                 </div>
                 <dl class="metric-kv">
                     <div class="metric-kv__item"><dt>部门数</dt><dd>{{ department_total|default:0 }}</dd></div>
@@ -37,7 +37,7 @@
                     <div class="metric-kv__item"><dt>总人数</dt><dd>{{ overview.total|default:0 }}</dd></div>
                 </dl>
             </div>
-            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary text-end">查看部门{% if view == 'departments' %} · 当前{% endif %}</div>
+            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary d-flex justify-content-end">查看部门{% if view == 'departments' %} · 当前{% endif %}</div>
         </button>
     </div>
     {% else %}
@@ -46,9 +46,9 @@
                 role="tab" aria-selected="{% if view == 'records' %}true{% else %}false{% endif %}"
                 data-view-tab="records" data-view-url="?object=records">
             <div class="card-body p-4 d-flex flex-column">
-                <div class="metric-card__status-row d-flex justify-content-between align-items-start mb-3">
+                <div class="metric-card__status-row d-flex justify-content-between align-items-start mb-3" style="display:flex;justify-content:space-between;align-items:center;width:100%">
                     <h2 class="h5 mb-0">巡检记录</h2>
-                    <span class="metric-card__ready ms-auto"><span class="status-dot status-dot--ok"></span>历史</span>
+                    <span class="metric-card__ready" style="margin-left:auto"><span class="status-dot status-dot--ok"></span>历史</span>
                 </div>
                 <dl class="metric-kv">
                     <div class="metric-kv__item"><dt>设备</dt><dd>{{ overview.total|default:0 }}</dd></div>
@@ -56,7 +56,7 @@
                     <div class="metric-kv__item"><dt>异常</dt><dd>{{ overview.abnormal|default:0 }}</dd></div>
                 </dl>
             </div>
-            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary text-end">查看巡检记录{% if view == 'records' %} · 当前{% endif %}</div>
+            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary d-flex justify-content-end">查看巡检记录{% if view == 'records' %} · 当前{% endif %}</div>
         </button>
     </div>
     {% if item_key == 'weakcurrent' %}
@@ -65,9 +65,9 @@
                 role="tab" aria-selected="{% if view == 'access' %}true{% else %}false{% endif %}"
                 data-view-tab="access" data-view-url="?object=access">
             <div class="card-body p-4 d-flex flex-column">
-                <div class="metric-card__status-row d-flex justify-content-between align-items-start mb-3">
+                <div class="metric-card__status-row d-flex justify-content-between align-items-start mb-3" style="display:flex;justify-content:space-between;align-items:center;width:100%">
                     <h2 class="h5 mb-0">门禁记录</h2>
-                    <span class="metric-card__ready ms-auto"><span class="status-dot status-dot--ok"></span>进出</span>
+                    <span class="metric-card__ready" style="margin-left:auto"><span class="status-dot status-dot--ok"></span>进出</span>
                 </div>
                 <dl class="metric-kv">
                     <div class="metric-kv__item"><dt>设备</dt><dd>{{ overview.total|default:0 }}</dd></div>
@@ -75,7 +75,7 @@
                     <div class="metric-kv__item"><dt>异常</dt><dd>{{ overview.abnormal|default:0 }}</dd></div>
                 </dl>
             </div>
-            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary text-end">查看门禁记录{% if view == 'access' %} · 当前{% endif %}</div>
+            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary d-flex justify-content-end">查看门禁记录{% if view == 'access' %} · 当前{% endif %}</div>
         </button>
     </div>
     {% endif %}

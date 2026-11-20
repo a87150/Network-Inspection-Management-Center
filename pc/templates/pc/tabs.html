@@ -8,9 +8,9 @@ PC 主页面顶部的三个方块。指标按 key/value 两列从上到下排，
                 id="pc-tab-assets" data-bs-toggle="tab" data-bs-target="#pc-pane-assets"
                 role="tab" aria-controls="pc-pane-assets" aria-selected="true">
             <div class="card-body p-4 d-flex flex-column">
-                <div class="metric-card__status-row d-flex justify-content-between align-items-start mb-3">
+                <div class="metric-card__status-row d-flex justify-content-between align-items-start mb-3" style="display:flex;justify-content:space-between;align-items:center;width:100%">
                     <h2 class="h5 mb-0">PC 资产</h2>
-                    <span class="metric-card__ready ms-auto"><span class="status-dot status-dot--ok"></span>台账</span>
+                    <span class="metric-card__ready" style="margin-left:auto"><span class="status-dot status-dot--ok"></span>台账</span>
                 </div>
                 <dl class="metric-kv">
                     <div class="metric-kv__item"><dt>总数</dt><dd>{{ overview.total|default:0 }}</dd></div>
@@ -18,7 +18,7 @@ PC 主页面顶部的三个方块。指标按 key/value 两列从上到下排，
                     <div class="metric-kv__item"><dt>活跃率</dt><dd>{{ overview.active_rate|default:0 }}%</dd></div>
                 </dl>
             </div>
-            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary text-end">查看 PC 资产{% if pc_tab == 'assets' %} · 当前{% endif %}</div>
+            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary d-flex justify-content-end">查看 PC 资产{% if pc_tab == 'assets' %} · 当前{% endif %}</div>
         </button>
     </div>
     <div class="col-12 col-md-4">
@@ -26,9 +26,9 @@ PC 主页面顶部的三个方块。指标按 key/value 两列从上到下排，
                 id="pc-tab-analyses" data-bs-toggle="tab" data-bs-target="#pc-pane-analyses"
                 role="tab" aria-controls="pc-pane-analyses" aria-selected="true">
             <div class="card-body p-4 d-flex flex-column">
-                <div class="metric-card__status-row d-flex justify-content-between align-items-start mb-3">
+                <div class="metric-card__status-row d-flex justify-content-between align-items-start mb-3" style="display:flex;justify-content:space-between;align-items:center;width:100%">
                     <h2 class="h5 mb-0">分析记录</h2>
-                    <span class="metric-card__ready ms-auto"><span class="status-dot status-dot--ok"></span>快照</span>
+                    <span class="metric-card__ready" style="margin-left:auto"><span class="status-dot status-dot--ok"></span>快照</span>
                 </div>
                 <dl class="metric-kv">
                     <div class="metric-kv__item"><dt>记录数</dt><dd>{{ pc_analyses_total|default:0 }}</dd></div>
@@ -36,7 +36,7 @@ PC 主页面顶部的三个方块。指标按 key/value 两列从上到下排，
                     <div class="metric-kv__item"><dt>采集异常</dt><dd>{{ pc_errors_total|default:0 }}</dd></div>
                 </dl>
             </div>
-            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary text-end">查看分析记录{% if pc_tab == 'analyses' %} · 当前{% endif %}</div>
+            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary d-flex justify-content-end">查看分析记录{% if pc_tab == 'analyses' %} · 当前{% endif %}</div>
         </button>
     </div>
     <div class="col-12 col-md-4">
@@ -44,9 +44,9 @@ PC 主页面顶部的三个方块。指标按 key/value 两列从上到下排，
                 id="pc-tab-logs" data-bs-toggle="tab" data-bs-target="#pc-pane-logs"
                 role="tab" aria-controls="pc-pane-logs" aria-selected="true">
             <div class="card-body p-4 d-flex flex-column">
-                <div class="metric-card__status-row d-flex justify-content-between align-items-start mb-3">
+                <div class="metric-card__status-row d-flex justify-content-between align-items-start mb-3" style="display:flex;justify-content:space-between;align-items:center;width:100%">
                     <h2 class="h5 mb-0">日志</h2>
-                    <span class="metric-card__ready ms-auto"><span class="status-dot status-dot--ok"></span>采集</span>
+                    <span class="metric-card__ready" style="margin-left:auto"><span class="status-dot status-dot--ok"></span>采集</span>
                 </div>
                 <dl class="metric-kv">
                     <div class="metric-kv__item"><dt>日志文件</dt><dd>{{ pc_logs_total|default:0 }}</dd></div>
@@ -54,7 +54,7 @@ PC 主页面顶部的三个方块。指标按 key/value 两列从上到下排，
                     <div class="metric-kv__item"><dt>采集异常</dt><dd>{{ pc_errors_total|default:0 }}</dd></div>
                 </dl>
             </div>
-            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary text-end">查看日志{% if pc_tab == 'logs' %} · 当前{% endif %}</div>
+            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary d-flex justify-content-end">查看日志{% if pc_tab == 'logs' %} · 当前{% endif %}</div>
         </button>
     </div>
 </div>
