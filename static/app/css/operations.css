@@ -1535,10 +1535,10 @@ code {
     color: var(--color-text-muted);
 }
 
-/* 方块的细项用正文档字号。 */
+/* 方块的细项用辅助档字号。 */
 .metric-card__detail {
-    font-size: var(--fs-md);
-    line-height: 1.5;
+    font-size: var(--fs-sm);
+    line-height: 1.6;
     color: var(--color-text);
 }
 
@@ -1548,3 +1548,10 @@ code {
     color: var(--color-primary);
 }
 
+
+/* 方块右下角的最新时间。 */
+.metric-card__latest {
+    margin-top: .3rem;
+    font-size: var(--fs-sm);
+    color: var(--color-text-muted);
+}

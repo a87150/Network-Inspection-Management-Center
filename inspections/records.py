@@ -583,7 +583,28 @@ def computer_logs_payload(request):
         # state 是筛选状态，没有总数；方块要的是全量计数。
         'pc_logs_total': ComputerLogFile.objects.count(),
         'pc_logs_computers': ComputerLogFile.objects.values('computer').distinct().count(),
+        'pc_logs_latest': ComputerLogFile.objects.order_by('-collected_at')
+        .values_list('collected_at', flat=True).first(),
+        # 在职人员里还没有任何一台机器上报过日志的，就是没采集到数据的人。
+        'pc_logs_missing_people': _people_without_logs(),
+        'pc_assets_latest': _latest_computer_report(),
     }
+
+
+def _latest_computer_report():
+    from net.models.devices import Computer
+
+    return Computer.objects.order_by('-last_report_at').values_list(
+        'last_report_at', flat=True,
+    ).first()
+
+
+def _people_without_logs():
+    from net.models.people import People
+    from net.models.records import ComputerLogFile
+
+    reported = ComputerLogFile.objects.values('computer__user_name')
+    return People.objects.filter(is_active=True).exclude(name__in=reported).count()
 
 def computer_workspace_payloads(request):
     """PC 的分析记录与采集异常，供资产工作区同页展示。
@@ -606,6 +627,8 @@ def computer_workspace_payloads(request):
         .order_by('-analysis_date')[:8],
         'pc_analyses_total': ComputerAnalysis.objects.count(),
         'pc_analyses_computers': ComputerAnalysis.objects.values('computer').distinct().count(),
+        'pc_analyses_latest': ComputerAnalysis.objects.order_by('-analysis_date')
+        .values_list('analysis_date', flat=True).first(),
         'pc_errors_total': errors.count(),
         'pc_errors': table_payload(
             errors_page, errors_definition,
