@@ -22,6 +22,7 @@ export default {
             columns: COLUMNS,
             currentState: this.state,
             currentPage: this.page,
+            jumpPage: this.page,
             items: this.rows,
             total: this.count,
             totalPages: this.pages,
@@ -50,6 +51,7 @@ export default {
                 this.total = payload.count || 0;
                 this.totalPages = this.pageCount(payload.count, payload.page_size);
                 this.currentPage = page;
+            this.jumpPage = page;
                 this.syncUrl();
             } catch (error) {
                 this.error = error instanceof ApiError ? error.message : '列表加载失败。';
@@ -67,6 +69,12 @@ export default {
         resetFilter() {
             this.currentState = '';
             this.load(1);
+        },
+        jumpTo() {
+            const total = this.totalPages || 1;
+            const page = Math.min(Math.max(Math.trunc(this.jumpPage || 1), 1), total);
+            this.jumpPage = page;
+            this.go(page);
         },
         go(page) {
             if (page < 1 || page > this.totalPages) return;
@@ -156,7 +164,9 @@ export default {
         <nav v-if="totalPages > 1" class="page-pagination" aria-label="维护记录分页">
             <div class="page-pagination__actions">
                 <button class="btn btn-outline-secondary page-pagination__button" type="button" :disabled="!canPrevious" @click="go(currentPage - 1)">上一页</button>
-                <span class="page-pagination__page">第 [[ currentPage ]] / [[ totalPages ]] 页</span>
+                <span class="page-pagination__page">第
+                    <input class="page-pagination__input" type="number" inputmode="numeric" min="1" :max="totalPages" v-model.number="jumpPage" @keydown.enter.prevent="jumpTo()" @change="jumpTo()" aria-label="输入页码跳转">
+                    / [[ totalPages ]] 页</span>
                 <button class="btn btn-outline-secondary page-pagination__button" type="button" :disabled="!canNext" @click="go(currentPage + 1)">下一页</button>
             </div>
         </nav>

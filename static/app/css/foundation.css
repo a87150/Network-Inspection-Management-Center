@@ -1221,3 +1221,34 @@ a.card.metric-card .card-body > .small:last-child {
     padding: .5rem 1.15rem;
     font-size: var(--fs-md);
 }
+
+/* 页码输入框：和翻页按钮同高，居中数字，去掉浏览器自带的上下箭头。 */
+.page-pagination__input {
+    width: 4.5rem;
+    padding: .35rem .5rem;
+    border: 1px solid var(--color-border);
+    border-radius: .5rem;
+    background: #fff;
+    color: var(--color-text, #1f2937);
+    font-size: var(--fs-md);
+    font-weight: 600;
+    text-align: center;
+    appearance: textfield;
+    -moz-appearance: textfield;
+}
+
+.page-pagination__input::-webkit-outer-spin-button,
+.page-pagination__input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.page-pagination__input:focus {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 1px;
+}
+
+/* 表头排序链接跟随表头文字色，只有悬停和已排序状态才用主色。 */
+.table thead th a.table-sort-link {
+    color: inherit;
+}

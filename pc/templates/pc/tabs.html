@@ -1,12 +1,12 @@
 {% comment %}
 PC 顶部三个方块：PC 资产 / 日志 / 分析记录。
-执行任务的统计（任务数、完成、正常、异常、异常率）并进分析记录这块，不再单列一张任务概况。
+用 <a href> 做渐进增强：Bootstrap 就绪时原地切 tab，脚本还没加载完时直接整页跳到对应视图。
 {% endcomment %}
 <div class="row g-3 mb-3" role="tablist" aria-label="PC 视图">
     <div class="col-12 col-md-4">
-        <button class="card surface-card metric-card h-100 w-100 text-start text-body border-0" type="button"
+        <a class="card surface-card metric-card h-100 w-100 text-start text-body border-0 text-decoration-none"
                 id="pc-tab-assets" data-bs-toggle="tab" data-bs-target="#pc-pane-assets"
-                role="tab" aria-controls="pc-pane-assets" aria-selected="{% if pc_tab == 'assets' %}true{% else %}false{% endif %}">
+                href="?object=assets" role="tab" aria-controls="pc-pane-assets" aria-selected="{% if pc_tab == 'assets' %}true{% else %}false{% endif %}">
             <div class="card-body d-flex flex-column flex-grow-1" style="width:100%">
                 <div class="metric-card__status-row mb-3" style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;width:100%">
                     <h2 class="h5 mb-0">PC 资产</h2>
@@ -18,12 +18,12 @@ PC 顶部三个方块：PC 资产 / 日志 / 分析记录。
                 <div class="metric-card__entry mt-auto pt-3" style="text-align:right;width:100%"><span class="metric-card__current">当前 · </span>查看 PC 资产</div>
                 <div class="metric-card__latest" style="text-align:right;width:100%">最新上报 {{ pc_assets_latest|date:"Y-m-d H:i"|default:"暂无" }}</div>
             </div>
-        </button>
+        </a>
     </div>
     <div class="col-12 col-md-4">
-        <button class="card surface-card metric-card h-100 w-100 text-start text-body border-0" type="button"
+        <a class="card surface-card metric-card h-100 w-100 text-start text-body border-0 text-decoration-none"
                 id="pc-tab-logs" data-bs-toggle="tab" data-bs-target="#pc-pane-logs"
-                role="tab" aria-controls="pc-pane-logs" aria-selected="{% if pc_tab == 'logs' %}true{% else %}false{% endif %}">
+                href="?object=logs" role="tab" aria-controls="pc-pane-logs" aria-selected="{% if pc_tab == 'logs' %}true{% else %}false{% endif %}">
             <div class="card-body d-flex flex-column flex-grow-1" style="width:100%">
                 <div class="metric-card__status-row mb-3" style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;width:100%">
                     <h2 class="h5 mb-0">日志</h2>
@@ -35,12 +35,12 @@ PC 顶部三个方块：PC 资产 / 日志 / 分析记录。
                 <div class="metric-card__entry mt-auto pt-3" style="text-align:right;width:100%"><span class="metric-card__current">当前 · </span>查看日志</div>
                 <div class="metric-card__latest" style="text-align:right;width:100%">最新采集 {{ pc_logs_latest|date:"Y-m-d H:i"|default:"暂无" }}</div>
             </div>
-        </button>
+        </a>
     </div>
     <div class="col-12 col-md-4">
-        <button class="card surface-card metric-card h-100 w-100 text-start text-body border-0" type="button"
+        <a class="card surface-card metric-card h-100 w-100 text-start text-body border-0 text-decoration-none"
                 id="pc-tab-analyses" data-bs-toggle="tab" data-bs-target="#pc-pane-analyses"
-                role="tab" aria-controls="pc-pane-analyses" aria-selected="{% if pc_tab == 'analyses' %}true{% else %}false{% endif %}">
+                href="?object=analyses" role="tab" aria-controls="pc-pane-analyses" aria-selected="{% if pc_tab == 'analyses' %}true{% else %}false{% endif %}">
             <div class="card-body d-flex flex-column flex-grow-1" style="width:100%">
                 <div class="metric-card__status-row mb-3" style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;width:100%">
                     <h2 class="h5 mb-0">分析记录</h2>
@@ -53,6 +53,6 @@ PC 顶部三个方块：PC 资产 / 日志 / 分析记录。
                 <div class="metric-card__entry mt-auto pt-3" style="text-align:right;width:100%"><span class="metric-card__current">当前 · </span>查看分析记录</div>
                 <div class="metric-card__latest" style="text-align:right;width:100%">最新分析 {{ task_metrics.latest_task_at|date:"Y-m-d H:i"|default:"暂无" }}</div>
             </div>
-        </button>
+        </a>
     </div>
 </div>

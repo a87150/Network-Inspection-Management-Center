@@ -194,7 +194,17 @@ def _asset_list_context(request, kind, *, integration_context=None, creation_for
     )
     if kind == 'computers':
         from inspections.records import computer_workspace_payloads
+        from net.inspections.task_summary import (
+            build_project_task_metrics, project_task_queryset,
+        )
+
         context.update(computer_workspace_payloads(request))
+        # 顶部大方块的执行统计跟分析记录 tab 共用一份，默认页也要有。
+        context['task_metrics'] = build_project_task_metrics(
+            project_task_queryset('computers'),
+        )
+        # 分析记录 tab 的内容在默认页也要渲染正确，不能因为没切过去就换成巡检结果表。
+        context.setdefault('record_type', 'computer_analysis')
     elif kind != 'people':
         from inspections.records import access_records_payload, project_records_payload
         context.update(project_records_payload(kind, request))

@@ -28,6 +28,7 @@ export default {
             items: this.rows,
             total: this.count,
             currentPage: this.page,
+            jumpPage: this.page,
             totalPages: this.pages,
             from: this.start_index,
             to: this.end_index,
@@ -72,6 +73,12 @@ export default {
                 });
             this.visible = next;
         },
+        jumpTo() {
+            const total = this.totalPages || 1;
+            const page = Math.min(Math.max(Math.trunc(this.jumpPage || 1), 1), total);
+            this.jumpPage = page;
+            this.load(page);
+        },
         async load(page) {
             if (!this.endpoint || this.loading || page < 1 || page > this.totalPages) return;
             this.loading = true;
@@ -83,6 +90,7 @@ export default {
                 this.items = payload.results || payload.rows || [];
                 this.total = payload.count;
                 this.currentPage = payload.page;
+                this.jumpPage = payload.page;
                 this.totalPages = payload.pages;
                 this.from = payload.start_index;
                 this.to = payload.end_index;
@@ -190,7 +198,9 @@ export default {
         <nav v-if="totalPages > 1" class="page-pagination" :aria-label="label + '分页'">
             <div class="page-pagination__actions">
                 <button class="btn btn-outline-secondary page-pagination__button" type="button" :disabled="currentPage <= 1 || loading" @click="load(currentPage - 1)">上一页</button>
-                <span class="page-pagination__page">第 [[ currentPage ]] / [[ totalPages ]] 页</span>
+                <span class="page-pagination__page">第
+                    <input class="page-pagination__input" type="number" inputmode="numeric" min="1" :max="totalPages" v-model.number="jumpPage" @keydown.enter.prevent="jumpTo()" @change="jumpTo()" aria-label="输入页码跳转">
+                    / [[ totalPages ]] 页</span>
                 <button class="btn btn-outline-secondary page-pagination__button" type="button" :disabled="currentPage >= totalPages || loading" @click="load(currentPage + 1)">下一页</button>
             </div>
         </nav>

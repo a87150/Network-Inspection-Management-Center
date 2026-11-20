@@ -1,6 +1,8 @@
-{% if record_type == 'computer_analysis' %}
+<div class="mb-4">{% include 'inspections/taskbar.html' %}</div>
+
+{% if pc_tab == 'analyses' or record_type == 'computer_analysis' %}
+{% comment %}分析记录不看设备巡检结果表：用最新任务统计和问题类型长条代替。{% endcomment %}
 {% include 'inspections/latest_analysis_statistics.html' %}
 {% else %}
-<div class="mb-4">{% include 'inspections/taskbar.html' %}</div>
 <div id="task-results-region">{% include 'inspections/_record_results.html' %}</div>
 {% endif %}

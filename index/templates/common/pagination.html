@@ -1,18 +1,16 @@
 {% load extras %}
 {% if page_obj.paginator.num_pages > 1 %}
-{% page_window page_obj 2 as visible_pages %}
+{% comment %}
+统一翻页：上一页 · 第 [输入页码] / 总页数 页 · 下一页。
+页码框回车或失焦就跳到对应页，地址栏其他参数原样保留。
+{% endcomment %}
 <nav class="page-pagination" aria-label="分页">
-<div class="page-pagination__actions"><ul class="pagination page-pagination__links justify-content-center mb-0">
-    {% if page_obj.has_previous %}<li class="page-item">{% query_transform request page=page_obj.previous_page_number page_size=table_state.page_size as previous_query %}<a class="page-link" data-page="previous" href="?{{ previous_query }}">上一页</a></li>{% endif %}
-    <li class="page-item{% if page_obj.number == 1 %} active{% endif %}">{% query_transform request page=1 page_size=table_state.page_size as first_query %}{% if page_obj.number == 1 %}<span class="page-link" aria-current="page">1</span>{% else %}<a class="page-link" data-page="1" href="?{{ first_query }}">1</a>{% endif %}</li>
-    {% for page_number in visible_pages %}
-        {% if forloop.first and page_number > 2 %}<li class="page-item disabled" aria-hidden="true"><span class="page-link">…</span></li>{% endif %}
-        <li class="page-item{% if page_obj.number == page_number %} active{% endif %}">{% query_transform request page=page_number page_size=table_state.page_size as page_query %}{% if page_obj.number == page_number %}<span class="page-link" aria-current="page">{{ page_number }}</span>{% else %}<a class="page-link" data-page="{{ page_number }}" href="?{{ page_query }}">{{ page_number }}</a>{% endif %}</li>
-        {% if forloop.last and page_number < page_obj.paginator.num_pages|add:'-1' %}<li class="page-item disabled" aria-hidden="true"><span class="page-link">…</span></li>{% endif %}
-    {% endfor %}
-    <li class="page-item{% if page_obj.number == page_obj.paginator.num_pages %} active{% endif %}">{% query_transform request page=page_obj.paginator.num_pages page_size=table_state.page_size as last_query %}{% if page_obj.number == page_obj.paginator.num_pages %}<span class="page-link" aria-current="page">{{ page_obj.paginator.num_pages }}</span>{% else %}<a class="page-link" data-page="{{ page_obj.paginator.num_pages }}" href="?{{ last_query }}">{{ page_obj.paginator.num_pages }}</a>{% endif %}</li>
-    {% if page_obj.has_next %}<li class="page-item">{% query_transform request page=page_obj.next_page_number page_size=table_state.page_size as next_query %}<a class="page-link" data-page="next" href="?{{ next_query }}">下一页</a></li>{% endif %}
-</ul></div>
-<p class="page-pagination__info mb-0"><span class="page-pagination__range">共 {{ page_obj.paginator.count }} 条（第 {{ page_obj.start_index }}–{{ page_obj.end_index }} 条）</span></p>
+<div class="page-pagination__actions">
+    {% if page_obj.has_previous %}{% query_transform request page=page_obj.previous_page_number page_size=table_state.page_size as previous_query %}<a class="page-link page-pagination__button" data-page="previous" href="?{{ previous_query }}">上一页</a>{% else %}<span class="page-link page-pagination__button disabled" aria-disabled="true">上一页</span>{% endif %}
+    <span class="page-pagination__page">第
+        <input class="page-pagination__input" type="number" inputmode="numeric" min="1" max="{{ page_obj.paginator.num_pages }}" value="{{ page_obj.number }}" aria-label="输入页码跳转" data-page-jump="{% query_transform request page=None page_size=table_state.page_size %}">
+        / {{ page_obj.paginator.num_pages }} 页</span>
+    {% if page_obj.has_next %}{% query_transform request page=page_obj.next_page_number page_size=table_state.page_size as next_query %}<a class="page-link page-pagination__button" data-page="next" href="?{{ next_query }}">下一页</a>{% else %}<span class="page-link page-pagination__button disabled" aria-disabled="true">下一页</span>{% endif %}
+</div>
 </nav>
 {% endif %}

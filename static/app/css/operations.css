@@ -1562,14 +1562,14 @@ code {
     transition: opacity .15s ease, box-shadow .15s ease;
 }
 
-.metric-card[role="tab"]:not(.active) {
+.metric-card[role="tab"]:not([aria-selected="true"]) {
     opacity: .58;
 }
 
-.metric-card[role="tab"]:not(.active):hover {
+.metric-card[role="tab"]:not([aria-selected="true"]):hover {
     opacity: .82;
 }
 
-.metric-card[role="tab"]:not(.active) .metric-card__current {
+.metric-card[role="tab"]:not([aria-selected="true"]) .metric-card__current {
     display: none;
 }
