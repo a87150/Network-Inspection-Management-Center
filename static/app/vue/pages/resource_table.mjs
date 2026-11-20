@@ -171,9 +171,10 @@ export default {
                                             data-bs-toggle="modal" :data-bs-target="action.modal_target ? '#' + action.modal_target : null"
                                             :data-bitlocker-url="action.url" :data-computer-name="action.computer_name || null">[[ action.label ]]</button>
                                     <a v-else :class="actionClass(action)" :href="action.url"
-                                       :data-modal-load="action.modal_target || null">[[ action.label ]]</a>
+                                       :data-modal-load="action.modal_target || null"
+                                       :data-detail-modal="action.detail_modal ? action.url : null">[[ action.label ]]</a>
                                 </template>
-                                <a v-if="!row.actions && row.url" class="btn btn-outline-dark btn-sm" :href="row.url">查看详情</a>
+                                <a v-if="!row.actions && row.url" class="btn btn-outline-dark btn-sm" :href="row.url" :data-detail-modal="row.url">查看详情</a>
                                 <span v-if="!hasActions(row)" class="text-secondary">—</span>
                             </div>
                         </td>

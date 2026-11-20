@@ -349,6 +349,8 @@ class DomainObjectViewSet(RecordTableViewSet):
             actions = [{
                 'kind': 'link', 'label': '查看详情',
                 'url': reverse(route, args=[obj.pk]),
+                # 详情不再跳页，前端就地弹窗。
+                'detail_modal': True,
             }]
             if self.object_type == 'groups' and admin:
                 actions.append({

@@ -207,7 +207,7 @@ export default {
                                     <button :class="actionClass(action)" type="submit">[[ action.label ]]</button>
                                 </form>
                                 <button v-else-if="action.kind === 'modal'" type="button" :class="actionClass(action)" data-bs-toggle="modal" :data-bs-target="action.modal_target ? '#' + action.modal_target : null">[[ action.label ]]</button>
-                                <a v-else :class="actionClass(action)" :href="action.url" :data-modal-load="action.modal_target || null">[[ action.label ]]</a>
+                                <a v-else :class="actionClass(action)" :href="action.url" :data-modal-load="action.modal_target || null" :data-detail-modal="action.detail_modal ? action.url : null">[[ action.label ]]</a>
                             </template>
                         </div></td>
                     </tr>

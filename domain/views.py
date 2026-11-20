@@ -259,6 +259,8 @@ def _domain_panel(request, object_type, *, active, operation_form=None):
         actions = [{
             'kind': 'link', 'label': '查看详情',
             'url': reverse(page.detail_route, args=[obj.pk]),
+            # 详情不再跳页，前端就地弹窗。
+            'detail_modal': True,
         }]
         if object_type == 'groups' and admin:
             actions.append({

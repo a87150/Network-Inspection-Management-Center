@@ -272,44 +272,13 @@ async function selectTask(row) {
     region.classList.remove('is-loading');
 }
 
-/* 任务详情的深链：地址栏带上 #task=<详情地址>，分享出去能直接弹出同一个任务。 */
-const TASK_HASH_KEY = '#task=';
-
-function taskHashPath() {
-    const hash = window.location.hash || '';
-    if (!hash.startsWith(TASK_HASH_KEY)) return '';
-    try {
-        return decodeURIComponent(hash.slice(TASK_HASH_KEY.length));
-    } catch (error) {
-        return '';
-    }
-}
-
-function syncTaskHash(path) {
-    const base = window.location.pathname + window.location.search;
-    window.history.replaceState(null, '', path ? base + TASK_HASH_KEY + encodeURIComponent(path) : base);
-}
-
-function openTaskDetail(doc, url) {
-    const modalElement = doc.getElementById('taskDetailModal');
-    const frame = modalElement?.querySelector('.task-detail-frame');
-    if (!frame || !url) return;
-    frame.src = url;
-    if (window.bootstrap?.Modal) window.bootstrap.Modal.getOrCreateInstance(modalElement).show();
-    syncTaskHash(url);
-}
-
 function bindTaskTable(doc) {
     const table = doc.querySelector('.inspection-taskbar');
     if (!table || table.dataset.taskTableBound === '1') return;
     table.dataset.taskTableBound = '1';
     table.addEventListener('click', (event) => {
-        const detail = event.target.closest?.('[data-task-modal]');
-        if (detail) {
-            event.preventDefault();
-            openTaskDetail(doc, detail.dataset.taskDetailUrl || '');
-            return;
-        }
+        // 详情按钮交给共享的 detail_modal.js，这里只管任务行的原地切换。
+        if (event.target.closest?.('[data-detail-modal]')) return;
         const row = event.target.closest?.('[data-task-row]');
         if (!row) return;
         selectTask(row);
@@ -329,8 +298,4 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.modal[data-auto-open="true"]').forEach((modal) => {
         if (window.bootstrap?.Modal) window.bootstrap.Modal.getOrCreateInstance(modal).show();
     });
-    // 直接打开带 #task= 的链接时，把对应任务详情弹出来。
-    const deepLinked = taskHashPath();
-    if (deepLinked) openTaskDetail(document, deepLinked);
-    document.getElementById('taskDetailModal')?.addEventListener('hidden.bs.modal', () => syncTaskHash(''));
 });

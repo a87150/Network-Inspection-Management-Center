@@ -631,8 +631,8 @@ class ModalVisualContractTests(TestCase):
         settings = self.client.get(reverse('issue_severity_settings') + '?project=computers')
 
         self.assertContains(records, 'data-modal-load="issueSeverityModal"')
-        # 页面上唯一的 iframe 是任务详情弹窗；设置类弹窗一律走 fetch 片段。
-        self.assertEqual(records.content.decode().count('<iframe'), 1)
+        # 详情和设置都走 fetch 片段，页面上不再有 iframe。
+        self.assertEqual(records.content.decode().count('<iframe'), 0)
         for response in (records, settings):
             self.assertContains(response, 'id="issueSeverityModal"')
             self.assertContains(response, 'modal-dialog-scrollable modal-shell')
