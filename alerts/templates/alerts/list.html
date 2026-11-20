@@ -1,11 +1,11 @@
 {% extends 'common/base.html' %}
 {% load extras static %}
-{% block title %}告警记录{% endblock %}
+{% block title %}告警·维护{% endblock %}
 {% block content %}
 <header class="page-heading">
     <div class="page-heading__copy">
         <p class="page-heading__eyebrow">告警中心</p>
-        <h1 class="page-heading__title">告警记录</h1>
+        <h1 class="page-heading__title">告警·维护</h1>
         <p class="page-heading__description">任务总结、异常与恢复事件及渠道送达状态均可追溯。</p>
     </div>
     {% if can_administer and view != 'maintenance' %}

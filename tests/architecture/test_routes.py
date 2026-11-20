@@ -272,10 +272,7 @@ class DetailRouteTests(TestCase):
                 self.assertContains(response, f'href="{list_url}"')
                 self.assertContains(response, f'href="{record_url}"')
 
-        self.assertContains(
-            response,
-            f'href="{reverse("people_statistics")}"',
-        )
+        # 人员统计已经并进人员页，首页不再单列入口。
         self.assertContains(response, '手动执行巡检', count=3)
         self.assertNotContains(response, '巡检此类设备')
         self.assertNotContains(response, '人员巡检')

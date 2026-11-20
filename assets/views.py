@@ -39,7 +39,7 @@ class AssetPage:
 
 
 ASSET_PAGES = {
-    'people': AssetPage(People, 'people', '人员'),
+    'people': AssetPage(People, 'people', '人员·部门'),
     'computers': AssetPage(Computer, 'computers', 'PC'),
     'networks': AssetPage(
         Network_Device,

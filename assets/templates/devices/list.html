@@ -1,12 +1,12 @@
 {% extends 'common/base.html' %}
 {% load extras %}
 {% load static %}
-{% block title %}{{ item_name }}列表{% endblock %}
+{% block title %}{{ item_name }}{% endblock %}
 {% block content %}
 <header class="page-heading">
     <div class="page-heading__copy">
         <p class="page-heading__eyebrow">资产管理</p>
-        <h1 class="page-heading__title">{{ item_name }}列表</h1>
+        <h1 class="page-heading__title">{{ item_name }}</h1>
         <p class="page-heading__description">{% if item_key == 'people' %}展示姓名、工号、部门、邮箱、上级和启用状态。{% else %}仅展示名称、地址、型号和系统版本等基础信息。{% endif %}</p>
     </div>
     <div class="page-heading__actions">

@@ -57,100 +57,55 @@ class NavigationMenuParser(HTMLParser):
                 self.current_menu = None
 
 
-class NavigationDropdownTests(TestCase):
+class NavigationMenuTests(TestCase):
     def setUp(self):
         login_admin(self.client)
 
-    def test_asset_and_domain_navigation_groups_expose_their_workspaces(self):
-        response = self.client.get(reverse('index'))
-        parser = NavigationMenuParser()
-        parser.feed(response.content.decode(response.charset))
+    def _nav_html(self):
+        body = self.client.get(reverse('index')).content.decode()
+        start = body.index('<ul class="navbar-nav me-auto">')
+        return body[start:body.index('</ul>', start)]
 
-        self.assertEqual(
-            {
-                key: {
-                    'toggle': menu['toggle'],
-                    'links': menu['links'],
-                }
-                for key, menu in parser.menus.items()
-            },
-            {
-                'people': {
-                    'toggle': '人员·部门',
-                    'links': [
-                        ('人员列表', '/assets/people/'),
-                        ('人员统计', '/people/statistics/'),
-                    ],
-                },
-                'domain': {
-                    'toggle': '域控管理',
-                    'links': [
-                        ('域控管理', '/settings/domain-controller/'),
-                        ('域账户', '/settings/domain-controller/?object=accounts'),
-                        ('域计算机', '/settings/domain-controller/?object=computers'),
-                        ('域分组', '/settings/domain-controller/?object=groups'),
-                    ],
-                },
-                'computers': {
-                    'toggle': 'PC',
-                    'links': [
-                        ('PC 列表', '/assets/computers/'),
-                        ('日志列表', '/assets/computers/?object=logs'),
-                        ('日志分析记录', '/assets/computers/?object=analyses'),
-                    ],
-                },
-                'networks': {
-                    'toggle': '网络设备',
-                    'links': [
-                        ('网络设备列表', '/assets/networks/'),
-                        ('巡检记录', '/assets/networks/?object=records'),
-                    ],
-                },
-                'servers': {
-                    'toggle': '服务器',
-                    'links': [
-                        ('服务器列表', '/assets/servers/'),
-                        ('巡检记录', '/assets/servers/?object=records'),
-                    ],
-                },
-                'weakcurrent': {
-                    'toggle': '弱电设备',
-                    'links': [
-                        ('弱电设备列表', '/assets/weakcurrent/'),
-                        ('巡检记录', '/assets/weakcurrent/?object=records'),
-                        ('门禁记录', '/assets/weakcurrent/?object=access'),
-                    ],
-                },
-                'alerts': {
-                    'toggle': '告警·维护',
-                    'links': [
-                        ('告警记录', '/alerts/'),
-                        ('维护记录', '/maintenance/'),
-                    ],
-                },
-            },
-        )
+    def test_primary_navigation_is_a_flat_list_of_pages(self):
+        """导航是一级菜单：每项直接对应一个页面，没有下拉分组。"""
+        nav = self._nav_html()
+        expected = [
+            ('人员·部门', reverse('asset_list', args=['people'])),
+            ('域控管理', reverse('domain_controller_settings') + '?object=accounts'),
+            ('PC', reverse('asset_list', args=['computers'])),
+            ('网络设备', reverse('asset_list', args=['networks'])),
+            ('服务器', reverse('asset_list', args=['servers'])),
+            ('弱电设备', reverse('asset_list', args=['weakcurrent'])),
+            ('任务·异常', reverse('task_list')),
+            ('告警·维护', reverse('alert_list')),
+            ('网络拓扑', reverse('operations_overview')),
+            ('IP 管理', reverse('ip_management')),
+        ]
+        positions = []
+        for label, href in expected:
+            marker = f'href="{href}">{label}</a>'
+            self.assertIn(marker, nav, f'主导航缺少 {label}')
+            positions.append(nav.index(marker))
+        self.assertEqual(positions, sorted(positions), '主导航顺序与约定不一致')
 
-    def test_each_group_toggle_supports_bootstrap_click_and_accessibility_state(self):
-        response = self.client.get(reverse('index'))
-        parser = NavigationMenuParser()
-        parser.feed(response.content.decode(response.charset))
+    def test_primary_navigation_has_no_dropdowns(self):
+        nav = self._nav_html()
 
-        self.assertEqual(len(parser.menus), 7)
-        for key, menu in parser.menus.items():
-            with self.subTest(menu=key):
-                attributes = menu['toggle_attributes']
-                self.assertEqual(attributes.get('type'), 'button')
-                self.assertEqual(attributes.get('data-bs-toggle'), 'dropdown')
-                self.assertEqual(attributes.get('aria-expanded'), 'false')
-                self.assertTrue(attributes.get('aria-controls'))
+        self.assertNotIn('dropdown', nav)
+        self.assertNotIn('data-bs-toggle', nav)
 
-    def test_network_topology_is_the_rightmost_primary_navigation_item(self):
-        response = self.client.get(reverse('index'))
-        html = response.content.decode(response.charset)
-
-        overview_link = f'href="{reverse("operations_overview")}">网络拓扑</a>'
-        alert_link = f'href="{reverse("alert_list")}">告警记录</a>'
-        self.assertIn(overview_link, html)
-        self.assertIn(alert_link, html)
-        self.assertLess(html.index(alert_link), html.index(overview_link))
+    def test_page_headings_match_the_navigation_labels(self):
+        """各自主页面的标题和导航名一致。"""
+        cases = [
+            ('asset_list', ['people'], '人员·部门'),
+            ('asset_list', ['computers'], 'PC'),
+            ('asset_list', ['networks'], '网络设备'),
+            ('asset_list', ['servers'], '服务器'),
+            ('asset_list', ['weakcurrent'], '弱电设备'),
+            ('task_list', [], '任务·异常'),
+            ('alert_list', [], '告警·维护'),
+        ]
+        for name, args, label in cases:
+            with self.subTest(page=label):
+                body = self.client.get(reverse(name, args=args)).content.decode()
+                self.assertIn(f'<h1 class="page-heading__title">{label}</h1>', body)

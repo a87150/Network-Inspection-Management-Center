@@ -194,16 +194,13 @@ body.app-shell {
     background: var(--color-success);
 }
 
+/* grid 的 1fr 把标题撑满，角标自然贴到卡片右上角。 */
 .metric-card__status-row {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    justify-content: space-between;
-    width: 100%;
+    gap: .75rem;
     min-height: 2rem;
-}
-
-.metric-card__status-row > h2 {
-    margin-right: auto;
 }
 
 .metric-card__ready {
