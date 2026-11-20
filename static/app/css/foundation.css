@@ -1152,41 +1152,41 @@ a.card.metric-card .card-body > .small:last-child {
     text-align: center;
 }
 
-/* 方块里的指标格：两列 key/value，从左到右、从上到下；长的单独占一行。
-   不用竖线做分隔，靠留白对齐。 */
+/* 方块里的指标格：两列 key/value，key 和 value 紧挨着，整体左对齐。
+   不要 justify-content: space-between —— 那会把数字推到行尾，
+   中间空一大片，右边还是空的。 */
 .metric-kv {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: .45rem 1.5rem;
+    gap: 1rem 2.5rem;
     margin: 0;
 }
 
+/* key 贴格左、value 贴格右，两列各自撑满一半宽度，
+   这样整块卡片的宽度都用上了，不会挤在左边留一大片空白。 */
 .metric-kv__item {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
     align-items: baseline;
-    justify-content: space-between;
-    gap: .75rem;
+    gap: .6rem;
     min-width: 0;
 }
 
-.metric-kv__item--wide {
-    grid-column: 1 / -1;
-}
-
 .metric-kv__item dt {
-    font-size: .85rem;
+    font-size: 1rem;
     font-weight: 400;
     color: var(--color-text-muted, #6b7280);
     white-space: nowrap;
 }
 
 .metric-kv__item dd {
+    justify-self: end;
     margin: 0;
     min-width: 0;
-    font-size: 1rem;
-    font-weight: 600;
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.2;
     color: var(--color-text, #1f2937);
-    text-align: right;
     overflow-wrap: anywhere;
 }
 

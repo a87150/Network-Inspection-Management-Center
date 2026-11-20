@@ -201,8 +201,9 @@ body.app-shell {
 .metric-card__ready {
     display: inline-flex;
     align-items: center;
+    gap: .3rem;
     color: var(--color-text-muted);
-    font-size: .72rem;
+    font-size: .875rem;
     font-weight: 600;
 }
 
