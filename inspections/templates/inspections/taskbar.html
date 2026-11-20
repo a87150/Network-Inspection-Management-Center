@@ -35,7 +35,6 @@
         <li class="page-item active"><span class="page-link text-white">{{ task_page.number }} / {{ task_page.paginator.num_pages }}</span></li>
         {% if task_page.has_next %}{% query_transform request task_page=task_page.next_page_number as next_query %}<li class="page-item"><a class="page-link" href="?{{ next_query }}">下一页</a></li>{% endif %}
     </ul></div>
-    <p class="page-pagination__info mb-0"><span class="page-pagination__range">共 {{ task_page.paginator.count }} 个任务（第 {{ task_page.number }} / {{ task_page.paginator.num_pages }} 页）</span></p>
     </nav>
     {% endif %}
 </section>

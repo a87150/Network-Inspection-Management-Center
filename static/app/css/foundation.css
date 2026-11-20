@@ -1125,12 +1125,10 @@ a.card.metric-card .card-body > .small:last-child {
     margin-top: auto;
 }
 
-/* 分页控件：左边两行说明（页码 / 条数区间），右边一组等宽按钮，
-   按钮高度盖住两行文字，避免一行文字和按钮基线互相错位。 */
-/* 两排：上面翻页按钮，下面"共 N 条（第 X–Y 条）"，两排居中对齐。 */
+/* 分页控件统一成一行：上一页 · 第 X / Y 页 · 下一页，居中。
+   不再显示"共 N 条（第 a–b 条）"那种补充说明。 */
 .page-pagination {
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: .55rem;
@@ -1139,11 +1137,10 @@ a.card.metric-card .card-body > .small:last-child {
 }
 
 .page-pagination__actions {
-    order: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: .5rem;
+    gap: .75rem;
 }
 
 .page-pagination__info {
@@ -1191,10 +1188,14 @@ a.card.metric-card .card-body > .small:last-child {
     white-space: nowrap;
 }
 
+/* 夹在上一页/下一页中间的页码。 */
 .page-pagination__page {
+    min-width: 8rem;
     font-size: var(--fs-md);
     font-weight: 600;
     color: var(--color-text, #1f2937);
+    text-align: center;
+    white-space: nowrap;
 }
 
 .page-pagination__range {
