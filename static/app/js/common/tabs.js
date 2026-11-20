@@ -1,4 +1,5 @@
 // 方块切换：自己接管 tab 的显隐，不等 Bootstrap 初始化，也不会出现两个面板同时展开。
+// 切换只在页内换内容，不动地址栏；带 ?object= 进来仍然认，那是外链直达用的。
 (function () {
     function activate(trigger) {
         const selector = trigger.getAttribute('data-bs-target') || trigger.getAttribute('href');
@@ -24,10 +25,6 @@
             });
         }
 
-        const href = trigger.getAttribute('href');
-        if (href && href.charAt(0) === '?' && window.history.replaceState) {
-            window.history.replaceState({}, '', href);
-        }
         return true;
     }
 
@@ -39,12 +36,19 @@
         }
     });
 
-    // 带 ?object= 的方块：首屏就按地址栏把对应面板打开，避免脚本慢一步时看到错的面板。
+    // 带 ?object= 进来（外链直达）时，首屏就把对应面板打开，
+    // 然后把地址栏收拾成不带参数的形态，免得刷新后残留看着像又跳了一次页。
     window.addEventListener('DOMContentLoaded', function () {
         const params = new URLSearchParams(window.location.search);
         const object = params.get('object');
         if (!object) return;
         const trigger = document.querySelector('[data-bs-toggle="tab"][href="?object=' + object + '"]');
-        if (trigger) activate(trigger);
+        if (!trigger) return;
+        activate(trigger);
+        if (window.history.replaceState) {
+            params.delete('object');
+            const rest = params.toString();
+            window.history.replaceState({}, '', window.location.pathname + (rest ? '?' + rest : ''));
+        }
     });
 })();
