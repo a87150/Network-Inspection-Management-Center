@@ -208,7 +208,6 @@ class ProjectRecordWorkspaceTests(TestCase):
         response = self.client.get(reverse('computer_analysis_list'))
 
         self.assertContains(response, '日志分析记录')
-        self.assertContains(response, '总体统计')
         self.assertNotContains(response, '导入日志证据 / 重新分析')
 
     def test_project_task_list_uses_seven_rows_per_page(self):

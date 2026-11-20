@@ -1,6 +1,6 @@
 {% comment %}
-PC 顶部三个方块：PC 资产 / 日志 / 分析记录。选中态由 .active 控制：
-被选中的方块高亮并显示「当前」，其他两块变暗。
+PC 顶部三个方块：PC 资产 / 日志 / 分析记录。
+执行任务的统计（任务数、完成、正常、异常、异常率）并进分析记录这块，不再单列一张任务概况。
 {% endcomment %}
 <div class="row g-3 mb-3" role="tablist" aria-label="PC 视图">
     <div class="col-12 col-md-4">
@@ -47,10 +47,11 @@ PC 顶部三个方块：PC 资产 / 日志 / 分析记录。选中态由 .active
                     <span class="metric-card__ready"><span class="status-dot status-dot--ok"></span>快照</span>
                 </div>
                 <div class="metric">{{ pc_analyses_computers|default:0 }}<span class="metric__unit">台</span></div>
-                <div class="metric-card__detail mt-2">分析 <span class="text-success">{{ pc_analyses_total|default:0 }}</span> 条 · 异常 <span class="{% if pc_errors_total %}text-danger{% endif %}">{{ pc_errors_total|default:0 }}</span> 台</div>
-                <div class="metric-card__detail mt-1">异常率 {% widthratio pc_errors_total pc_analyses_computers 100 %}%</div>
+                <div class="metric-card__detail mt-2">任务 <span class="text-success">{{ task_metrics.task_count }}</span> 个 · 完成 <span class="text-success">{{ task_metrics.completed_count }}</span> 个</div>
+                <div class="metric-card__detail mt-1">正常 <span class="text-success">{{ task_metrics.normal_count }}</span> 台 · 异常 <span class="{% if task_metrics.abnormal_count %}text-danger{% endif %}">{{ task_metrics.abnormal_count }}</span> 台</div>
+                <div class="metric-card__detail mt-1">整体异常率 {{ task_metrics.abnormal_rate|floatformat:1 }}%</div>
                 <div class="metric-card__entry mt-auto pt-3" style="text-align:right;width:100%"><span class="metric-card__current">当前 · </span>查看分析记录</div>
-                <div class="metric-card__latest" style="text-align:right;width:100%">最新分析 {{ pc_analyses_latest|date:"Y-m-d"|default:"暂无" }}</div>
+                <div class="metric-card__latest" style="text-align:right;width:100%">最新分析 {{ task_metrics.latest_task_at|date:"Y-m-d H:i"|default:"暂无" }}</div>
             </div>
         </button>
     </div>

@@ -1,13 +1,12 @@
 {% comment %}PC 日志文件清单。参数前缀 logs_，与资产表、异常表互不覆盖。{% endcomment %}
+{% with table_definition=pc_logs_definition table_state=pc_logs_state %}
 <div data-table-workspace data-table-key="{{ pc_logs_definition.key }}">
-    <div class="card surface-card">
-        <div class="card-body pb-2">
-            <h2 class="h6 mb-1">日志文件</h2>
-            <p class="text-secondary small mb-0">共 {{ pc_logs_state.total }} 个日志文件，按采集时间倒序。</p>
-        </div>
+    <div class="table-toolbar">{% include 'common/table_workspace.html' %}</div>
+    <div class="card surface-card table-scroll-shell">
         <div id="pc-logs-deep" data-vue-page="pc-logs" data-vue-bootstrap="pc-logs-bootstrap">
             <noscript><p class="alert alert-warning mb-0">日志表需要启用 JavaScript。</p></noscript>
         </div>
         {{ pc_logs|json_script:"pc-logs-bootstrap" }}
     </div>
 </div>
+{% endwith %}

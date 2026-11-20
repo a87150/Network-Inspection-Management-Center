@@ -572,7 +572,9 @@ def computer_logs_payload(request):
     return {
         'pc_logs': table_payload(
             page_obj, definition,
-            table_row_payloads(page_obj.object_list, definition),
+            table_row_payloads(
+                page_obj.object_list, definition, actions=_log_actions,
+            ),
             extra={
                 'endpoint': '/api/v1/computer-logs/', 'label': 'PC 日志',
                 'region_label': 'PC 日志数据表', 'page_param': 'logs_page',
@@ -589,6 +591,15 @@ def computer_logs_payload(request):
         'pc_logs_missing_people': _people_without_logs(),
         'pc_assets_latest': _latest_computer_report(),
     }
+
+
+def _log_actions(log):
+    """日志行只有一个动作：在弹窗里看这条日志的原始 JSON。"""
+    return [{
+        'kind': 'link', 'label': '查看详情',
+        'url': reverse('computer_log_detail', args=[log.pk]),
+        'detail_modal': True,
+    }]
 
 
 def _logs_with_error_summary():

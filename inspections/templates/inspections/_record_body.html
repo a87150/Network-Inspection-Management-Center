@@ -1,26 +1,9 @@
-<section class="mb-4" aria-labelledby="task-overview-title">
-    <div class="card surface-card" style="width:100%">
-        <div class="card-body">
-            <div class="metric-card__status-row mb-3" style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;width:100%">
-                <h2 class="h5 mb-0" id="task-overview-title">任务概况</h2>
-                <span class="metric-card__ready"><span class="status-dot status-dot--ok"></span>总体统计</span>
-            </div>
-            <dl class="metric-kv">
-                <div class="metric-kv__item"><dt>任务总数</dt><dd>{{ task_metrics.task_count }}</dd></div>
-                <div class="metric-kv__item"><dt>完成目标</dt><dd>{{ task_metrics.completed_count }}</dd></div>
-                <div class="metric-kv__item"><dt>正常目标</dt><dd class="text-success">{{ task_metrics.normal_count }}</dd></div>
-                <div class="metric-kv__item"><dt>异常目标</dt><dd class="text-danger">{{ task_metrics.abnormal_count }}</dd></div>
-                <div class="metric-kv__item"><dt>整体异常率</dt><dd>{{ task_metrics.abnormal_rate|floatformat:1 }}%</dd></div>
-                <div class="metric-kv__item"><dt>最新任务时间</dt><dd>{{ task_metrics.latest_task_at|date:'Y-m-d H:i'|default:'暂无' }}</dd></div>
-            </dl>
-        </div>
-    </div>
-</section>
-
-<div class="mb-4">{% include 'inspections/taskbar.html' %}</div>
-
 {% if record_type == 'computer_analysis' %}
 {% include 'inspections/latest_analysis_statistics.html' %}
-{% else %}
+{% endif %}
+
+<div class="mb-4 mt-4">{% include 'inspections/taskbar.html' %}</div>
+
+{% if record_type != 'computer_analysis' %}
 <div id="task-results-region">{% include 'inspections/_record_results.html' %}</div>
 {% endif %}

@@ -276,6 +276,7 @@ TABLE_DEFINITIONS = {
       'computer_logs': TableDefinition(
           'computer_logs', 'PC 日志文件', (
               _field('computer_name', 'PC 名称', source='computer__computer_name', option_mode='suggest'),
+              _field('person_name', '人员名称', source='computer__user_name', option_mode='suggest'),
               _field('platform', '平台', 'choice', default_filter=False),
               _field('collected_at', '采集时间', 'datetime', default_filter=False),
               _field('content_hash', '内容哈希', default_filter=False),
