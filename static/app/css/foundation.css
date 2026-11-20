@@ -1,5 +1,8 @@
 html {
     background: var(--color-canvas);
+    /* 弹窗打开时 Bootstrap 会收起滚动条并补 padding，页面会左右抖一下。
+       预留滚动条位置就不会有这次跳动。 */
+    scrollbar-gutter: stable;
 }
 
 body.app-shell {

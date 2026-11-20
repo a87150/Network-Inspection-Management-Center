@@ -24,7 +24,7 @@
                 <td>{{ summary.pending }}</td>
                 <td>{{ summary.cancelled }}</td>
                 <td><span class="badge status-badge {% if summary.task.status == 'success' %}text-bg-success{% elif summary.task.status == 'failed' %}text-bg-danger{% elif summary.task.status == 'partial' %}text-bg-warning{% else %}text-bg-secondary{% endif %}">{{ summary.status_label }}</span></td>
-                <td class="text-end table-actions-cell"><button class="btn btn-outline-dark btn-sm" type="button" data-task-modal="{{ summary.task.pk }}" data-detail-modal="{% url 'task_detail' summary.task.pk %}">查看详情</button></td>
+                <td class="text-end table-actions-cell"><button class="btn btn-outline-dark btn-sm" type="button" data-detail-modal="{% url 'task_detail' summary.task.pk %}">查看详情</button></td>
             </tr>{% empty %}<tr><td colspan="12"><div class="empty-state"><strong>{{ task_empty_title|default:'暂无巡检任务' }}</strong><span>从资产或日志页面发起巡检、扫描或分析后，任务进度会显示在这里。</span></div></td></tr>{% endfor %}</tbody>
         </table>
     </div></div>

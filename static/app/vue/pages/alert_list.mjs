@@ -96,7 +96,7 @@ export default {
                                 </div>
                             </td>
                             <td>[[ row.occurred_at_display ]]</td>
-                            <td class="text-end table-actions-cell"><a class="btn btn-outline-dark btn-sm" :href="row.detail_url">查看详情</a></td>
+                            <td class="text-end table-actions-cell"><a class="btn btn-outline-dark btn-sm" :href="row.detail_url" :data-detail-modal="row.detail_url">查看详情</a></td>
                         </tr>
                         <tr v-if="!items.length">
                             <td colspan="8">

@@ -538,6 +538,8 @@ def _task_actions(task, admin):
     actions = [{
         'kind': 'link', 'label': '查看详情',
         'url': reverse('task_detail', args=[task.pk]),
+        # 详情走共享弹窗，不跳页。
+        'detail_modal': True,
     }]
     if admin and task.status in task.ACTIVE_STATUSES:
         actions.append({
