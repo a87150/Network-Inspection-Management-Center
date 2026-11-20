@@ -153,9 +153,6 @@ export default {
             try {
                 this.detail = await api.get(this.detailBase + id + '/detail.json');
                 this.detailId = id;
-                const url = new URL(window.location.href);
-                url.searchParams.set('selected', id);
-                window.history.replaceState({}, '', url);
             } catch (failure) {
                 this.detailError = failure.message || '详情加载失败';
             } finally {
@@ -177,9 +174,6 @@ export default {
         closeDetail() {
             this.detail = null;
             this.detailId = '';
-            const url = new URL(window.location.href);
-            url.searchParams.delete('selected');
-            window.history.replaceState({}, '', url);
         },
         rowClick(row, event) {
             if (event.target.closest('a, button, input, form')) return;
