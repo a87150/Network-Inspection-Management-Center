@@ -1,14 +1,19 @@
 <section class="mb-4" aria-labelledby="task-overview-title">
-    <div class="d-flex align-items-center justify-content-between mb-3">
-        <div><p class="page-heading__eyebrow mb-1">任务概况</p><h2 class="h5 mb-0" id="task-overview-title">总体统计</h2></div>
-    </div>
-    <div class="row g-3">
-        <div class="col-6 col-xl"><div class="card surface-card h-100"><div class="card-body"><div class="metric-label">任务总数</div><div class="h3 mb-0">{{ task_metrics.task_count }}</div></div></div></div>
-        <div class="col-6 col-xl"><div class="card surface-card h-100"><div class="card-body"><div class="metric-label">完成目标</div><div class="h3 mb-0">{{ task_metrics.completed_count }}</div></div></div></div>
-        <div class="col-6 col-xl"><div class="card surface-card h-100"><div class="card-body"><div class="metric-label">正常目标</div><div class="h3 mb-0 text-success">{{ task_metrics.normal_count }}</div></div></div></div>
-        <div class="col-6 col-xl"><div class="card surface-card h-100"><div class="card-body"><div class="metric-label">异常目标</div><div class="h3 mb-0 text-danger">{{ task_metrics.abnormal_count }}</div></div></div></div>
-        <div class="col-6 col-xl"><div class="card surface-card h-100"><div class="card-body"><div class="metric-label">整体异常率</div><div class="h3 mb-0">{{ task_metrics.abnormal_rate|floatformat:1 }}%</div></div></div></div>
-        <div class="col-12 col-xl-3"><div class="card surface-card h-100"><div class="card-body"><div class="metric-label">最新任务时间</div><div class="fw-semibold mt-2">{{ task_metrics.latest_task_at|date:'Y-m-d H:i:s'|default:'暂无' }}</div></div></div></div>
+    <div class="card surface-card" style="width:100%">
+        <div class="card-body">
+            <div class="metric-card__status-row mb-3" style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;width:100%">
+                <h2 class="h5 mb-0" id="task-overview-title">任务概况</h2>
+                <span class="metric-card__ready"><span class="status-dot status-dot--ok"></span>总体统计</span>
+            </div>
+            <dl class="metric-kv">
+                <div class="metric-kv__item"><dt>任务总数</dt><dd>{{ task_metrics.task_count }}</dd></div>
+                <div class="metric-kv__item"><dt>完成目标</dt><dd>{{ task_metrics.completed_count }}</dd></div>
+                <div class="metric-kv__item"><dt>正常目标</dt><dd class="text-success">{{ task_metrics.normal_count }}</dd></div>
+                <div class="metric-kv__item"><dt>异常目标</dt><dd class="text-danger">{{ task_metrics.abnormal_count }}</dd></div>
+                <div class="metric-kv__item"><dt>整体异常率</dt><dd>{{ task_metrics.abnormal_rate|floatformat:1 }}%</dd></div>
+                <div class="metric-kv__item"><dt>最新任务时间</dt><dd>{{ task_metrics.latest_task_at|date:'Y-m-d H:i'|default:'暂无' }}</dd></div>
+            </dl>
+        </div>
     </div>
 </section>
 

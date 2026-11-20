@@ -279,6 +279,8 @@ TABLE_DEFINITIONS = {
               _field('platform', '平台', 'choice', default_filter=False),
               _field('collected_at', '采集时间', 'datetime', default_filter=False),
               _field('content_hash', '内容哈希', default_filter=False),
+              # 最近一次分析给出的异常摘要，合并进来后日志表就不用再单列一张异常表。
+              _field('error_summary', '异常摘要', default_filter=False),
         ), 'collected_at', 'desc', ('content_hash',), 20,
     ),
     'access_records': TableDefinition(

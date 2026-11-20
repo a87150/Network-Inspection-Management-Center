@@ -563,7 +563,7 @@ def computer_logs_payload(request):
 
     definition = get_table_definition('computer_logs')
     logs, state = apply_table_filters(
-        request, ComputerLogFile.objects.select_related('computer'), definition,
+        request, _logs_with_error_summary(), definition,
         prefix='logs',
     )
     page_obj = Paginator(logs, state['page_size']).get_page(
@@ -589,6 +589,20 @@ def computer_logs_payload(request):
         'pc_logs_missing_people': _people_without_logs(),
         'pc_assets_latest': _latest_computer_report(),
     }
+
+
+def _logs_with_error_summary():
+    """日志行带上该机器最近一次分析的摘要，采集异常就并进这一张表。"""
+    from django.db.models import OuterRef, Subquery
+
+    from net.models.records import ComputerAnalysis, ComputerLogFile
+
+    latest = ComputerAnalysis.objects.filter(
+        computer=OuterRef('computer'),
+    ).order_by('-analysis_date')
+    return ComputerLogFile.objects.select_related('computer').annotate(
+        error_summary=Subquery(latest.values('summary')[:1]),
+    )
 
 
 def _latest_computer_report():

@@ -1555,3 +1555,21 @@ code {
     font-size: var(--fs-sm);
     color: var(--color-text-muted);
 }
+
+/* 方块组里只有选中的那块是亮的，其余压暗，切换时一眼能看出当前在哪。
+   「当前 ·」只跟在选中方块的入口前面。 */
+.metric-card[role="tab"] {
+    transition: opacity .15s ease, box-shadow .15s ease;
+}
+
+.metric-card[role="tab"]:not(.active) {
+    opacity: .58;
+}
+
+.metric-card[role="tab"]:not(.active):hover {
+    opacity: .82;
+}
+
+.metric-card[role="tab"]:not(.active) .metric-card__current {
+    display: none;
+}
