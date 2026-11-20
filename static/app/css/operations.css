@@ -1526,3 +1526,25 @@ code {
     align-items: start;
 }
 .detail-text { white-space: pre-wrap; word-break: break-word; }
+
+/* 方块里的单位跟在总数后面，比数字小一档。 */
+.metric__unit {
+    margin-left: .3rem;
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    color: var(--color-text-muted);
+}
+
+/* 方块的细项用正文档字号。 */
+.metric-card__detail {
+    font-size: var(--fs-md);
+    line-height: 1.5;
+    color: var(--color-text);
+}
+
+/* 方块底部的入口，压在右下角。 */
+.metric-card__entry {
+    font-size: var(--fs-md);
+    color: var(--color-primary);
+}
+
