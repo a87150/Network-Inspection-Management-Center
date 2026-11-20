@@ -1,9 +1,6 @@
 {% if record_type == 'computer_analysis' %}
 {% include 'inspections/latest_analysis_statistics.html' %}
-{% endif %}
-
-<div class="mb-4 mt-4">{% include 'inspections/taskbar.html' %}</div>
-
-{% if record_type != 'computer_analysis' %}
+{% else %}
+<div class="mb-4">{% include 'inspections/taskbar.html' %}</div>
 <div id="task-results-region">{% include 'inspections/_record_results.html' %}</div>
 {% endif %}
