@@ -256,7 +256,8 @@ class DashboardTests(TestCase):
         response = self.client.get(reverse('computer_analysis_list'))
 
         self.assertEqual(response.context['task_metrics']['task_count'], 0)
-        self.assertContains(response, '总体统计')
+        # 任务概况小方块已经并进页面顶部的大方块，页面上保留的是最新任务统计。
+        self.assertContains(response, '最新任务统计')
 
 
 class PeopleUploadTests(TestCase):
