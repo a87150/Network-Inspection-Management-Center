@@ -6,6 +6,8 @@ body.app-shell {
     min-height: 100vh;
     background: var(--color-canvas);
     color: var(--color-text);
+    /* 全站基准字号：正文档，其余两档只在这里的 token 里改。 */
+    font-size: var(--fs-md);
 }
 
 .skip-link {
@@ -45,7 +47,7 @@ body.app-shell {
 .app-navbar .nav-link {
     border-radius: var(--radius-sm);
     color: var(--color-nav-muted);
-    font-size: .925rem;
+    font-size: var(--fs-md);
     margin-inline: .1rem;
     padding-inline: .75rem !important;
 }
@@ -73,7 +75,7 @@ body.app-shell {
 .app-navbar__dropdown-menu .dropdown-item {
     border-radius: calc(var(--radius-sm) - 2px);
     color: var(--color-text);
-    font-size: .9rem;
+    font-size: var(--fs-md);
     padding: .55rem .75rem;
 }
 
@@ -103,7 +105,7 @@ body.app-shell {
     background: transparent;
     box-shadow: none;
     font: inherit;
-    font-size: .85rem;
+    font-size: var(--fs-sm);
     font-weight: 600;
     line-height: 1.25;
     opacity: .9;
@@ -123,7 +125,7 @@ body.app-shell {
 
 .app-account-role {
     color: var(--color-text-muted);
-    font-size: .76rem;
+    font-size: var(--fs-sm);
     font-weight: 600;
     line-height: 1.35;
 }
@@ -151,7 +153,7 @@ body.app-shell {
 
 .page-heading__eyebrow {
     color: var(--color-primary);
-    font-size: .74rem;
+    font-size: var(--fs-sm);
     font-weight: 700;
     letter-spacing: .12em;
     margin: 0 0 .35rem;
@@ -332,7 +334,7 @@ body.app-shell {
 .interactive-list__title {
     overflow: hidden;
     color: var(--color-text);
-    font-size: .9rem;
+    font-size: var(--fs-md);
     line-height: 1.35;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -344,7 +346,7 @@ body.app-shell {
     flex-wrap: wrap;
     gap: .3rem .7rem;
     color: var(--color-text-muted);
-    font-size: .76rem;
+    font-size: var(--fs-sm);
     line-height: 1.4;
 }
 
@@ -363,7 +365,7 @@ body.app-shell {
 
 .interactive-list__action {
     color: var(--color-primary);
-    font-size: .78rem;
+    font-size: var(--fs-sm);
     font-weight: 700;
     white-space: nowrap;
 }
@@ -379,11 +381,11 @@ body.app-shell {
 
 .interactive-list__empty strong {
     color: var(--color-text);
-    font-size: .9rem;
+    font-size: var(--fs-md);
 }
 
 .interactive-list__empty span {
-    font-size: .8rem;
+    font-size: var(--fs-sm);
 }
 
 .surface-accordion {
@@ -424,19 +426,19 @@ a.metric-card:hover {
 
 .metric {
     color: var(--color-text);
-    font-size: 1.75rem;
+    font-size: var(--fs-lg);
     font-weight: 700;
     line-height: 1.2;
 }
 
 .metric--time {
-    font-size: 1.1rem;
+    font-size: var(--fs-md);
     line-height: 1.5;
 }
 
 .metric-label {
     color: var(--color-text-muted);
-    font-size: .82rem;
+    font-size: var(--fs-sm);
     margin: 0 0 .35rem;
 }
 
@@ -487,7 +489,7 @@ a.metric-card:hover {
 .table-filter-actions .btn {
     min-height: 2.25rem;
     padding-block: .35rem;
-    font-size: .875rem;
+    font-size: var(--fs-sm);
 }
 
 .table-filter-actions {
@@ -509,7 +511,7 @@ a.metric-card:hover {
     width: fit-content;
     color: var(--color-text-muted);
     cursor: pointer;
-    font-size: .82rem;
+    font-size: var(--fs-sm);
     font-weight: 600;
 }
 
@@ -529,13 +531,13 @@ a.metric-card:hover {
 }
 
 .table-config legend {
-    font-size: .875rem;
+    font-size: var(--fs-sm);
     font-weight: 600;
 }
 
 .table-config .form-check-label,
 .table-config__reset {
-    font-size: .82rem;
+    font-size: var(--fs-sm);
 }
 
 .table-result-bar {
@@ -568,7 +570,7 @@ a.metric-card:hover {
 .table {
     --bs-table-color: var(--color-text);
     --bs-table-hover-bg: #f7f9fc;
-    font-size: .9rem;
+    font-size: var(--fs-md);
 }
 
 .table > :not(caption) > * > * {
@@ -580,7 +582,7 @@ a.metric-card:hover {
     border-bottom-width: 1px;
     background: #eef2f8;
     color: #354157;
-    font-size: .75rem;
+    font-size: var(--fs-sm);
     font-weight: 700;
     letter-spacing: .045em;
     text-transform: uppercase;
@@ -632,12 +634,12 @@ th[aria-sort="descending"] .table-sort-link::after { color: var(--color-primary)
 
 .empty-state strong {
     color: var(--color-text);
-    font-size: .95rem;
+    font-size: var(--fs-md);
 }
 
 .empty-state span {
     max-width: 34rem;
-    font-size: .875rem;
+    font-size: var(--fs-sm);
 }
 
 .btn {
@@ -662,7 +664,7 @@ th[aria-sort="descending"] .table-sort-link::after { color: var(--color-primary)
 }
 
 .metric-card__last-run {
-    font-size: .875rem;
+    font-size: var(--fs-sm);
     white-space: nowrap;
 }
 
@@ -679,7 +681,7 @@ th[aria-sort="descending"] .table-sort-link::after { color: var(--color-primary)
     justify-content: center;
     gap: .25rem;
     color: var(--color-text-muted);
-    font-size: .8rem;
+    font-size: var(--fs-sm);
     text-align: center;
 }
 
@@ -709,14 +711,14 @@ th[aria-sort="descending"] .table-sort-link::after { color: var(--color-primary)
 .inspection-taskbar__scan-note {
     display: block;
     color: var(--color-text-muted);
-    font-size: .75rem;
+    font-size: var(--fs-sm);
     white-space: nowrap;
 }
 
 .inspection-taskbar__integrity-warning {
     display: block;
     color: var(--color-warning);
-    font-size: .75rem;
+    font-size: var(--fs-sm);
     max-width: 16rem;
 }
 
@@ -826,13 +828,13 @@ details > summary {
     border-radius: 999px;
     background: rgba(246, 249, 255, .72);
     color: var(--color-text-muted);
-    font-size: .76rem;
+    font-size: var(--fs-sm);
 }
 
 .execution-workspace__summary strong,
 .department-workspace__summary strong {
     color: var(--color-primary);
-    font-size: .92rem;
+    font-size: var(--fs-md);
     font-variant-numeric: tabular-nums;
 }
 
@@ -884,7 +886,7 @@ details > summary {
     overflow: auto;
     white-space: pre-wrap;
     word-break: break-word;
-    font-size: .85rem;
+    font-size: var(--fs-sm);
 }
 
 .sortable-column {
@@ -1031,7 +1033,7 @@ details > summary {
 .table-action-feedback {
     flex-basis: 100%;
     padding: .6rem .8rem;
-    font-size: .82rem;
+    font-size: var(--fs-sm);
 }
 
 /* 资产工作区的详情抽屉：覆盖在列表右侧，不挤压表格宽度。
@@ -1067,7 +1069,7 @@ details > summary {
 
 .asset-workspace .asset-drawer__eyebrow {
     margin: 0;
-    font-size: .7rem;
+    font-size: var(--fs-sm);
     letter-spacing: .12em;
     text-transform: uppercase;
     color: var(--color-text-muted, #6b7280);
@@ -1079,7 +1081,7 @@ details > summary {
     border: 0;
     border-radius: .4rem;
     background: transparent;
-    font-size: .95rem;
+    font-size: var(--fs-md);
     line-height: 1;
     cursor: pointer;
 }
@@ -1171,7 +1173,7 @@ a.card.metric-card .card-body > .small:last-child {
 }
 
 .metric-kv__item dt {
-    font-size: 1.15rem;
+    font-size: var(--fs-md);
     font-weight: 400;
     color: var(--color-text-muted, #6b7280);
     white-space: nowrap;
@@ -1179,7 +1181,7 @@ a.card.metric-card .card-body > .small:last-child {
 
 .metric-kv__item dd {
     margin: 0;
-    font-size: 1.6rem;
+    font-size: var(--fs-lg);
     font-weight: 700;
     line-height: 1.15;
     color: var(--color-text, #1f2937);
@@ -1187,13 +1189,13 @@ a.card.metric-card .card-body > .small:last-child {
 }
 
 .page-pagination__page {
-    font-size: .9rem;
+    font-size: var(--fs-md);
     font-weight: 600;
     color: var(--color-text, #1f2937);
 }
 
 .page-pagination__range {
-    font-size: .9rem;
+    font-size: var(--fs-md);
     font-weight: 600;
     color: var(--color-text, #1f2937);
 }
@@ -1202,5 +1204,5 @@ a.card.metric-card .card-body > .small:last-child {
     min-width: 6rem;
     min-height: 2.75rem;
     padding: .5rem 1.15rem;
-    font-size: .95rem;
+    font-size: var(--fs-md);
 }

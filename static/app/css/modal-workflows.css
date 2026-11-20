@@ -107,14 +107,14 @@
 .config-section-heading h3 {
     margin: 0 0 .18rem;
     color: var(--color-text);
-    font-size: .95rem;
+    font-size: var(--fs-md);
     font-weight: 760;
 }
 
 .config-section-heading p {
     margin: 0;
     color: var(--color-text-muted);
-    font-size: .78rem;
+    font-size: var(--fs-sm);
     line-height: 1.45;
 }
 
@@ -128,7 +128,7 @@
     border-radius: .68rem;
     color: var(--color-primary);
     background: rgba(234, 241, 255, .86);
-    font-size: .72rem;
+    font-size: var(--fs-sm);
     font-weight: 780;
 }
 
@@ -162,7 +162,7 @@
 
 .config-toggle-card .form-check-label span {
     color: var(--color-text-muted);
-    font-size: .76rem;
+    font-size: var(--fs-sm);
     line-height: 1.4;
 }
 
@@ -296,7 +296,7 @@
     border-radius: 1rem;
     background: rgba(255, 255, 255, .48);
     color: var(--color-text-muted);
-    font-size: .86rem;
+    font-size: var(--fs-sm);
     line-height: 1.65;
 }
 
@@ -325,7 +325,7 @@
 .collection-template-picker .form-label {
     margin-bottom: .35rem;
     color: var(--color-text-muted);
-    font-size: .78rem;
+    font-size: var(--fs-sm);
     font-weight: 700;
 }
 
@@ -420,12 +420,12 @@
 
 .domain-statistics-impact span {
     color: var(--color-text-muted);
-    font-size: .78rem;
+    font-size: var(--fs-sm);
 }
 
 .domain-statistics-impact strong {
     color: var(--color-text);
-    font-size: 1.55rem;
+    font-size: var(--fs-lg);
     line-height: 1.15;
 }
 
@@ -473,7 +473,7 @@
 .ip-lookup-hint {
     margin: .75rem 0 0;
     color: var(--color-text-muted);
-    font-size: .8125rem;
+    font-size: var(--fs-sm);
     line-height: 1.6;
 }
 
@@ -494,7 +494,7 @@
 .ip-issue p {
     margin: .15rem 0 0;
     color: var(--color-text-muted);
-    font-size: .8125rem;
+    font-size: var(--fs-sm);
     line-height: 1.6;
 }
 
@@ -511,7 +511,7 @@
 .ip-issue-more {
     margin: 0;
     color: var(--color-text-muted);
-    font-size: .8125rem;
+    font-size: var(--fs-sm);
 }
 
 .ip-unplanned {
@@ -533,7 +533,7 @@
 .maintenance-window-form__hint {
     margin: 0;
     color: var(--color-text-muted);
-    font-size: .8125rem;
+    font-size: var(--fs-sm);
     line-height: 1.6;
 }
 
@@ -556,7 +556,7 @@
     margin: 0;
     padding: 0;
     list-style: none;
-    font-size: .8125rem;
+    font-size: var(--fs-sm);
 }
 
 .configuration-backup-summary li {
@@ -589,7 +589,7 @@
     min-width: 2.4rem;
     padding: .1rem .45rem;
     border-radius: 999px;
-    font-size: .75rem;
+    font-size: var(--fs-sm);
     font-variant-numeric: tabular-nums;
     text-align: center;
 }
@@ -676,7 +676,7 @@
 
 .configuration-diff-label {
     color: var(--color-text-muted);
-    font-size: .78rem;
+    font-size: var(--fs-sm);
 }
 
 .configuration-diff-switch {
@@ -696,7 +696,7 @@
 }
 
 .configuration-diff {
-    font-size: .82rem;
+    font-size: var(--fs-sm);
 }
 
 .configuration-diff-gutter {

@@ -40,8 +40,8 @@ body.admin-shell {
 .admin-shell #branding .navbar-brand:link,
 .admin-shell #branding .navbar-brand:visited { color: #fff; }
 .admin-shell #branding .app-brand__copy { display: grid; line-height: 1.12; }
-.admin-shell #branding .app-brand__copy strong { color: #fff; font-size: .98rem; font-weight: 700; letter-spacing: .02em; }
-.admin-shell #branding .app-brand__copy small { margin-top: .22rem; color: #91a3bd; font-size: .61rem; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
+.admin-shell #branding .app-brand__copy strong { color: #fff; font-size: var(--fs-md); font-weight: 700; letter-spacing: .02em; }
+.admin-shell #branding .app-brand__copy small { margin-top: .22rem; color: #91a3bd; font-size: var(--fs-sm); font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
 .admin-shell #adminNav { min-width: 0; }
 .admin-shell #header #user-tools {
     display: flex;
@@ -62,7 +62,7 @@ body.admin-shell {
     border-radius: var(--radius-sm);
     background: transparent;
     color: var(--color-nav-muted) !important;
-    font-size: .925rem;
+    font-size: var(--fs-md);
     font-weight: 400;
     line-height: 1.25;
     text-decoration: none;
@@ -78,7 +78,7 @@ body.admin-shell {
     align-items: center;
     padding: .5rem .75rem;
     color: var(--color-nav-muted);
-    font-size: .86rem;
+    font-size: var(--fs-sm);
     line-height: 1.25;
     white-space: nowrap;
 }
@@ -144,7 +144,7 @@ body.admin-shell {
     padding: .82rem 1rem;
     background: linear-gradient(135deg, rgba(238, 244, 255, .96), rgba(248, 250, 255, .86));
     color: var(--admin-ink);
-    font-size: .82rem;
+    font-size: var(--fs-sm);
     font-weight: 750;
     letter-spacing: .015em;
 }
@@ -242,7 +242,7 @@ body.admin-shell {
 .admin-shell .paginator { padding: .8rem 1rem; color: var(--admin-muted); }
 .admin-shell .paginator a:link,
 .admin-shell .paginator a:visited { border-radius: .45rem; background: #eaf1ff; color: var(--admin-primary); }
-.admin-shell #footer { max-width: none; margin: 2rem 0 0; padding: 0; color: var(--admin-muted); font-size: .75rem; }
+.admin-shell #footer { max-width: none; margin: 2rem 0 0; padding: 0; color: var(--admin-muted); font-size: var(--fs-sm); }
 .admin-shell #footer .app-main { padding-top: 1rem; padding-bottom: 1.5rem; }
 
 .admin-login-shell { display: grid; min-height: 100vh; place-items: center; padding: 1.25rem; }
@@ -255,11 +255,11 @@ body.admin-shell {
 .admin-login-shell .main { margin: 0; padding: 0; }
 .admin-login-shell #content { width: 100%; }
 .admin-login-card { padding: 2rem; border: 1px solid rgba(255, 255, 255, .78); border-radius: 1.15rem; background: rgba(255, 255, 255, .84); box-shadow: 0 24px 60px rgba(21, 45, 87, .18), inset 0 1px 0 rgba(255, 255, 255, .95); backdrop-filter: blur(18px); }
-.admin-login-card h1 { margin: 0 0 1.5rem; color: var(--admin-ink); font-size: 1.55rem; text-align: center; }
+.admin-login-card h1 { margin: 0 0 1.5rem; color: var(--admin-ink); font-size: var(--fs-lg); text-align: center; }
 .admin-login-shell .password-reset-link { margin-top: -.25rem; text-align: right; }
-.admin-login-shell .password-reset-link a { color: var(--admin-primary); font-size: .82rem; font-weight: 650; text-decoration: none; }
+.admin-login-shell .password-reset-link a { color: var(--admin-primary); font-size: var(--fs-sm); font-weight: 650; text-decoration: none; }
 .admin-login-shell #login-form .form-row { display: grid; gap: .45rem; padding: 0; margin-bottom: 1rem; border: 0; }
-.admin-login-shell #login-form label { color: #41506a; font-size: .82rem; font-weight: 700; }
+.admin-login-shell #login-form label { color: #41506a; font-size: var(--fs-sm); font-weight: 700; }
 .admin-login-shell #login-form input[type="text"],
 .admin-login-shell #login-form input[type="password"] { box-sizing: border-box; width: 100%; min-height: 2.7rem; }
 .admin-login-shell #login-form .submit-row { margin: 1.35rem 0 0; padding: 0; border: 0; background: transparent; box-shadow: none; }

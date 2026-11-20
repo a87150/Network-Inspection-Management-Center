@@ -51,4 +51,5 @@ class AccountNavigationTests(TestCase):
 
         self.assertContains(response, 'class="dropdown-item-text app-account-role"')
         self.assertIn('.app-account-role', css)
-        self.assertIn('font-size: .76rem', css)
+        # 辅助字号统一走 --fs-sm 这一档，不再写死。
+        self.assertIn('font-size: var(--fs-sm)', css)
