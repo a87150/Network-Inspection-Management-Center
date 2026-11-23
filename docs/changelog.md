@@ -1,3 +1,12 @@
+## 2.05（2026-11-24）
+
+### 修复
+- 任务详情弹窗的「任务结果记录」没有导出入口：`table_section` 的 `export_url`
+  参数与 `_result_export_href` 都已就位，但调用点漏传，`export` 字段始终为空，
+  前端 `v-if="section.export"` 因此永远不成立。补上调用后
+  `computer_analysis` 任务导出到 `/tables/computer_inspections/export/`，
+  巡检任务导出到 `/tables/inspection_records/<kind>/export/`。
+
 ## 2.04（2026-11-24）
 
 ### 修复

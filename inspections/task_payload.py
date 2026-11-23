@@ -282,6 +282,7 @@ def task_detail_payload(*, task, request, page_obj, table_definition, table_stat
             pagination=_page_links(result_context['page_obj'], request),
             workspace=result_context.get('table_preference_key', ''),
             filters=_filter_controls(definition, request),
+            export_url=_result_export_href(request, result_context),
         ))
     else:
         rows = []
