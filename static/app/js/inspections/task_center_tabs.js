@@ -34,6 +34,9 @@
         // 换进来的表要重新挂一次表格与弹窗行为。
         window.AppTableTools && window.AppTableTools.refresh && window.AppTableTools.refresh();
         window.AppModalWorkflows && window.AppModalWorkflows.bind && window.AppModalWorkflows.bind(document);
+        // 换进来的表是新的 Vue 岛，必须重新挂载，否则只有表头没有行。
+        const fresh = pane();
+        if (fresh && window.mountPages) window.mountPages(fresh);
     }
 
     document.addEventListener('click', (event) => {

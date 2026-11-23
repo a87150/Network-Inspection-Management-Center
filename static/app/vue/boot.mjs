@@ -85,6 +85,11 @@ export async function mountPages(root = document) {
     document.dispatchEvent(new CustomEvent('app:modal-updated'));
 }
 
+// 换进来一段新 HTML 的页面（Ajax 分页签等）要重新挂岛，普通 script 拿不到模块导出。
+if (typeof window !== 'undefined') {
+    window.mountPages = mountPages;
+}
+
 if (typeof document !== 'undefined') {
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => mountPages(), {once: true});
