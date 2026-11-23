@@ -102,7 +102,11 @@ class BitLockerViewTests(TestCase):
     def test_computer_list_replaces_unlock_with_single_device_button(self):
         self.client.force_login(self.admin)
         response = self.client.get(reverse("domain_computer_list"))
-        self.assertNotContains(response, 'value="unlock"')
+        # 三个面板都渲染在 DOM 里（点方块只切显隐），账户面板的解锁选项也在页面中；
+        # 这里只断言计算机面板自己没有 unlock。
+        html = response.content.decode()
+        computers = html.split('data-domain-operation-controls="computers"', 1)[-1][:4000]
+        self.assertNotIn('value="unlock"', computers)
         # 按钮由注入的行数据渲染，断言 payload 而非 HTML。
         actions = payload_rows(response, 'domain-objects-computers-bootstrap')[0]['actions']
         self.assertIn(self.url, [action['url'] for action in actions])

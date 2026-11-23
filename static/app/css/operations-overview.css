@@ -500,12 +500,13 @@ body:has(.operations-overview) .app-footer {
     }
 }
 
-.topology-toolbar__link {
+.topology-toolbar__link, .topology-toolbar__act {
     display: inline-flex; align-items: center; padding: .3rem .7rem; border-radius: 6px;
     border: 1px solid var(--overview-border); color: var(--overview-text);
     font-size: .82rem; text-decoration: none; white-space: nowrap;
 }
-.topology-toolbar__link:hover { border-color: var(--overview-cyan); color: var(--overview-cyan); }
+.topology-toolbar__link:hover,
+.topology-toolbar__act:hover { border-color: var(--overview-cyan); color: var(--overview-cyan); }
 /* 边标签压一层描边底色，压在连线上也能读。 */
 .topology-edge-label { pointer-events: none; }
 .topology-edge-label__port {

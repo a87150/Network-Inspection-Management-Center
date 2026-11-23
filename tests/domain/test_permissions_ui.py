@@ -88,8 +88,9 @@ class DomainPermissionUiTests(TestCase):
                 self.assertEqual(
                     '域控连接设置' in settings_response.content.decode(), can_manage,
                 )
+                # 操作栏按面板各一份，计算机页签那份存在与否才说明权限。
                 self.assertEqual(
-                    'data-domain-operation-controls' in computer_response.content.decode(),
+                    'data-domain-operation-controls="computers"' in computer_response.content.decode(),
                     can_manage,
                 )
 
@@ -208,13 +209,17 @@ class DomainPermissionUiTests(TestCase):
         self.client.force_login(self.permitted_user)
 
         response = self.client.get(reverse('domain_computer_list'))
-
         self.assertEqual(response.status_code, 200)
+
+        # 三个面板都渲染在 DOM 里（点方块切显隐），账户面板的动作也在页面中；
+        # 只看计算机面板那份清单。
+        html = response.content.decode()
+        computers = html.split('data-domain-operation-controls="computers"', 1)[-1][:5000]
         for action in ('move_ou', 'add_group', 'enable', 'disable'):
-            self.assertContains(response, f'value="{action}"')
-        self.assertNotContains(response, 'value="remove_group"')
+            self.assertIn(f'value="{action}"', computers)
+        self.assertNotIn('value="remove_group"', computers)
         for action in ('create_user', 'reset_password', 'must_change_password', 'password_never_expires'):
-            self.assertNotContains(response, f'value="{action}"')
+            self.assertNotIn(f'value="{action}"', computers)
         self.assertContains(response, str(self.computer.pk))
 
     def test_account_operation_ui_offers_account_password_and_expiry_actions(self):
