@@ -1,3 +1,13 @@
+{% if panel.context.domain_operation_actions %}<section class="card surface-card mb-3" data-domain-operation-controls="{{ panel.object_type }}">
+<div class="card-body d-flex flex-column flex-lg-row gap-3 align-items-lg-end justify-content-between">
+<div><h2 class="h5 mb-1">批量目录操作</h2><p class="text-secondary mb-0">先勾选目标，再选择动作；提交前会显示目标数量和关键参数。</p></div>
+<div class="d-flex flex-column flex-sm-row gap-2 align-items-sm-end">
+<div><label class="form-label small mb-1" for="domain-operation-action-{{ panel.object_type }}">动作</label>
+<select class="form-select" id="domain-operation-action-{{ panel.object_type }}" data-domain-operation-action>
+{% for action_value, action_label in panel.context.domain_operation_actions %}<option value="{{ action_value }}">{{ action_label }}</option>{% endfor %}
+</select></div>
+<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#domainOperationModal">确认操作</button>
+</div></div></section>{% endif %}
 {% with table_definition=panel.context.table_definition table_state=panel.context.table_state item_key=panel.context.item_key page_obj=panel.context.page_obj page_sizes=panel.context.page_sizes table_export_path=panel.context.table_export_path pagination_query=panel.context.pagination_query can_manage_domain=panel.context.can_manage_domain %}
 <div data-table-workspace data-table-key="{{ table_definition.key }}">
 {# 岛内工具栏接管筛选和导出；没接管的旧页面（域账户子页等）仍用服务端工具栏。 #}

@@ -65,6 +65,27 @@ export default {
         document.removeEventListener('change', this.syncColumnToggles);
     },
     methods: {
+        boxes() {
+            const root = this.$el && this.$el.querySelectorAll ? this.$el : document;
+            return Array.from(root.querySelectorAll('tbody [' + this.select_attr + ']'));
+        },
+        allSelected() {
+            const list = this.boxes();
+            return list.length > 0 && list.every((box) => box.checked);
+        },
+        someSelected() {
+            return this.boxes().some((box) => box.checked);
+        },
+        toggleAll(event) {
+            const on = event.target.checked;
+            this.boxes().forEach((box) => { box.checked = on; });
+        },
+        selectAll() {
+            this.boxes().forEach((box) => { box.checked = true; });
+        },
+        selectInvert() {
+            this.boxes().forEach((box) => { box.checked = !box.checked; });
+        },
         syncColumnToggles() {
             const next = {};
             document.querySelectorAll('[data-column-toggle][data-column-key]')
@@ -145,12 +166,19 @@ export default {
     },
     template: `
     <div class="resource-table">
+        <div v-if="select_attr" class="d-flex justify-content-end gap-2 mb-2">
+            <button class="btn btn-sm btn-outline-secondary" type="button" @click="selectAll">全选</button>
+            <button class="btn btn-sm btn-outline-secondary" type="button" @click="selectInvert">反选</button>
+        </div>
         <p v-if="error" class="alert alert-danger py-2" role="alert">[[ error ]]</p>
         <div class="table-responsive" role="region" :aria-label="region_label || (label + '数据表')" tabindex="0" :aria-busy="loading ? 'true' : 'false'">
             <table class="table data-table table-hover align-middle mb-0">
                 <thead>
                     <tr>
-                        <th v-if="select_attr" scope="col" class="text-center"><span class="visually-hidden">选择</span></th>
+                        <th v-if="select_attr" scope="col" class="text-center">
+                            <input class="form-check-input" type="checkbox" :checked="allSelected" :indeterminate.prop="someSelected && !allSelected"
+                                   aria-label="全选本页" @change="toggleAll($event)">
+                        </th>
                         <th v-for="column in visibleColumns" :key="column.key" scope="col" :data-column-key="column.key" :aria-sort="ariaSort(column)">
                             <a v-if="column.sortable" class="table-sort-link" :data-sort-key="column.key" :href="sortUrl(column)" :aria-label="sortLabel(column)">[[ column.label ]]</a>
                             <template v-else>[[ column.label ]]</template>

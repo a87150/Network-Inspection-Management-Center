@@ -13,6 +13,7 @@
     <div class="col-12 col-md-4"><a class="card surface-card metric-card h-100 w-100 text-start text-body border-0 text-decoration-none" role="tab" href="?object=groups" data-panel-switch="?object=groups" role="tab" aria-selected="{% if selected_domain_object == 'groups' %}true{% else %}false{% endif %}"><div class="card-body d-flex flex-column flex-grow-1" style="width:100%"><div class="metric-card__status-row mb-3" style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;width:100%"><h2 class="h5 mb-0">域分组</h2><span class="metric-card__ready"><span class="status-dot status-dot--success"></span>目录</span></div><div class="metric">{{ group_total }}<span class="metric__unit">个</span></div><div class="metric-card__detail mt-2">安全组 {{ security_group_total }} · 通讯组 {{ distribution_group_total }}</div><div class="metric-card__detail mt-1">组策略与成员由域控同步</div><div class="metric-card__entry mt-auto pt-3" style="text-align:right;width:100%"><span class="metric-card__current">当前 · </span>查看域分组</div></div></a></div>
 </div>
 
+{# 批量操作栏已移进各面板，动作清单跟着当前方块走；弹窗只保留一份。 #}
 {% include 'domain/operation_modal.html' %}
 
 {# 三份列表都渲染进 DOM，方块切换只切显隐，不取数据也不动地址栏。 #}

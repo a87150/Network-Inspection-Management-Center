@@ -263,7 +263,8 @@ def _domain_panel(request, object_type, *, active, operation_form=None):
         scoped.GET.get(f'{object_type}_page'),
     )
     admin = is_admin(request.user)
-    can_select = admin and object_type != 'groups'
+    # 三张表都能勾选：全选/反选/导出所选用得到，和批量动作有没有无关。
+    can_select = admin
     can_manage = object_type != 'groups' and admin
 
     def row_actions(obj):

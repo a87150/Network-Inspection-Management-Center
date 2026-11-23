@@ -42,6 +42,8 @@ if (mountElement && bootstrapElement) {
         // 按 IP 定位：输入的查询串和命中的节点 id，模板据此高亮。
         ipQuery: '',
         searchHitId: '',
+        // 悬停的边：和选中一样露出端口/VLAN 标签，移开就收。
+        hoveredEdgeId: '',
       };
     },
     computed: {
@@ -264,6 +266,36 @@ if (mountElement && bootstrapElement) {
       },
       edgePath(edge) {
         return this.elbowPath(edge);
+      },
+      /* 正交折线的标签点：水平段中点。上下两端没对齐时这一段在垂直段之间。 */
+      edgeLabelPoint(edge) {
+        const source = this.topologyNodes.get(edge.source);
+        const target = this.topologyNodes.get(edge.target);
+        if (!source || !target) return { x: 0, y: 0 };
+        const upper = source.y < target.y ? source : target;
+        const lower = source.y < target.y ? target : source;
+        const from = upper.y + this.nodeBottom(upper);
+        const to = lower.y + this.nodeTop(lower);
+        const mid = from + Math.max(14, (to - from) / 2);
+        return { x: (source.x + target.x) / 2, y: mid };
+      },
+      /* 端口：本地口 → 对端口；任一侧缺失就退化成已有的那一个。 */
+      edgePortLabel(edge) {
+        const local = String(edge.localInterfaceLabel || '').trim();
+        const remote = String(edge.remoteInterfaceLabel || '').trim();
+        if (local && remote) return local + ' → ' + remote;
+        return local || remote || '';
+      },
+      edgeVlanLabel(edge) {
+        const ids = Array.isArray(edge.vlanIds) ? edge.vlanIds : [];
+        return ids.length ? 'VLAN ' + ids.join(',') : '';
+      },
+      /* 只给选中和悬停的边显示标签：221 条链路全铺文字会糊成一片。 */
+      edgeLabelVisible(edge) {
+        return edge.id === this.selectedEdgeId || edge.id === this.hoveredEdgeId;
+      },
+      hoverEdge(edge) {
+        this.hoveredEdgeId = edge ? edge.id : '';
       },
       hierarchyPath(edge) {
         return this.elbowPath(edge);
