@@ -26,8 +26,8 @@
                     <div class="card surface-card table-scroll-shell">
                         <p class="table-scroll-hint">可横向滚动查看全部等级和阈值设置</p>
                         <div class="table-responsive" role="region" aria-label="问题等级规则" tabindex="0">
-                            <table class="table data-table align-middle mb-0">
-                                <thead><tr><th scope="col">类型</th><th scope="col">检查项目</th><th scope="col">实际问题</th><th scope="col">数据不足 / 未知</th><th scope="col">超限阈值</th></tr></thead>
+                            <table class="table data-table align-middle mb-0" data-table-key="issue-severity-{{ project }}">
+                                <thead><tr><th scope="col" data-column-key="category">类型</th><th scope="col" data-column-key="label">检查项目</th><th scope="col" data-column-key="rule">实际问题</th><th scope="col" data-column-key="missing">数据不足 / 未知</th><th scope="col" data-column-key="thresholds">超限阈值</th></tr></thead>
                                 <tbody>
                                 {% for category, label, rule, missing, thresholds in form.rule_rows %}
                                 <tr>

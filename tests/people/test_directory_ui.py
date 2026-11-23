@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from tests.people.test_directory_sync import SnapshotAdapter
 from tests.auth import login_admin
-from tests.payloads import asset_table_text
+from tests.payloads import payload_text
 from net.people.directory import DirectoryPerson
 from net.models import People, PeopleSyncSource, Schedule, TaskRun, TaskTargetRun
 from net.inspections.queue import claim_next_task, finish_task, recover_expired_tasks
@@ -172,7 +172,10 @@ class PeopleImportUITests(PeopleFlowMixin, TestCase):
         self.assertNotIn('>API 导入</a>', document)
         self.assertContains(response, '>文件</button>')
         # 空态文案搬进了 payload，供组件在没有行时显示。
-        self.assertIn('可点击右上角“导入人员”添加人员。', asset_table_text(response))
+        self.assertIn(
+            '可点击右上角“导入人员”添加人员。',
+            payload_text(response, 'people-workspace-bootstrap'),
+        )
         self.assertContains(response, 'id="people-tab-feishu"')
         self.assertContains(response, 'id="people-tab-dingtalk"')
         self.assertContains(response, 'CSV 或 Excel 文件')

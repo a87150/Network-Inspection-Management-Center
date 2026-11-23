@@ -1,0 +1,17 @@
+{% comment %}
+记录页页头：记录页只看记录、只跑本类型任务，没有设备增删和清单导入。
+采集模板仍在这里给：记录页改的就是这些采集项，改完下次巡检生效。
+PC 日志分析记录和三种设备巡检记录的按钮组不一样。
+{% endcomment %}
+{% if can_administer %}
+{% if record_type == 'computer_analysis' %}
+{% if action_issue_settings %}<a class="btn btn-outline-primary" href="{% url 'issue_severity_settings' %}?project=computers" data-modal-load="issueSeverityModal">问题等级设置</a>{% endif %}
+{% if task_project_kind %}<button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#profileConfigModal">{{ task_config_label }}</button><button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#alertPolicyModal">告警配置</button>{% endif %}
+{% if task_project_kind %}<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#runTaskModal">{{ task_action_label }}</button>{% endif %}
+{% else %}
+{% if device_form %}<a class="btn btn-outline-primary" href="{% url 'collection_templates' item_key %}" data-modal-load="collectionTemplateModal">配置模板</a>{% endif %}
+{% if task_project_kind %}<button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#profileConfigModal">{{ task_config_label }}</button><button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#alertPolicyModal">告警配置</button>{% endif %}
+{% if item_key == 'servers' %}<a class="btn btn-primary" href="{% url 'windows_server_script_download' %}">下载 Windows 脚本</a>{% endif %}
+{% if task_project_kind %}<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#runTaskModal">{{ task_action_label }}</button>{% endif %}
+{% endif %}
+{% endif %}

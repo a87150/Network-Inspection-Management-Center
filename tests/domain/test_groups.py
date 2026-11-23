@@ -1,3 +1,4 @@
+import re
 from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -106,7 +107,8 @@ class DomainGroupWorkspaceTests(TestCase):
 
         self.assertContains(response, '域账户')
         self.assertContains(response, '启用')
-        self.assertContains(response, '停用 1')
+        # 失效数标红后包了一层 span，按文本比较。
+        self.assertIn('停用 1', re.sub(r'<[^>]+>', '', response.content.decode()))
         self.assertContains(
             response,
             '<span class="text-success">1</span>',

@@ -25,6 +25,10 @@ class AccessPolicyTests(TestCase):
             if actor:
                 self.client.force_login(actor)
             for pattern in urlpatterns:
+                # include() 进来的是 URLResolver，没有 name；工作区页那五个
+                # include 只挂只读 GET 视图，没有要在这里试的写入口。
+                if not getattr(pattern, 'name', None):
+                    continue
                 if pattern.name in {'login', 'logout'}:
                     continue
                 kwargs = {key: samples.get(key, 1 if converter.__class__.__name__ == 'IntConverter'

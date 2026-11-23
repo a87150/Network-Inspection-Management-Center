@@ -6,12 +6,29 @@ from index.common.badges import severity_badge, status_badge
 from index.common.table_payload import row_payloads
 from index.common.detail_payload import (
     alert_section, detail_payload, field_section, form_action, form_section,
-    link_action, list_section, table_section,
+    link_action, list_section, metric_section, table_section,
 )
 
 
 def _stamp(value):
     return timezone.localtime(value).strftime('%Y-%m-%d %H:%M:%S') if value else '-'
+
+
+# 任务结果表只看排查用得上的列：人员姓名、入库时间、关键指标、摘要都不在这张表里看，
+# 补上 IP / MAC / SN 三列，方便直接对着设备核对。
+ANALYSIS_HIDDEN_FIELDS = frozenset(
+    {'personnel_name', 'created_at', 'key_metrics', 'summary'},
+)
+ANALYSIS_EXTRA_COLUMNS = (
+    ('ip_addresses', 'IP 地址'),
+    ('mac_addresses', 'MAC 地址'),
+    ('serial_number', 'SN'),
+)
+
+
+def _cell_text(value):
+    text = '' if value is None else str(value).strip()
+    return text or '—'
 
 
 def _page_links(page_obj, request, key='page'):
@@ -26,7 +43,34 @@ def _page_links(page_obj, request, key='page'):
         params[key] = page_obj.next_page_number()
         links['next_url'] = '?' + params.urlencode()
     links['label'] = '%s / %s' % (page_obj.number, page_obj.paginator.num_pages)
+    # 前端用共用分页组件时直接拼页码，不再靠 prev/next 两个链接。
+    params.pop(key, None)
+    query = params.urlencode()
+    links['page'] = page_obj.number
+    links['pages'] = page_obj.paginator.num_pages
+    links['page_url'] = request.path + '?' + ((query + '&') if query else '') + key + '='
     return links
+
+
+def _filter_controls(definition, request):
+    """弹窗表格上方的筛选控件；kind 决定前端画什么，值从当前查询串回填。"""
+    controls = []
+    for field in definition.fields:
+        if not field.filterable or not field.default_filter:
+            continue
+        controls.append({
+            'key': field.key,
+            'label': field.label,
+            'kind': field.kind,
+            'value': request.GET.get('filter_' + field.key, ''),
+            # choices 是 (值, 文案) 二元组；前端要分开取值和显示。
+            'options': [
+                (choice if isinstance(choice, str)
+                 else {'value': str(choice[0]), 'label': str(choice[1])})
+                for choice in field.choices
+            ],
+        })
+    return controls
 
 
 def _sort_columns(definition, table_state, request):
@@ -142,7 +186,7 @@ def task_detail_payload(*, task, request, page_obj, table_definition, table_stat
         ('失败目标', task.failed_targets),
         ('下发时间', _stamp(task.created_at)),
     ]
-    sections.append(field_section('执行进度', progress))
+    sections.append(metric_section('执行进度', progress))
 
     if task.error_summary:
         sections.append(alert_section('danger', task.error_summary))
@@ -166,32 +210,46 @@ def task_detail_payload(*, task, request, page_obj, table_definition, table_stat
             ]))
         definition = result_context['table_definition']
         is_analysis = result_context.get('record_type') == 'computer_analysis'
+        # 两张结果表都不显示这几列：内容长度不定，排查时也用不上。
+        hidden = ANALYSIS_HIDDEN_FIELDS
+        fields = [field for field in definition.fields
+                  if field.key not in hidden and field.default_visible]
+        extra = ANALYSIS_EXTRA_COLUMNS if is_analysis else ()
+        columns = []
+        for field, column in zip(definition.fields,
+                                 _sort_columns(definition, result_context['table_state'], request)):
+            if field.key in hidden or not field.default_visible:
+                continue
+            columns.append(column)
+            if field.key == 'computer_name':
+                columns.extend(label for _, label in extra)
         rows = []
         for record in result_context['page_obj']:
             payload = row_payloads([record], definition)[0]
-            cells = [payload['cells'][field.key] for field in definition.fields]
+            cells = [payload['cells'][field.key] for field in fields]
             if is_analysis:
-                record_pk = getattr(record, 'pk', None)
-                url = reverse('computer_analysis_detail', args=[record_pk]) if record_pk else ''
+                computer = getattr(record, 'computer', None)
+                inserted = [
+                    _cell_text(getattr(computer, attribute, '')) for attribute, _ in extra
+                ]
+                if inserted:
+                    anchor = next(
+                        (index for index, field in enumerate(fields)
+                         if field.key == 'computer_name'), None,
+                    )
+                    cells[anchor + 1:anchor + 1] = inserted
                 # 状态列在分析结果里是分级徽章，不是纯文本。
-                for index, field in enumerate(definition.fields):
+                for index, field in enumerate(fields):
                     if field.key == 'status':
                         cells[index] = {
                             'badge': severity_badge(getattr(record, 'result_level', '')),
                         }
-                op_cell = ({'url': url, 'label': '查看详情'} if url
-                           else {'text': '异常：未匹配日志'})
+                log_id = getattr(record, 'log_file_id', None)
+                op_cell = ({'url': reverse('computer_log_detail', args=[log_id]),
+                            'label': '看原始日志'} if log_id else '—')
             else:
                 op_cell = {'url': payload['url'], 'label': '查看详情'} if payload['url'] else '—'
             rows.append([*cells, op_cell])
-        sections.append(table_section(
-            '任务结果记录',
-            _sort_columns(definition, result_context['table_state'], request) + ['操作'],
-            rows,
-            empty='最新任务尚未产生巡检结果。',
-            pagination=_page_links(result_context['page_obj'], request),
-            workspace=result_context.get('table_preference_key', ''),
-        ))
         execution_page = result_context.get('execution_page')
         if execution_page is not None and execution_page.paginator.count:
             sections.append(table_section(
@@ -207,6 +265,15 @@ def task_detail_payload(*, task, request, page_obj, table_definition, table_stat
                 ],
                 pagination=_page_links(execution_page, request, key='execution_page'),
             ))
+        sections.append(table_section(
+            '任务结果记录',
+            columns + ['操作'],
+            rows,
+            empty='最新任务尚未产生巡检结果。',
+            pagination=_page_links(result_context['page_obj'], request),
+            workspace=result_context.get('table_preference_key', ''),
+            filters=_filter_controls(definition, request),
+        ))
     else:
         rows = []
         for target in target_page_obj:
@@ -228,7 +295,7 @@ def task_detail_payload(*, task, request, page_obj, table_definition, table_stat
             '结束任务', reverse('task_cancel', args=[task.pk]),
             confirm='确定结束这个任务吗？尚未开始的目标会被取消，正在执行的外部调用将在超时后退出。',
         ))
-    actions.append(link_action('返回任务列表', reverse('task_list')))
+    # 任务详情现在以弹窗形式打开，返回靠关闭弹窗，不需要页内返回按钮。
 
     return detail_payload(
         title='任务详情',

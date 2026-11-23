@@ -50,7 +50,13 @@ export default {
             this.errors = {};
             try {
                 await api.post(this.endpoint, {...this.form});
-                window.location.reload();
+                // 先让按钮活过来再关窗，否则 hide() 会被 submitting 挡回去，弹窗关不掉。
+                this.submitting = false;
+                this.open = false;
+                this.$emit('saved');
+                if (typeof document !== 'undefined') {
+                    document.dispatchEvent(new CustomEvent('app:subnet-saved'));
+                }
             } catch (error) {
                 this.message = error.message || '保存失败';
                 this.errors = (error.payload && error.payload.errors) || {};

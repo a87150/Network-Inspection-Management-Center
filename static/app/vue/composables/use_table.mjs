@@ -21,34 +21,29 @@ export function tableData(props) {
     };
 }
 
-/** 地址栏只留真正有值的参数：第 1 页、默认条数、空筛选一律不写。 */
-export function syncUrl(changes, { pageSize = 20, prefix = '' } = {}) {
-    if (!window.history.replaceState) return;
-    const params = new URLSearchParams(window.location.search);
-    const name = (key) => (prefix ? prefix + '_' + key : key);
-    Object.keys(changes).forEach((key) => {
-        const value = changes[key];
-        const blank = value === null || value === undefined || String(value).trim() === '';
-        const isDefault = (key === 'page' && Number(value) <= 1)
-            || (key === 'page_size' && Number(value) === pageSize);
-        if (blank || isDefault) {
-            params.delete(name(key));
-        } else {
-            params.set(name(key), String(value));
-        }
-    });
-    const kept = Array.from(params.entries()).filter(([, value]) => String(value).trim() !== '');
-    const search = new URLSearchParams(kept).toString();
-    window.history.replaceState({}, '', window.location.pathname + (search ? '?' + search : ''));
-}
+/** 排序、筛选、翻页都在岛内完成，不写地址栏；URL 只由外部入口决定。 */
+export function syncUrl() {}
 
-/** 页面上的筛选值 → 接口参数。接口这一层不带前缀，前缀只用于地址栏。 */
+/** 页面上的筛选值 → 接口参数。接口这一层不带前缀，前缀只用于地址栏。
+    数值是 {op, value}、日期是 {from, to}，下划线开头的是服务端内部键，不外发。 */
 export function apiParams(filters, extra = {}) {
     const params = {};
     Object.keys(filters || {}).forEach((key) => {
         const value = filters[key];
+        const name = 'filter_' + key;
+        if (value !== null && typeof value === 'object') {
+            if (value.value !== undefined) {
+                if (String(value.value).trim() === '') return;
+                params[name] = value.value;
+                params[name + '_op'] = value.op || 'gt';
+            } else {
+                if (value.from) params[name + '_from'] = value.from;
+                if (value.to) params[name + '_to'] = value.to;
+            }
+            return;
+        }
         if (value === '' || value === null || value === undefined) return;
-        params['filter_' + key] = value;
+        params[name] = value;
     });
     return {...params, ...extra};
 }

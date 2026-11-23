@@ -17,6 +17,18 @@ def field_section(heading, fields):
     return {"heading": heading, "kind": "fields", "fields": items}
 
 
+def metric_section(heading, metrics):
+    """metrics: [(label, value)]，渲染成一排统计方块。"""
+    return {
+        "heading": heading,
+        "kind": "metrics",
+        "metrics": [
+            {"label": label, "value": "" if value is None else str(value)}
+            for label, value in metrics
+        ],
+    }
+
+
 def list_section(heading, items, empty=""):
     """items: [{label, meta?, detail?, badge?}]."""
     return {"heading": heading, "kind": "list", "items": list(items), "empty": empty}
@@ -32,7 +44,7 @@ def alert_section(level, text):
 
 
 def table_section(heading, columns, rows, empty="", note="", pagination=None,
-                  workspace=""):
+                  workspace="", filters=None):
     """columns: [label | {label, sort_url?, aria_sort?}]; a cell is a string or
     {text?, badge?, url?, label?, note?}. Cells stay strings when that is all the
     template showed."""
@@ -49,6 +61,8 @@ def table_section(heading, columns, rows, empty="", note="", pagination=None,
         "note": note,
         "pagination": pagination,
         "workspace": workspace,
+        # 弹窗里的筛选栏：kind 决定控件形状，value 是当前值。
+        "filters": list(filters or []),
     }
 
 
@@ -72,6 +86,16 @@ def form_section(heading, fields, submit, note="", inputs=(), confirm=""):
     }
 
 
+def code_section(heading, text, note=""):
+    """整段只读文本：日志原文这类内容直接铺开，不做折叠。"""
+    return {
+        "heading": heading,
+        "kind": "code",
+        "text": text,
+        "note": note,
+    }
+
+
 def group_section(heading, summary, groups):
     """groups: [{title, count, items: [{label, detail, badge}]}]."""
     return {
@@ -88,7 +112,12 @@ def detail_payload(*, title, eyebrow="", description="", actions=(), sections=()
         "title": title,
         "eyebrow": eyebrow,
         "description": description,
-        "actions": [action for action in actions if action],
+        # 弹窗里不放跳转按钮：点了会整页跑掉，用户以为点错了。
+        # 表单类操作（删除等）留在弹窗内，不跳页。
+        "actions": [
+            action for action in actions
+            if action and action.get("kind") != "link"
+        ],
         "sections": [section for section in sections if section],
         "disclosure": disclosure,
         "csrf": csrf,

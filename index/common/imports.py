@@ -47,16 +47,17 @@ def import_inventory(request, entity):
         messages.error(request, '该数据由系统自动获取，不支持手动导入。')
         if entity in {'accounts', 'domain_computers'}:
             return redirect('domain_controller_settings')
-        return redirect('item_list', item=entity)
+        return redirect('asset_list', kind=entity)
 
-    back = reverse('item_list', args=[entity])
+    # 导入完成后落到各资产自己的工作区页，不再回旧列表视图。
+    back = reverse('asset_list', args=[entity])
 
     def fail(message):
         if wants_json(request):
             return form_errors([message], back)
         messages.error(request, message)
         request.session['open_import_modal'] = entity
-        return redirect('item_list', item=entity)
+        return redirect('asset_list', kind=entity)
 
     uploaded_file = request.FILES.get('file')
     if not uploaded_file:
@@ -70,4 +71,4 @@ def import_inventory(request, entity):
     if wants_json(request):
         return form_saved(message, back)
     messages.success(request, message)
-    return redirect('item_list', item=entity)
+    return redirect('asset_list', kind=entity)

@@ -14,9 +14,32 @@ def column_payloads(definition):
             "kind": field.kind,
             "default_visible": bool(field.default_visible),
             "sortable": bool(field.sortable),
+            # 工具栏靠这两个决定哪些筛选常驻、哪些收进「更多筛选」。
+            "filterable": bool(field.filterable),
+            "default_filter": bool(field.default_filter),
         }
         for field in definition.fields
     ]
+
+
+def attach_column_options(payload, definition, state):
+    """Fill each column's candidates from the filter state.
+
+    A choice column renders as a dropdown only when the payload carries its
+    options; without them the toolbar falls back to a free-text box. fixed
+    columns take their labels from definition.choices, distinct/suggest columns
+    from the field_options apply_table_filters just computed.
+    """
+    options = state.get('field_options') or {}
+    modes = state.get('field_option_modes') or {}
+    declared = {field.key: field.option_mode for field in definition.fields}
+    for column in payload['columns']:
+        column['options'] = [
+            {'value': value, 'label': label}
+            for value, label in (options.get(column['key']) or ())
+        ]
+        column['optionMode'] = modes.get(column['key']) or declared.get(column['key'], 'none')
+    return payload
 
 
 def _raw_value(record, field):

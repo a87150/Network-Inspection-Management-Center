@@ -264,7 +264,7 @@ async function selectTask(row) {
         clean.searchParams.set('task', row.dataset.taskId);
         clean.searchParams.delete('fragment');
         clean.searchParams.delete('page');
-        window.history.replaceState({}, '', clean.toString());
+        // 选中任务是页面内部切换，不写地址栏。
     } catch (error) {
         region.classList.remove('is-loading');
         return;

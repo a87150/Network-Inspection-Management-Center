@@ -8,6 +8,7 @@ from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from tests.auth import login_reader
 from net.models import (Computer, Network_Device, People,
                         WeakCurrentDevice, Server, Server_Inspection, TaskRun)
 
@@ -39,7 +40,7 @@ class PublicPrivacyTests(TestCase):
                                error_summary='SECRET-TASK',
                                parameters_snapshot={'secret': 'SECRET-PARAMETER'})
 
-    def response(self, view='asset_list', kwargs=None, params=None):
+    def response(self, view='item_list', kwargs=None, params=None):
         module = import_module('index.common.public_views')
         request = RequestFactory().get('/', params or {})
         request.user = AnonymousUser()
@@ -57,7 +58,7 @@ class PublicPrivacyTests(TestCase):
         }
         for kind, fields in expected.items():
             with self.subTest(kind=kind):
-                response = self.response(kwargs={'kind': kind})
+                response = self.response('item_list', {'item': kind})
                 self.assertEqual(response.status_code, 200)
                 self.assertNotIn(b'SECRET-', response.content)
                 for row in response.context_data['page_obj']:
@@ -73,26 +74,26 @@ class PublicPrivacyTests(TestCase):
                   'page': 'SECRET-PAGE', 'page_size': 'SECRET-SIZE'}
         for kind in ('people', 'computers', 'networks', 'servers', 'weakcurrent'):
             with self.subTest(kind=kind):
-                baseline = self.response(kwargs={'kind': kind})
-                attacked = self.response(kwargs={'kind': kind}, params=attack)
+                baseline = self.response('item_list', {'item': kind})
+                attacked = self.response('item_list', {'item': kind}, params=attack)
                 self.assertEqual(baseline.content, attacked.content)
                 self.assertEqual(list(baseline.context_data['page_obj']),
                                  list(attacked.context_data['page_obj']))
 
     def test_public_name_search_filter_sort_and_pagination(self):
-        response = self.response(kwargs={'kind': 'people'}, params={'filter_name': 'Alice'})
+        response = self.response('item_list', {'item': 'people'}, params={'filter_name': 'Alice'})
         self.assertEqual(response.context_data['page_obj'].paginator.count, 1)
         self.assertContains(response, 'Alice Public')
         self.assertNotContains(response, 'Bob Public')
-        response = self.response(kwargs={'kind': 'people'}, params={'sort': 'name', 'order': 'desc'})
+        response = self.response('item_list', {'item': 'people'}, params={'sort': 'name', 'order': 'desc'})
         self.assertEqual(response.context_data['page_obj'][0]['name'], 'Bob Public')
-        response = self.response(kwargs={'kind': 'people'}, params={'q': 'SECRET-EMP'})
+        response = self.response('item_list', {'item': 'people'}, params={'q': 'SECRET-EMP'})
         self.assertEqual(response.context_data['page_obj'].paginator.count, 0)
         People.objects.bulk_create([People(name=f'Person {n:03}') for n in range(55)])
         for size in (20, 50, 100, 200, 500):
-            response = self.response(kwargs={'kind': 'people'}, params={'page_size': size})
+            response = self.response('item_list', {'item': 'people'}, params={'page_size': size})
             self.assertEqual(response.context_data['page_obj'].paginator.per_page, size)
-        response = self.response(kwargs={'kind': 'people'}, params={'page_size': 20, 'page': 2})
+        response = self.response('item_list', {'item': 'people'}, params={'page_size': 20, 'page': 2})
         self.assertEqual(response.context_data['page_obj'].number, 2)
         self.assertEqual(len(response.context_data['page_obj']), 20)
 
@@ -115,7 +116,7 @@ class PublicPrivacyTests(TestCase):
 
     def test_http_guest_dispatch(self):
         for view, kwargs in [('index', {}), ('people_statistics', {})] + [
-            (view, {key: kind}) for view, key in [('asset_list', 'kind'), ('item_list', 'item')]
+            ('item_list', {'item': kind})
             for kind in ('people', 'computers', 'networks', 'servers', 'weakcurrent')
         ]:
             with self.subTest(view=view, kwargs=kwargs):
@@ -129,21 +130,44 @@ class PublicPrivacyTests(TestCase):
     def test_private_filters_never_survive_real_pagination_links(self):
         People.objects.bulk_create([People(name=f'Person {n:03}') for n in range(45)])
         from urllib.parse import parse_qs, urlsplit
-        response = self.client.get('/assets/people/', {'page_size': 20, 'filter_name': 'Person',
+        public_url = reverse('item_list', kwargs={'item': 'people'})
+        response = self.client.get(public_url, {'page_size': 20, 'filter_name': 'Person',
                                   'filter_employee_id': 'SECRET-EMP', 'filter_phone': 'SECRET-PHONE'})
         self.assertNotIn(b'SECRET-', response.content)
         link = response.context_data['next_url']
         self.assertEqual(parse_qs(urlsplit(link).query),
                          {'sort': ['name'], 'order': ['asc'], 'page_size': ['20'],
                           'filter_name': ['Person'], 'page': ['2']})
-        second = self.client.get('/assets/people/' + link)
+        second = self.client.get(public_url + link)
         self.assertEqual(second.context_data['page_obj'].number, 2)
         self.assertEqual(second.context_data['page_obj'].paginator.count, 45)
 
+    def test_asset_ledger_requires_login(self):
+        """五个台账页统一要求登录：匿名只拿到登录页，一行数据都看不到。"""
+        kinds = ('people', 'computers', 'networks', 'servers', 'weakcurrent')
+        for kind in kinds:
+            with self.subTest(kind=kind):
+                response = self.client.get(reverse('asset_list', kwargs={'kind': kind}))
+                self.assertEqual(response.status_code, 302)
+                self.assertTrue(response.headers['Location'].startswith('/login/'),
+                                response.headers['Location'])
+                self.assertNotIn(b'SECRET-', response.content)
+
+        login_reader(self.client)
+        for kind in kinds:
+            with self.subTest(kind=kind, as_reader=True):
+                response = self.client.get(reverse('asset_list', kwargs={'kind': kind}))
+                self.assertEqual(response.status_code, 200)
+                # 登录只解锁可见性，不放宽脱敏：设备登录口令与接口令牌仍不出现在页面里。
+                for secret in (b'SECRET-PASSWORD', b'SECRET-COMMUNITY',
+                               b'SECRET-TOKEN', b'SECRET-CAMERA'):
+                    self.assertNotIn(secret, response.content)
+
     def test_http_private_details_and_legacy_routes_are_not_public(self):
-        for path in ('/assets/unknown/', '/item/accounts/', '/item/taskrecordcontent/'):
+        for path in ('/item/accounts/', '/item/taskrecordcontent/'):
             self.assertEqual(self.client.get(path).status_code, 404)
-        for path in ('/computers/logs/', '/tasks/', '/records/servers/', '/tables/people/export/'):
+        for path in ('/assets/unknown/', '/computers/logs/', '/tasks/', '/records/servers/',
+                     '/tables/people/export/'):
             response = self.client.get(path)
             self.assertEqual(response.status_code, 302)
             self.assertNotIn(b'SECRET-', response.content)

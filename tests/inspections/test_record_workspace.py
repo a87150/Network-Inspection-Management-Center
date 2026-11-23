@@ -7,6 +7,7 @@ from io import StringIO
 from django.test import TestCase
 from django.urls import NoReverseMatch, reverse
 from tests.auth import login_reader
+from tests.payloads import payload_text, vue_component
 from django.utils import timezone
 
 from tests.devices.pc.helpers import create_log_file
@@ -207,7 +208,7 @@ class ProjectRecordWorkspaceTests(TestCase):
     def test_computer_analysis_records_do_not_repeat_the_log_list_entry(self):
         response = self.client.get(reverse('computer_analysis_list'))
 
-        self.assertContains(response, '日志分析记录')
+        self.assertContains(response, '分析记录')
         self.assertNotContains(response, '导入日志证据 / 重新分析')
 
     def test_project_task_list_uses_seven_rows_per_page(self):
@@ -242,10 +243,10 @@ class ProjectRecordWorkspaceTests(TestCase):
         )
 
         self.assertNotIn('stats_url', computer)
-        self.assertContains(
-            response,
-            '<a href="/assets/computers/?object=analyses" '
-            'class="btn btn-outline-secondary btn-sm">日志分析记录</a>',
-            html=True,
-        )
-        self.assertNotContains(response, '统计详情')
+        # 卡片按钮由 Vue 渲染：文案与链接在 JSON，次级按钮样式在组件模板。
+        body = payload_text(response, 'dashboard-index-bootstrap')
+        self.assertIn('分析记录', body)
+        self.assertIn('/assets/computers/?object=analyses', body)
+        self.assertNotIn('统计详情', body)
+        self.assertIn('btn btn-outline-secondary btn-sm',
+                      vue_component('pages/dashboard_index.mjs'))

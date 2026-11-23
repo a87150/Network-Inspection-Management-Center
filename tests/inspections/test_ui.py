@@ -368,11 +368,10 @@ class TaskUiTestCase(TestCase):
             'total': 1, 'queued': 0, 'running': 0, 'success': 1,
             'attention': 0, 'cancelled': 0,
         })
-        self.assertContains(response, '任务总数')
+        # 统计已经并进两个大方块，顶部不再有独立的小格阵列。
+        self.assertContains(response, '后台任务')
         self.assertContains(response, '需关注')
-        # 统计不再是小方块阵列，改成页面顶部的大方块。
-        self.assertContains(response, 'metric-card__metrics')
-
+        self.assertContains(response, 'metric__unit')
     def test_active_task_pages_offer_authenticated_manual_stop(self):
         """Omitting the stop control would leave an operator unable to cancel stuck work."""
         task = enqueue_task(

@@ -71,14 +71,19 @@ def _load_snapshots(tasks, wanted):
     pending = [task.pk for task in tasks
                if task.pk in wanted and 'parameters_snapshot' in task.get_deferred_fields()]
     if not pending:
-        return {task.pk: task.parameters_snapshot for task in tasks if task.pk in wanted}
+        # Read from __dict__: attribute access would re-query the deferred field.
+        return {task.pk: task.__dict__.get('parameters_snapshot')
+                for task in tasks if task.pk in wanted}
     snapshots = dict(
         TaskRun.objects.filter(pk__in=pending).values_list('pk', 'parameters_snapshot'),
     )
     for task in tasks:
         if task.pk in snapshots:
             task.parameters_snapshot = snapshots[task.pk]
-    return snapshots
+    # Return the already-loaded ones too; otherwise the caller reads the
+    # attribute again and pays one query per task.
+    return {task.pk: task.__dict__.get('parameters_snapshot')
+            for task in tasks if task.pk in wanted}
 
 
 def _prepare_summaries(tasks):
@@ -244,20 +249,24 @@ def _frozen_roster_ids_from(snapshot):
 
 def _missing_people_counts(tasks):
     if isinstance(tasks, QuerySet):
+        # values_list 直接取元组：模型实例上的 only() 会被上游的 defer() 顶掉，
+        # 每读一次 parameters_snapshot 就补一条 SELECT，任务多时就是几百条。
         people_tasks = list(tasks.filter(
             task_type=TaskRun.TaskType.COMPUTER_ANALYSIS,
             status__in=_COMPLETED_HEALTH_STATUSES,
             profile_snapshot__matching_mode='people',
-        ).select_related(None).only('pk', 'parameters_snapshot'))
+        ).values_list('pk', 'parameters_snapshot'))
     else:
         people_tasks = [
-            task for task in tasks
+            (task.pk, task.parameters_snapshot) for task in tasks
             if task.task_type == TaskRun.TaskType.COMPUTER_ANALYSIS
             and task.status in _COMPLETED_HEALTH_STATUSES
             and isinstance(task.profile_snapshot, dict)
             and task.profile_snapshot.get('matching_mode') == 'people'
         ]
-    roster_by_task = {task.pk: _frozen_roster_ids(task) for task in people_tasks}
+    roster_by_task = {
+        task_id: _frozen_roster_ids_from(snapshot) for task_id, snapshot in people_tasks
+    }
     if not roster_by_task:
         return {}
     matched_by_task = {task_id: set() for task_id in roster_by_task}
@@ -302,8 +311,10 @@ def build_project_task_metrics(tasks):
         people_tasks = list(tasks.filter(
             task_type=TaskRun.TaskType.COMPUTER_ANALYSIS,
             profile_snapshot__matching_mode='people',
-        ).select_related(None).only('pk', 'parameters_snapshot'))
-        rosters = {task.pk: _frozen_roster_ids(task) for task in people_tasks}
+        ).values_list('pk', 'parameters_snapshot'))
+        rosters = {
+            task_id: _frozen_roster_ids_from(snapshot) for task_id, snapshot in people_tasks
+        }
         rows = TaskTargetRun.objects.filter(task_id__in=task_ids).exclude(
             _legacy_orphan_targets(task_ids, rosters)).annotate(
             outcome=_outcome_expression())
@@ -349,7 +360,7 @@ def project_workspace_context(request, kind):
     return {'task_metrics': metrics, 'task_page': page, 'latest_task': latest,
             'selected_task_id': latest.pk if latest else None,
             'results_is_latest': is_latest,
-            'task_section_title': '日志分析任务' if kind == 'computers' else '巡检任务',
+            'task_section_title': '分析任务栏' if kind == 'computers' else '巡检任务栏',
             'task_empty_title': '暂无日志分析任务' if kind == 'computers' else '暂无巡检任务'}
 
 

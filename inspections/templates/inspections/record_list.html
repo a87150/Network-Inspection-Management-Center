@@ -7,10 +7,10 @@
     <div class="page-heading__copy">
         <p class="page-heading__eyebrow">{% if record_type == 'computer_analysis' %}PC 日志{% else %}设备巡检{% endif %}</p>
         <h1 class="page-heading__title">{% if record_type == 'computer_analysis' %}日志分析记录{% else %}{{ item_name }}巡检记录{% endif %}</h1>
-        <p class="page-heading__description">{% if record_type == 'computer_analysis' %}每次日志分析独立保存，可进入详情查看动态指标和异常。{% else %}每次巡检独立保存，可进入详情查看动态指标和采集回显。{% endif %}</p>
+        <p class="page-heading__description">{% if record_type == 'computer_analysis' %}每次分析独立保存，可查指标与异常。{% else %}每次巡检独立保存，可查指标与回显。{% endif %}</p>
     </div>
     <div class="page-heading__actions">
-        {% include 'common/workspace_actions.html' %}
+        {% include 'inspections/_actions_records.html' %}
     </div>
 </header>
 {# 记录页是独立页面，不再嵌 PC 资产/分析/日志的切换方块。 #}

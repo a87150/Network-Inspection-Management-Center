@@ -1,9 +1,9 @@
 {% if can_administer %}
-<div class="modal fade" id="{% if device_modal_mode == 'edit' %}editDeviceModal{% else %}addDeviceModal{% endif %}" tabindex="-1" aria-labelledby="{% if device_modal_mode == 'edit' %}editDeviceModalLabel{% else %}addDeviceModalLabel{% endif %}" aria-hidden="true"{% if open_add_device_modal or open_edit_device_modal %} data-auto-open="true"{% endif %}>
+<div class="modal fade" id="deviceFormModal" tabindex="-1" aria-labelledby="deviceFormModalLabel" aria-hidden="true"{% if open_add_device_modal or open_edit_device_modal %} data-auto-open="true"{% endif %}>
  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg modal-shell"><div class="modal-content modal-surface">
   <form method="post" data-form-ajax action="{% if device_modal_mode == 'edit' %}{% url 'asset_edit' item_key edit_device.pk %}{% else %}{% url 'asset_create' item_key %}{% endif %}" class="d-flex flex-column overflow-hidden">
    {% csrf_token %}
-   <div class="modal-header"><h2 class="modal-title fs-5" id="{% if device_modal_mode == 'edit' %}editDeviceModalLabel{% else %}addDeviceModalLabel{% endif %}">{% if device_modal_mode == 'edit' %}修改{{ item_name }}{% else %}添加{{ item_name }}{% endif %}</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+   <div class="modal-header"><h2 class="modal-title fs-5" id="deviceFormModalLabel">{% if device_modal_mode == 'edit' %}修改{{ item_name }}{% else %}添加{{ item_name }}{% endif %}</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
    <div class="modal-body modal-body--scroll">
     <p class="text-secondary small">填写设备名称、IP 和巡检连接参数即可。硬件信息由巡检自动回填；系统版本如有输入框可选填，后续成功采集会更新。字段中的示例仅作格式参考。保存不会立即巡检；编辑时密码留空会保留已保存的值，校验失败后密码不会回显。</p>
     {% if device_form.non_field_errors %}<div class="alert alert-danger">{{ device_form.non_field_errors }}</div>{% endif %}

@@ -1,6 +1,6 @@
 from tests.devices.pc.helpers import add_analysis_issue, create_log_file
 from tests.payloads import bootstrap as page_bootstrap
-from tests.payloads import payload_text
+from tests.payloads import payload_text, vue_component
 
 
 def records_bootstrap(response):
@@ -232,8 +232,9 @@ class DashboardTests(TestCase):
     def test_empty_dashboard_and_record_workspace_do_not_crash(self):
         response = self.client.get(reverse('index'))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, '后台任务')
-        self.assertContains(response, '弱电设备')
+        # 首页卡片由 Vue 渲染：挂载点在 HTML，卡片数据在 bootstrap JSON。
+        self.assertContains(response, 'data-vue-page="dashboard-index"')
+        self.assertIn('弱电设备', payload_text(response, 'dashboard-index-bootstrap'))
         self.assertEqual(self.client.get(reverse('computer_analysis_list')).status_code, 200)
 
     def test_multiple_errors_count_as_one_abnormal_computer(self):
@@ -299,7 +300,8 @@ class NetworkCheckCommandTests(TestCase):
             'asset_type': 'networks',
             'asset_id': str(device.pk),
         })
-        self.assertRedirects(response, reverse('item_list', args=['networks']))
+        # 导入完成后落到各资产自己的工作区页面。
+        self.assertRedirects(response, reverse('asset_list', args=['networks']))
         self.assertEqual(Network_Device_Inspection.objects.filter(device=device).count(), 0)
         self.assertEqual(TaskRun.objects.filter(status=TaskRun.Status.QUEUED).count(), 1)
         list_response = self.client.get(reverse('item_list', args=['networks']))
@@ -366,7 +368,7 @@ class InventoryImportExportTests(TestCase):
             content_type='text/csv',
         )
         response = self.client.post(reverse('import_inventory', args=['people']), {'file': upload})
-        self.assertRedirects(response, reverse('item_list', args=['people']))
+        self.assertRedirects(response, reverse('asset_list', args=['people']))
         self.assertTrue(People.objects.filter(employee_id='H10001', name='张三').exists())
 
         export_response = self.client.get(reverse('table_export', args=['people']))
@@ -389,7 +391,7 @@ class InventoryImportExportTests(TestCase):
             content_type='text/csv',
         )
         response = self.client.post(reverse('import_inventory', args=['servers']), {'file': upload})
-        self.assertRedirects(response, reverse('item_list', args=['servers']))
+        self.assertRedirects(response, reverse('asset_list', args=['servers']))
         server = Server.objects.get(ip='192.0.2.60')
         self.assertEqual(server.username, 'inspector')
         self.assertEqual(server.password, 'secret')
@@ -410,7 +412,7 @@ class InventoryImportExportTests(TestCase):
             content_type='text/csv',
         )
         response = self.client.post(reverse('import_inventory', args=['computers']), {'file': upload})
-        self.assertRedirects(response, reverse('item_list', args=['computers']))
+        self.assertRedirects(response, reverse('asset_list', args=['computers']))
         self.assertFalse(Computer.objects.filter(computer_name='MANUAL-PC').exists())
 
 
@@ -862,7 +864,7 @@ class TableRegistryTests(TestCase):
         }
         self.assertTrue({
             'ip_addresses', 'mac_addresses', 'os_version',
-            'os_build', 'system_installed_at',
+            'system_installed_at',
         }.issubset(fields))
         self.assertFalse({
             'last_boot_at', 'cpu_temperature', 'cpu_usage',
@@ -920,8 +922,12 @@ class VisualStructureTests(TestCase):
             self.client.get(reverse('computer_error_list')),
         ]
 
+        # 首页整页由 Vue 渲染，页头结构落在组件模板里；其余页面的页头仍是 Django 输出。
+        vue_heading_pages = {'/': 'pages/dashboard_index.mjs'}
+
         for response in responses:
-            with self.subTest(path=response.request['PATH_INFO']):
+            path = response.request['PATH_INFO']
+            with self.subTest(path=path):
                 document = parse_response_html(response)
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(
@@ -930,12 +936,17 @@ class VisualStructureTests(TestCase):
                 self.assertEqual(
                     len(document.find('main', id='main-content')), 1,
                 )
-                self.assertEqual(
-                    len(self._elements_with_class(document, 'header', 'page-heading')), 1,
-                )
-                self.assertEqual(
-                    len(self._elements_with_class(document, 'h1', 'page-heading__title')), 1,
-                )
+                if path in vue_heading_pages:
+                    component = vue_component(vue_heading_pages[path])
+                    self.assertIn('class="page-heading"', component)
+                    self.assertIn('class="page-heading__title"', component)
+                else:
+                    self.assertEqual(
+                        len(self._elements_with_class(document, 'header', 'page-heading')), 1,
+                    )
+                    self.assertEqual(
+                        len(self._elements_with_class(document, 'h1', 'page-heading__title')), 1,
+                    )
 
     def test_workspace_components_expose_shared_visual_classes(self):
         Network_Device.objects.create(device_name='SW-VISUAL', ip='192.0.2.88')
@@ -948,8 +959,13 @@ class VisualStructureTests(TestCase):
             self.client.get(reverse('item_list', args=['people'])),
         )
 
-        self.assertTrue(self._elements_with_class(dashboard, 'section', 'metric-card'))
-        self.assertTrue(self._elements_with_class(dashboard, 'section', 'surface-card'))
+        # 卡片结构在组件模板里，服务端只剩挂载点与概览条。
+        component = vue_component('pages/dashboard_index.mjs')
+        self.assertIn('surface-card metric-card glass-card', component)
+        self.assertIn('class="dashboard-overview"', component)
+        self.assertContains(
+            self.client.get(reverse('index')), 'data-vue-page="dashboard-index"',
+        )
         self.assertTrue(self._elements_with_class(asset_page, 'div', 'table-toolbar'))
         # 行动作由 Vue 渲染，链接在 bootstrap 的行数据里。
         table = page_bootstrap(
@@ -969,12 +985,14 @@ class VisualStructureTests(TestCase):
         )
 
     def test_dedicated_computer_record_pages_use_shared_table_surfaces(self):
+        # 任务详情的筛选栏与表格现在都由 Vue 画（form.table-toolbar），
+        # 页面上只剩挂载点，所以结构断言落到组件源码。
         for url in (analysis_task_url(), reverse('computer_error_list')):
             with self.subTest(url=url):
                 response = self.client.get(url)
                 document = parse_response_html(response)
                 self.assertTrue(
-                    self._elements_with_class(document, 'div', 'table-toolbar'),
+                    'table-toolbar' in vue_component('pages/resource_detail.mjs')                    or self._elements_with_class(document, 'div', 'table-toolbar'),
                 )
                 # 表格主体由 Vue 渲染，卡片外壳在组件里；服务端只需给出表格岛。
                 self.assertTrue(document.find('div', **{'data-vue-page': ''})
@@ -1051,7 +1069,9 @@ class VisualStructureTests(TestCase):
         people_document = parse_response_html(people_page)
 
         self.assertFalse(dashboard_document.find('form', method='post', action=run_url))
-        self.assertTrue(dashboard_document.find('a', href='/assets/networks/?task_modal=run'))
+        # 卡片按钮由 Vue 渲染，链接在 bootstrap JSON 里。
+        self.assertIn('/assets/networks/?task_modal=run',
+                      payload_text(dashboard, 'dashboard-index-bootstrap'))
         self.assertTrue(network_document.find(
             'form', id='manualTaskForm', method='post', action=manual_task_url,
         ))
@@ -1405,7 +1425,8 @@ class DynamicTableQueryTests(TestCase):
         self.assertEqual(list(response.context['page_obj'].object_list), [secure])
         self.assertEqual(
             (field.kind, field.default_visible, field.default_filter, field.sortable),
-            ('boolean', True, True, True),
+            # 弱电页的「验证 TLS 证书」按需求收进「更多筛选」。
+            ('boolean', True, False, True),
         )
 
 
@@ -1714,7 +1735,9 @@ class RecordWorkspaceTests(TestCase):
                       payload_text(inspection_response, 'detail-bootstrap'))
         self.assertEqual(records_bootstrap(error_response)['columns'][0]['key'] is not None, True)
         detail_url = reverse('computer_analysis_detail', args=[inspection.pk])
-        self.assertIn(detail_url, payload_text(inspection_response, 'detail-bootstrap'))
+        # 任务详情的操作列直接给原始日志，不再绕去分析详情页。
+        log_url = reverse('computer_log_detail', args=[inspection.log_file_id])
+        self.assertIn(log_url, payload_text(inspection_response, 'detail-bootstrap'))
         # 徽章由 payload 输出，组件按 {status, tone, label} 渲染成同一套 class。
         self.assertIn('"status": "warning"',
                       payload_text(inspection_response, 'detail-bootstrap'))
@@ -1788,7 +1811,9 @@ class RecordWorkspaceTests(TestCase):
             [abnormal.computer.computer_name],
         )
         self.assertFalse(document.find('select', name='status'))
-        self.assertEqual(len(document.find('select', name='filter_status')), 1)
+        # 筛选栏改由 Vue 画（form.table-toolbar），页面上只剩挂载点。
+        self.assertIn("'filter_' + control.key",
+                      vue_component('pages/resource_detail.mjs'))
         self.assertContains(
             response, '<option value="abnormal" selected>异常</option>', html=True,
         )
@@ -1810,10 +1835,9 @@ class RecordWorkspaceTests(TestCase):
         self.assertEqual(list(normal_response.context['page_obj'].object_list), [normal])
         self.assertEqual(list(abnormal_response.context['page_obj'].object_list), [abnormal])
         self.assertFalse(document.find('select', name='status'))
-        self.assertEqual(len(document.find('select', name='filter_status')), 1)
-        self.assertContains(
-            normal_response, '<option value="normal" selected>正常</option>', html=True,
-        )
+        self.assertIn("'filter_' + control.key", vue_component('pages/resource_detail.mjs'))
+        # 下拉选项由 Vue 画，当前筛选值回填在 payload 的 filters 里。
+        self.assertIn('"value": "normal"', payload_text(normal_response, 'detail-bootstrap'))
 
     def test_computer_severity_filters_include_findings_without_error_rows(self):
         normal = create_computer_analysis('PC-NORMAL')

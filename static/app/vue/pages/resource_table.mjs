@@ -94,9 +94,7 @@ export default {
                 this.totalPages = payload.pages;
                 this.from = payload.start_index;
                 this.to = payload.end_index;
-                const url = new URL(window.location.href);
-                url.searchParams.set(this.page_param, payload.page);
-                window.history.replaceState({}, '', url);
+                // 翻页在岛内完成，不写地址栏。
             } catch (failure) {
                 this.error = failure.message || '加载失败';
             } finally {

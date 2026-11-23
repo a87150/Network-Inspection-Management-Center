@@ -4,12 +4,13 @@ from weakcurrent.views import (access_record_list, access_record_sync, access_so
 from assets.collection_profiles import collection_templates, device_collection_settings
 from domain.bitlocker import domain_computer_bitlocker
 from inspections.tasks import single_device_task_create
-from django.urls import path
+from django.urls import include, path
 from django.contrib.auth.views import LogoutView
 from index.common.login_throttle import ThrottledLoginView
 from . import views
+from index.dashboard.views import dashboard_tasks
 from inspections.issue_settings import issue_severity_settings
-from inspections.analysis_summary import analysis_problem_list
+from inspections.analysis_summary import analysis_problem_list, inspection_problem_list
 from pc import upload_config as pc_upload_views
 from server.scripts import windows_server_script_download
 from assets.create import asset_create, asset_edit
@@ -30,6 +31,7 @@ from pc.software_policy import pc_software_policy_template_download
 urlpatterns = [
     path('operations/overview/', views.operations_overview, name='operations_overview'),
     path('operations/overview/data/', views.operations_overview_data, name='operations_overview_data'),
+    path('operations/overview/node/<str:node_id>/', views.operations_node_detail, name='operations_overview_node'),
     path('network/ip/', ip_management, name='ip_management'),
     path('maintenance/', maintenance_list, name='maintenance_list'),
     path(
@@ -55,6 +57,8 @@ urlpatterns = [
     path("assets/<str:kind>/<uuid:pk>/collection-settings/", device_collection_settings, name="device_collection_settings"),
     path("domain/computers/<uuid:pk>/bitlocker/", domain_computer_bitlocker, name="domain_computer_bitlocker"),
     path('computers/analyses/tasks/<uuid:pk>/problems/', analysis_problem_list, name='analysis_problem_list'),
+    path('inspections/tasks/<uuid:pk>/problems/', inspection_problem_list,
+         name='inspection_problem_list'),
     path('login/', ThrottledLoginView.as_view(template_name='registration/login.html'), name='login'),
     path('logout/', LogoutView.as_view(), name='logout'),
     path('inspections/issue-severity/', issue_severity_settings, name='issue_severity_settings'),
@@ -62,6 +66,15 @@ urlpatterns = [
     path('computers/upload-config/save/', pc_upload_views.pc_upload_config_save, name='pc_upload_config_save'),
     path('computers/upload-config/reset-token/', pc_upload_views.pc_upload_config_reset_token, name='pc_upload_config_reset_token'),
     path('', views.index, name='index'),
+    path('tasks.json', dashboard_tasks, name='dashboard_tasks'),
+    # 五个工作区页先于旧的 assets/<kind>/ 命中；旧路由保留兜底其它 kind，
+    # 阶段 5 清理时再一起删。URL 名沿用 asset_list / asset_detail_json：
+    # 权限中间件按 url_name 判公开页，换新名会把访客挡到登录页。
+    path('', include('pc.urls')),
+    path('', include('network.urls')),
+    path('', include('server.urls')),
+    path('', include('weakcurrent.urls')),
+    path('', include('people.urls')),
     path('assets/<str:kind>/', views.asset_list, name='asset_list'),
     path('assets/<str:kind>/toggle-enabled/', asset_toggle_enabled, name='asset_toggle_enabled'),
     path('assets/<str:kind>/add/', asset_create, name='asset_create'),

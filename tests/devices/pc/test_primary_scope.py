@@ -57,11 +57,12 @@ class PrimaryScopeTests(TestCase):
         response = self.client.get(reverse('analysis_problem_list', args=[task.pk]),
                                    {'category': '人员缺少日志'})
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, '<th scope="col">人员</th>', html=True)
-        self.assertNotContains(response, '<th scope="col">PC 名称</th>', html=True)
-        self.assertNotContains(response, '同一 PC 可能有多条记录')
-        self.assertContains(response, 'Two · A2')
-        self.assertContains(response, 'A2')
+        # 表格搬到 bootstrap 里了，列名看 JSON。
+        data = response.context['problems_bootstrap']
+        self.assertEqual(data['columns'][0]['label'], '对象')
+        body = str(data['rows'])
+        self.assertNotIn('同一 PC 可能有多条记录', body)
+        self.assertIn('Two · A2', body)
 
     def test_logs_mode_reports_orphan_but_not_person_without_log(self):
         task = self.run_mode('logs')

@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db.models import Case, CharField, F, Q, Value, When
 from django.db.models.functions import Cast, Coalesce
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 
@@ -161,7 +161,6 @@ def record_list_context(request, kind):
     )
     context = {
         'record_type': 'infrastructure',
-        'record_kind': kind,
         'item_name': page.title,
         'page_obj': page_obj,
         'table_definition': table_definition,
@@ -172,6 +171,12 @@ def record_list_context(request, kind):
             'table_export_scoped', args=['inspection_records', kind],
         ),
         'pagination_query': query_without_page(request),
+        # 结果表的数据和列定义都在这里，岛和模板共用同一份，不另开接口。
+        'results_table': table_payload(
+            page_obj, table_definition,
+            table_row_payloads(page_obj.object_list, table_definition),
+            extra={'recordsKind': kind},
+        ),
     }
     context.update(_project_workspace_context(request, kind))
     context.update(task_modal_context(request, kind, target_source='records'))
@@ -183,6 +188,9 @@ def record_list_context(request, kind):
 def record_list(request, kind):
     context = record_list_context(request, kind)
     # 换任务时只取结果区，页面不重载、不滚动。
+    # 排序、筛选、翻页只要表格数据，地址栏不动。
+    if request.GET.get('fragment') == 'table':
+        return JsonResponse(context['results_table'])
     if request.GET.get('fragment') == 'results':
         return render(request, 'inspections/_record_results.html', context)
     return render(request, 'inspections/record_list.html', context)
@@ -200,7 +208,6 @@ def record_detail(request, kind, pk):
     error_manager = getattr(inspection, 'errors', None)
     asset_name = str(getattr(inspection, page.asset_field, None) or '未知设备')
     return render(request, 'inspections/record_detail.html', {
-        'record_kind': kind,
         'item_name': page.title,
         'asset_name': asset_name,
         'inspection': inspection,
@@ -557,7 +564,7 @@ def project_records_payload(kind, request):
 
 
 
-def computer_logs_payload(request):
+def computer_logs_payload(request, tables=True):
     """PC 日志文件清单，参数前缀 logs_，和资产表的参数空间分开。"""
     from net.models.records import ComputerLogFile
 
@@ -569,24 +576,27 @@ def computer_logs_payload(request):
     page_obj = Paginator(logs, state['page_size']).get_page(
         request.GET.get('logs_page'),
     )
-    return {
-        'pc_logs': table_payload(
-            page_obj, definition,
-            table_row_payloads(
-                page_obj.object_list, definition, actions=_log_actions,
+    # tables=False 只给方块要的计数，整张日志表不构造。
+    table_part = {}
+    if tables:
+        table_part = {
+            'pc_logs': table_payload(
+                page_obj, definition,
+                table_row_payloads(
+                    page_obj.object_list, definition, actions=_log_actions,
+                ),
+                extra={
+                    'endpoint': '/api/v1/computer-logs/', 'label': 'PC 日志',
+                    'region_label': 'PC 日志数据表', 'page_param': 'logs_page',
+                },
             ),
-            extra={
-                'endpoint': '/api/v1/computer-logs/', 'label': 'PC 日志',
-                'region_label': 'PC 日志数据表', 'page_param': 'logs_page',
-            },
-        ),
+        }
+    return {
+        **table_part,
         'pc_logs_definition': definition,
         'pc_logs_state': state,
         # state 是筛选状态，没有总数；方块要的是全量计数。
-        'pc_logs_total': ComputerLogFile.objects.count(),
-        'pc_logs_computers': ComputerLogFile.objects.values('computer').distinct().count(),
-        'pc_logs_latest': ComputerLogFile.objects.order_by('-collected_at')
-        .values_list('collected_at', flat=True).first(),
+        **_log_counts(),
         # 在职人员里还没有任何一台机器上报过日志的，就是没采集到数据的人。
         'pc_logs_missing_people': _people_without_logs(),
         'pc_assets_latest': _latest_computer_report(),
@@ -631,7 +641,7 @@ def _people_without_logs():
     reported = ComputerLogFile.objects.values('computer__user_name')
     return People.objects.filter(is_active=True).exclude(name__in=reported).count()
 
-def computer_workspace_payloads(request):
+def computer_workspace_payloads(request, tables=True):
     """PC 的分析记录与采集异常，供资产工作区同页展示。
 
     两份清单各用带前缀的查询参数（analyses_page、errors_filter_x 之类），
@@ -648,27 +658,26 @@ def computer_workspace_payloads(request):
         request.GET.get('errors_page'),
     )
     return {
+        **({
+            'pc_errors': table_payload(
+                errors_page, errors_definition,
+                table_row_payloads(
+                    errors_page.object_list, errors_definition,
+                    badges={'type': _error_type_badge_for_analysis},
+                    actions=_error_actions,
+                ),
+                extra={
+                    'endpoint': '/api/v1/computer-errors/', 'label': 'PC 异常记录',
+                    'region_label': 'PC 异常记录数据表',
+                    'cell_class': {'message': 'text-wrap detail-cell'},
+                    'page_param': 'errors_page',
+                },
+            ),
+        } if tables else {}),
         'pc_analyses_recent': ComputerAnalysis.objects.select_related('computer')
         .order_by('-analysis_date')[:8],
-        'pc_analyses_total': ComputerAnalysis.objects.count(),
-        'pc_analyses_computers': ComputerAnalysis.objects.values('computer').distinct().count(),
-        'pc_analyses_latest': ComputerAnalysis.objects.order_by('-analysis_date')
-        .values_list('analysis_date', flat=True).first(),
+        **_analysis_counts(),
         'pc_errors_total': errors.count(),
-        'pc_errors': table_payload(
-            errors_page, errors_definition,
-            table_row_payloads(
-                errors_page.object_list, errors_definition,
-                badges={'type': _error_type_badge_for_analysis},
-                actions=_error_actions,
-            ),
-            extra={
-                'endpoint': '/api/v1/computer-errors/', 'label': 'PC 异常记录',
-                'region_label': 'PC 异常记录数据表',
-                'cell_class': {'message': 'text-wrap detail-cell'},
-                'page_param': 'errors_page',
-            },
-        ),
         'pc_errors_definition': errors_definition,
         'pc_errors_state': errors_state,
         **computer_logs_payload(request),
@@ -708,3 +717,40 @@ def computer_error_list(request):
 
 def infrastructure_inspection_detail(request, category, pk):
     return record_detail(request, category, pk)
+
+
+
+def _analysis_counts():
+    """Three analysis counters in one aggregate."""
+    from django.db.models import Count, Max
+
+    from net.models.records import ComputerAnalysis
+
+    row = ComputerAnalysis.objects.aggregate(
+        total=Count('pk'),
+        computers=Count('computer', distinct=True),
+        latest=Max('analysis_date'),
+    )
+    return {
+        'pc_analyses_total': row['total'],
+        'pc_analyses_computers': row['computers'],
+        'pc_analyses_latest': row['latest'],
+    }
+
+
+def _log_counts():
+    """Three log counters in one aggregate."""
+    from django.db.models import Count, Max
+
+    from net.models.records import ComputerLogFile
+
+    row = ComputerLogFile.objects.aggregate(
+        total=Count('pk'),
+        computers=Count('computer', distinct=True),
+        latest=Max('collected_at'),
+    )
+    return {
+        'pc_logs_total': row['total'],
+        'pc_logs_computers': row['computers'],
+        'pc_logs_latest': row['latest'],
+    }

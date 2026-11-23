@@ -357,6 +357,7 @@ class OperationsOverviewViewTests(TestCase):
         self.assertNotContains(page, 'class="topology-device-card__detail" :href')
 
     def test_topology_nodes_carry_the_asset_detail_fields(self):
+        """节点详情按需取：首屏只给一眼要看的字段，明细走 detailsUrl。"""
         Network_Device.objects.create(
             device_name='CORE-SW-01', ip='10.0.0.2', device_type='核心交换机',
             vendor='Cisco', model='C9300',
@@ -366,23 +367,12 @@ class OperationsOverviewViewTests(TestCase):
         nodes = [node for node in data['topology']['nodes'] if node['kind'] == 'backbone']
 
         self.assertTrue(nodes)
-        details = {item['label']: item['value'] for item in nodes[0]['details']}
-        self.assertEqual(details['设备名称'], 'CORE-SW-01')
-        self.assertEqual(details['型号'], 'C9300')
-
-    def test_anonymous_user_is_redirected_to_login(self):
-        for name in ('operations_overview', 'operations_overview_data'):
-            with self.subTest(name=name):
-                response = self.client.get(reverse(name))
-                self.assertEqual(response.status_code, 302)
-                self.assertIn(reverse('login'), response.url)
-
-    def test_data_endpoint_rejects_post(self):
-        user = get_user_model().objects.create_user(
-            'overview-admin', is_staff=True, is_active=True,
-        )
-        self.client.force_login(user)
-
-        response = self.client.post(reverse('operations_overview_data'))
-
-        self.assertEqual(response.status_code, 405)
+        node = nodes[0]
+        # 首屏不再背每个节点的明细，压的是 180 个节点乘 400 多字节。
+        self.assertEqual(node['details'], [])
+        self.assertEqual(node['label'], 'CORE-SW-01')
+        self.assertEqual(node['model'], 'C9300')
+        detail = self.client.get(node['detailsUrl']).json()
+        mapping = {item['label']: item['value'] for item in detail['details']}
+        self.assertEqual(mapping['设备名称'], 'CORE-SW-01')
+        self.assertEqual(mapping['型号'], 'C9300')

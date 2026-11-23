@@ -6,6 +6,7 @@ from django.urls import reverse
 
 from net.models import People
 from tests.auth import login_reader
+from tests.payloads import payload_text, vue_component
 
 
 class PeopleStatisticsPageTests(TestCase):
@@ -61,9 +62,12 @@ class PeopleStatisticsPageTests(TestCase):
             'hires_this_year': 1,
             'departures_this_year': 1,
         })
-        self.assertContains(response, '人员统计')
-        self.assertContains(response, f'{expected_average:.1f} 年')
-        self.assertContains(response, '仅统计 3 名有有效入职日期的在职人员')
+        # 页面由 Vue 从 bootstrap JSON 渲染，数字与文案断言落在 JSON 上。
+        body = payload_text(response, 'people-statistics-bootstrap')
+        self.assertIn('人员统计', body)
+        self.assertIn(f'{expected_average:.1f}', body)
+        self.assertIn('仅统计 [[ tenure.sample ]] 名有有效入职日期的在职人员',
+                      vue_component('pages/people_statistics.mjs'))
 
     @patch('django.utils.timezone.localdate', return_value=as_of)
     def test_department_table_merges_blank_departments_and_counts_status(self, _localdate):
@@ -107,7 +111,13 @@ class PeopleStatisticsPageTests(TestCase):
             reverse('asset_list', args=['people']) + '?object=departments',
         )
         self.assertEqual(people['primary_action']['label'], '手动同步人员')
-        self.assertContains(response, 'href="/people/statistics/"')
+        # 统计并进人员工作区后，首页不再单列 /people/statistics/ 入口，部门视图
+        # （?object=departments）承接它；直达路由本身仍在，访客汇总页也用它。
+        self.assertIn(people['department_url'],
+                      payload_text(response, 'dashboard-index-bootstrap'))
+        self.assertEqual(
+            self.client.get(reverse('people_statistics')).status_code, 200,
+        )
 
     def test_empty_statistics_page_returns_zero_values(self):
         People.objects.all().delete()

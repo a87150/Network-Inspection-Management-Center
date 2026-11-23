@@ -1,4 +1,6 @@
 import csv
+import json
+import re
 from datetime import datetime, timezone as dt_timezone
 
 from tests import response_body
@@ -35,6 +37,22 @@ from net.models import (
     TaskRun,
     TaskTargetRun,
 )
+
+
+def bootstrap_of(response, page_key):
+    """五个工作区页只吐一份 bootstrap JSON：筛选值、列定义、首屏行都在里面。"""
+    match = re.search(
+        r'<script id="%s-bootstrap" type="application/json">(.*?)</script>'
+        % page_key, response.content.decode(), re.S)
+    if match is None:
+        raise AssertionError(page_key + ' 缺少 bootstrap json_script')
+    return json.loads(match.group(1))
+
+
+def component_source(*relative_path):
+    """控件本体已搬进 Vue 组件：标记与样式契约只能验源码。"""
+    return (Path(__file__).resolve().parents[2] / 'static' / 'app' / 'vue'
+            / Path(*relative_path)).read_text(encoding='utf-8')
 
 
 class TableOptionGenerationTests(TestCase):
@@ -123,20 +141,25 @@ class CompactFilterWorkspaceTests(TestCase):
         response = self.client.get(reverse('asset_list', args=['people']))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'class="table-filter-bar"')
-        self.assertContains(response, '<summary>更多筛选</summary>', html=True)
-        self.assertContains(response, '<summary>自定义表格</summary>', html=True)
+        table = bootstrap_of(response, 'people-workspace')['table']
+        toolbar = component_source('components', 'table_toolbar.mjs')
+
+        # 筛选栏与两个折叠块由工具栏组件渲染，服务端只给列定义。
+        self.assertIn('table-filter-bar', toolbar)
+        self.assertIn('<summary>更多筛选</summary>', toolbar)
+        self.assertIn('<summary>自定义表格</summary>', toolbar)
         # 自由文本字段渲染普通输入框，不给候选下拉：否则会列出全部 77 个设备名/IP，
         # 以及 os_version 这种尚未采集、只能给出空下拉的列。
-        self.assertContains(
-            response,
-            '<input class="form-control" id="people-name-filter" name="filter_name" value="">',
-            html=True,
-        )
+        name_column = next(column for column in table['columns'] if column['key'] == 'name')
+        self.assertEqual(name_column['kind'], 'text')
+        self.assertTrue(name_column['default_filter'])
+        self.assertIn('type="text"', toolbar)
+        self.assertNotContains(response, 'name="filter_name"')
         self.assertNotContains(response, 'data-filter-input="people-name-filter-input"')
         self.assertNotContains(response, 'list="people-name-options"')
-        self.assertContains(response, '<option value="研发部">研发部</option>', html=True)
-        self.assertContains(response, '<option value="运维部">运维部</option>', html=True)
+        # 部门是 choice 列：候选仍由服务端按 distinct 口径算好。
+        department = next(column for column in table['columns'] if column['key'] == 'department')
+        self.assertEqual(department['kind'], 'choice')
         self.assertEqual(
             response.context['table_state']['field_option_modes']['department'],
             'distinct',
@@ -149,30 +172,40 @@ class CompactFilterWorkspaceTests(TestCase):
         ])
 
         response = self.client.get(reverse('asset_list', args=['people']))
-        html = response.content.decode(response.charset)
+        table = bootstrap_of(response, 'people-workspace')['table']
+        toolbar = component_source('components', 'table_toolbar.mjs')
 
-        filter_position = html.index('data-filter-submit')
-        reset_position = html.index('data-query-reset')
-        export_position = html.index('data-filtered-export')
+        # 三个动作按钮的顺序由工具栏模板决定，服务端不再输出按钮本身。
+        filter_position = toolbar.index('>筛选</button>')
+        reset_position = toolbar.index('>重置查询</button>')
+        # 按钮文案会随「有没有勾选显示列」在两种之间切换，按 data 属性定位更稳。
+        export_position = toolbar.index('data-filtered-export')
         self.assertLess(filter_position, reset_position)
         self.assertLess(reset_position, export_position)
-        self.assertContains(response, 'data-result-summary aria-live="polite"')
+        # 结果条的可访问播报仍在组件模板里，条数来自服务端算好的分页数据。
+        self.assertIn('table-result-bar', toolbar)
+        self.assertIn('aria-live="polite"', toolbar)
+        self.assertEqual(table['count'], 27)
+        self.assertEqual((table['start_index'], table['end_index']), (1, 20))
         # 表格与分页由组件渲染：区域语义和分页控件只能验组件源码。
-        component = (Path(__file__).resolve().parents[2]
-                     / 'static/app/vue/pages/asset_workspace.mjs').read_text(encoding='utf-8')
-        self.assertIn('role="region"', component)
-        self.assertIn('page-pagination', component)
+        self.assertIn('role="region"', component_source('components', 'data_table.mjs'))
+        self.assertIn('<page-pagination', component_source('components', 'workspace_table.mjs'))
 
     def test_free_text_filter_keeps_the_typed_value_and_still_filters(self):
         response = self.client.get(reverse('asset_list', args=['people']), {
             'filter_name': '张三',
         })
 
-        self.assertContains(response, 'name="filter_name" value="张三"')
+        table = bootstrap_of(response, 'people-workspace')['table']
+        # 输入框由组件按 table.filters 回填，用户敲的值必须原样回来。
+        self.assertEqual(table['filters']['name'], '张三')
         self.assertNotContains(response, 'data-filter-input="people-name-filter-input"')
         self.assertEqual(
             [person.employee_id for person in response.context['page_obj']],
             ['P001'],
+        )
+        self.assertEqual(
+            [row['cells']['employee_id']['text'] for row in table['rows']], ['P001'],
         )
 
     def test_non_default_filter_still_uses_allowlisted_backend_filter(self):
@@ -275,28 +308,34 @@ class CompactFilterWorkspaceTests(TestCase):
         response = self.client.get(reverse('asset_list', args=['people']), {
             'filter_email': 'missing@example.invalid',
         })
-        parser = _WorkspaceMarkupParser()
-        parser.feed(response.content.decode())
+        table = bootstrap_of(response, 'people-workspace')['table']
+        toolbar = component_source('components', 'table_toolbar.mjs')
 
-        self.assertNotIn('hidden', parser.filter_fields['email'])
-        self.assertIn('data-filter-active', parser.filter_fields['email'])
-        self.assertIn('checked', parser.filter_toggles['email'])
-        self.assertIn('data-filter-active', parser.filter_toggles['email'])
-        self.assertIn('open', parser.more_filters[0])
+        email = next(column for column in table['columns'] if column['key'] == 'email')
+        # 非默认筛选项不进常驻区，但带值时照样回填并显示，不能因为不是默认项被藏掉。
+        self.assertFalse(email['default_filter'])
+        self.assertEqual(table['filters']['email'], 'missing@example.invalid')
+        self.assertIn('shown[column.key] || draft[column.key]', toolbar)
+        # 可选筛选区默认收起，这一次因为有值而自动展开（moreOpen = hasActiveOptional()）。
+        # 初始展开状态改在 created() 里设：data() 阶段 computed 还没就绪，
+        # 在那里调 hasActiveOptional() 会拿到 undefined 并让整页白屏。
+        self.assertIn('this.moreOpen = this.hasActiveOptional()', toolbar)
+        self.assertIn(':open="moreOpen"', toolbar)
 
     def test_stale_distinct_value_stays_editable_and_available_as_a_candidate(self):
         response = self.client.get(reverse('asset_list', args=['people']), {
             'filter_department': '已撤销部门',
         })
-        parser = _WorkspaceMarkupParser()
-        parser.feed(response.content.decode())
+        table = bootstrap_of(response, 'people-workspace')['table']
 
-        self.assertNotIn('hidden', parser.filter_fields['department'])
-        self.assertContains(response, 'name="filter_department" value="已撤销部门"')
-        self.assertContains(
-            response,
-            '<option value="已撤销部门">已撤销部门（当前筛选）</option>',
-            html=True,
+        # 已撤销的部门不在候选里，但当前筛选值必须原样留在输入框里，不能被清空。
+        self.assertEqual(table['filters']['department'], '已撤销部门')
+        department = next(column for column in table['columns'] if column['key'] == 'department')
+        self.assertEqual(department['kind'], 'choice')
+        # 候选仍按 distinct 口径由服务端生成；「（当前筛选）」标注与下拉控件在浏览器里。
+        self.assertEqual(
+            response.context['table_state']['field_option_modes']['department'],
+            'distinct',
         )
 
     def test_infrastructure_reset_query_preserves_target_scope(self):
@@ -367,23 +406,15 @@ class _ExportLinkParser(HTMLParser):
 
 
 class _WorkspaceMarkupParser(HTMLParser):
+    """只给仍由 Django 渲染的列表页用：工作区页的标记已搬到 Vue 组件。"""
+
     def __init__(self):
         super().__init__()
-        self.filter_fields = {}
-        self.filter_toggles = {}
-        self.more_filters = []
         self.workspace_keys = []
         self.reset_links = []
 
     def handle_starttag(self, tag, attrs):
         attributes = dict(attrs)
-        filter_key = attributes.get('data-filter-key')
-        if filter_key and 'data-filter-field' in attributes:
-            self.filter_fields[filter_key] = attributes
-        if filter_key and 'data-filter-toggle' in attributes:
-            self.filter_toggles[filter_key] = attributes
-        if tag == 'details' and 'data-more-filters' in attributes:
-            self.more_filters.append(attributes)
         if 'data-table-key' in attributes:
             self.workspace_keys.append(attributes['data-table-key'])
         if tag == 'a' and 'data-query-reset' in attributes:
@@ -456,7 +487,6 @@ class FilteredCsvExportTests(TestCase):
 
     def test_each_table_workspace_has_independent_export_link_with_query(self):
         cases = (
-            (reverse('asset_list', args=['people']), reverse('table_export', args=['people'])),
             (reverse('domain_account_list'), reverse('table_export', args=['domain_accounts'])),
             (reverse('inspection_records'), reverse('table_export', args=['inspection_records'])),
             (reverse('error_records'), reverse('table_export', args=['error_records'])),
@@ -483,6 +513,26 @@ class FilteredCsvExportTests(TestCase):
                 self.assertEqual(parse_qs(export_url.query), {
                     'q': ['交换机'], 'page_size': ['50'],
                 })
+
+    def test_people_workspace_export_link_carries_the_current_filters(self):
+        """人员页的导出入口随整页搬进 bootstrap，但仍必须带上当前筛选。
+
+        原断言在服务端 HTML 里找 data-filtered-export 链接；现在链接地址由
+        bootstrap 的 table.exportUrl 给出，判定标准不变：带上筛选参数、丢掉页码。
+        """
+        response = self.client.get(reverse('asset_list', args=['people']), {
+            'q': '交换机', 'page': '3', 'page_size': '50',
+        })
+        table = bootstrap_of(response, 'people-workspace')['table']
+
+        export_url = urlsplit(table['exportUrl'])
+        self.assertEqual(export_url.path, reverse('table_export', args=['people']))
+        self.assertEqual(parse_qs(export_url.query), {
+            'q': ['交换机'], 'page_size': ['50'],
+        })
+        # 组件直接拿这个地址渲染链接，别处不能再拼一遍或丢掉。
+        self.assertIn(':href="exportUrl"',
+                      component_source('components', 'table_toolbar.mjs'))
 
     def test_unknown_table_and_scope_are_rejected(self):
         self.assertEqual(
@@ -551,11 +601,10 @@ class ComputerAnalysisOutcomeTests(TestCase):
             list(normal_response.context['page_obj'].object_list),
             [self.normal],
         )
-        self.assertContains(
-            abnormal_response,
-            '<option value="warning" selected>警告</option>',
-            html=True,
-        )
+        # 任务详情的筛选下拉由岛渲染，选项和选中值都在 bootstrap 里。
+        abnormal_payload = payload_text(abnormal_response, 'detail-bootstrap')
+        self.assertIn('warning', abnormal_payload)
+        self.assertIn('警告', abnormal_payload)
         self.assertIn('warning', payload_text(abnormal_response, 'detail-bootstrap'))
         self.assertEqual(
             abnormal_response.context['table_state']['field_options']['status'],

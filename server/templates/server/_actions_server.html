@@ -1,0 +1,12 @@
+{% comment %}
+服务器页头：采集模板配置 + 巡检配置 + Windows 采集脚本 + 添加/导入设备 + 手动执行巡检。
+采集脚本只有服务器有，所以这个按钮只在这页出现。
+{% endcomment %}
+{% if can_administer %}
+{% if device_form %}<a class="btn btn-outline-primary" href="{% url 'collection_templates' item_key %}" data-modal-load="collectionTemplateModal">配置模板</a>{% endif %}
+{% if task_project_kind %}<button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#profileConfigModal">{{ task_config_label }}</button><button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#alertPolicyModal">告警配置</button>{% endif %}
+<a class="btn btn-primary" href="{% url 'windows_server_script_download' %}">下载 Windows 脚本</a>
+{% if device_form %}<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#deviceFormModal">添加设备</button>{% endif %}
+{% if import_enabled %}<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#importModal">导入设备</button>{% endif %}
+{% if task_project_kind %}<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#runTaskModal">{{ task_action_label }}</button>{% endif %}
+{% endif %}

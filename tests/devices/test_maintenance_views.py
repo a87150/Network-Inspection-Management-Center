@@ -2,6 +2,7 @@
 import json
 import re
 from datetime import timedelta
+from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -34,8 +35,12 @@ class MaintenanceWindowPageTests(TestCase):
 
     def test_list_page_offers_the_batch_button(self):
         response = self.client.get(reverse("asset_list", args=["networks"]))
-        self.assertContains(response, "data-maintenance-open")
+        # 弹窗本身仍由 Django 渲染，批量按钮在浏览器里由工作区组件画出。
+        self.assertContains(response, 'id="maintenanceWindowModal"')
         self.assertContains(response, "维护窗口")
+        component = (Path(__file__).resolve().parents[2] / "static" / "app" / "vue"
+                     / "pages" / "device_workspace.mjs").read_text(encoding="utf-8")
+        self.assertIn("data-maintenance-open", component)
 
     def test_one_window_per_selected_asset(self):
         start = timezone.now() + timedelta(hours=1)

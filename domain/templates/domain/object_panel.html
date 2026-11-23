@@ -1,6 +1,7 @@
 {% with table_definition=panel.context.table_definition table_state=panel.context.table_state item_key=panel.context.item_key page_obj=panel.context.page_obj page_sizes=panel.context.page_sizes table_export_path=panel.context.table_export_path pagination_query=panel.context.pagination_query can_manage_domain=panel.context.can_manage_domain %}
 <div data-table-workspace data-table-key="{{ table_definition.key }}">
-<div class="table-toolbar">{% include 'common/table_workspace.html' %}</div>
+{# 岛内工具栏接管筛选和导出；没接管的旧页面（域账户子页等）仍用服务端工具栏。 #}
+{% if not panel.payload.showToolbar %}<div class="table-toolbar">{% include 'common/table_workspace.html' %}</div>{% endif %}
 <div class="card surface-card table-scroll-shell"><p class="table-scroll-hint">可横向滚动查看更多域对象字段</p>
 <div id="domain-objects-{{ panel.object_type }}" data-vue-page="domain-objects" data-vue-bootstrap="domain-objects-{{ panel.object_type }}-bootstrap">
 <noscript><p class="alert alert-warning mb-0">域对象表需要启用 JavaScript。</p></noscript>

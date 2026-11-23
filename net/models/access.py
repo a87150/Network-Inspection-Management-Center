@@ -138,3 +138,43 @@ class AccessRecord(models.Model):
 
     def __str__(self):
         return f'{self.source} {self.occurred_at:%Y-%m-%d %H:%M:%S}'
+
+
+class AccessReportConfig(models.Model):
+    """门禁通行报表的定期发送配置，全站只有一条。
+
+    发送渠道复用告警渠道（飞书 / 钉钉 / 邮件），不再单独维护一套推送。
+    """
+
+    is_enabled = models.BooleanField('启用定期发送', default=False)
+    interval_hours = models.PositiveSmallIntegerField('发送间隔（小时）', default=24)
+    range_days = models.PositiveSmallIntegerField('报表覆盖天数', default=7)
+    # 告警渠道的主键是 UUID，跨表外键在 MariaDB 上建不出来；
+    # 这里只存 id，取渠道时查一次，配置本身不参与级联。
+    channel_id = models.UUIDField('发送渠道', null=True, blank=True)
+    last_sent_at = models.DateTimeField('上次发送时间', null=True, blank=True)
+    updated_at = models.DateTimeField('更新时间', auto_now=True)
+
+    class Meta:
+        verbose_name = '门禁报表配置'
+        verbose_name_plural = '门禁报表配置'
+
+    def __str__(self):
+        return '门禁报表配置'
+
+    @classmethod
+    def load(cls):
+        """单例：没有就建一条默认的，调用方不用自己处理 None。"""
+        config, _ = cls.objects.get_or_create(pk=1)
+        return config
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def is_due(self, now):
+        if not self.is_enabled or self.channel_id is None:
+            return False
+        if self.last_sent_at is None:
+            return True
+        return (now - self.last_sent_at).total_seconds() >= self.interval_hours * 3600

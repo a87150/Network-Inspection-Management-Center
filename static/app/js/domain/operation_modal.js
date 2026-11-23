@@ -1,7 +1,8 @@
 function refreshDomainOperationSummary(doc, actionSelect, form) {
     const action = actionSelect.value;
     const option = actionSelect.options[actionSelect.selectedIndex];
-    form.querySelector('[data-domain-operation-action-value]').value = action;
+    const actionHolder = form.querySelector('[data-domain-operation-action-value]');
+    if (actionHolder) actionHolder.value = action;
     form.querySelector('[data-domain-confirm-action]').textContent = option ? option.textContent : action;
     form.querySelectorAll('[data-domain-parameter-for]').forEach((field) => {
         field.hidden = !field.dataset.domainParameterFor.split(' ').includes(action);
@@ -59,10 +60,32 @@ function bindDomainOperationModal(doc) {
     refresh();
 }
 
+/* 表格是 Vue 渲染的，勾选框什么时候出现不确定：用事件委托，一次绑定长期有效。 */
+let delegatedDomainChange = false;
+function delegateDomainCheckboxes(doc) {
+    if (delegatedDomainChange) return;
+    delegatedDomainChange = true;
+    doc.addEventListener('change', (event) => {
+        if (!event.target.matches('[data-domain-target-checkbox]')) return;
+        const actionSelect = doc.querySelector('[data-domain-operation-action]');
+        const form = doc.querySelector('[data-domain-operation-form]');
+        if (actionSelect && form) refreshDomainOperationSummary(doc, actionSelect, form);
+    });
+}
+
 if (typeof module !== 'undefined') {
     module.exports = {bindDomainOperationModal, refreshDomainOperationSummary};
 }
 if (typeof document !== 'undefined') {
-    document.addEventListener('DOMContentLoaded', () => bindDomainOperationModal(document));
-    document.addEventListener('app:modal-updated', () => bindDomainOperationModal(document));
+    const boot = () => {
+        delegateDomainCheckboxes(document);
+        bindDomainOperationModal(document);
+    };
+    // 脚本可能在本文件加载前 DOMContentLoaded 就已经过去了，readyState 兜一下。
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', boot);
+    } else {
+        boot();
+    }
+    document.addEventListener('app:modal-updated', boot);
 }

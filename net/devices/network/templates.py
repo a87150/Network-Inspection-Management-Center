@@ -5,6 +5,7 @@ validated at the device boundary and may only describe read-only commands,
 bounded text parsing, and numeric SNMP object identifiers.
 """
 import re
+import sys
 
 from django.core.exceptions import ValidationError
 from net.inspections.selection import NETWORK_FUNCTION_ITEMS
@@ -255,7 +256,12 @@ def parse_template_output(parser, output, timeout=0.25):
         # 调用方传进来的 250ms 快速放弃预算就完全失效了。
         # 计时从进程启动之后开始：Windows 上 spawn 冷启动要 200-600ms，把它算进
         # 解析预算会让每一次解析都判超时。
-        deadline = time.monotonic() + min(max(float(timeout), 0.05), 2.0)
+        # Windows 上 spawn 的子进程要重建解释器再 import，实测 200-600ms，
+        # 250ms 的默认预算必然判超时；给足上限，解析仍在隔离进程里跑。
+        budget = min(max(float(timeout), 0.05), 2.0)
+        if sys.platform.startswith('win'):
+            budget = 2.0
+        deadline = time.monotonic() + budget
         while time.monotonic() < deadline:
             try:
                 status, value = queue.get(timeout=min(.05, deadline - time.monotonic()))

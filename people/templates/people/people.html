@@ -1,0 +1,30 @@
+{% extends 'common/base.html' %}
+{% load static %}
+{% block title %}{{ item_name }}{% endblock %}
+{% block content %}
+<header class="page-heading">
+    <div class="page-heading__copy">
+        <p class="page-heading__eyebrow">资产管理</p>
+        <h1 class="page-heading__title">{{ item_name }}</h1>
+        <p class="page-heading__description">Excel 导入或域控同步，人名册用于匹配日志归属。</p>
+    </div>
+    <div class="page-heading__actions">
+        {% include 'people/_actions_people.html' %}
+    </div>
+</header>
+
+{# 表单与 CSRF 留在 Django 这边，不搬进 Vue：导入弹窗里就有 API 同步页签。 #}
+{% if can_administer and import_enabled %}{% include 'common/import_modal.html' %}{% endif %}
+{% if can_administer and people_operation %}{% include 'integrations/preview_modal.html' %}{% endif %}
+{% if can_administer and personnel_api_import %}{% include 'integrations/task_notifications.html' %}{% endif %}
+
+<div id="people-workspace" data-vue-page="people-workspace" data-vue-bootstrap="people-workspace-bootstrap">
+    <noscript><p class="alert alert-warning mb-0">人员列表需要启用 JavaScript。</p></noscript>
+</div>
+{{ people_bootstrap|json_script:"people-workspace-bootstrap" }}
+{% endblock %}
+{% block page_scripts %}
+<script type="module" src="{% static 'app/vue/boot.mjs' %}"></script>
+{% include 'common/scripts/modal_workflows.html' %}
+{% if people_operation or personnel_api_import %}{% include 'common/scripts/people_workflows.html' %}{% endif %}
+{% endblock %}

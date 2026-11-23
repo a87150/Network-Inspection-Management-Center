@@ -107,7 +107,6 @@
 
 .status-indicator { display: inline-block; width: .58rem; height: .58rem; flex: 0 0 auto; border-radius: 50%; background: var(--overview-muted); box-shadow: 0 0 0 3px rgba(145, 170, 189, .12); }
 .status-indicator.is-normal { background: var(--overview-green); box-shadow: 0 0 0 3px rgba(85, 230, 165, .12), 0 0 12px rgba(85, 230, 165, .35); }
-.status-indicator.is-abnormal { background: var(--overview-red); box-shadow: 0 0 0 3px rgba(255, 120, 144, .12), 0 0 12px rgba(255, 120, 144, .3); }
 .status-indicator.is-warning { background: var(--overview-amber); }
 .status-indicator.is-unknown { background: #89a0b2; }
 
@@ -145,7 +144,6 @@
 .topology-device-card.is-backbone .topology-device-card__surface { fill: rgba(12, 40, 58, .97); }
 .topology-device-card.is-expanded .topology-device-card__surface,
 .topology-device-card:focus-visible .topology-device-card__surface { stroke: var(--overview-green); filter: drop-shadow(0 0 8px rgba(85, 230, 165, .3)); }
-.topology-device-card.is-abnormal .topology-device-card__surface { stroke: var(--overview-red); }
 .topology-device-card.is-external .topology-device-card__surface { fill: rgba(68, 48, 23, .92); stroke: var(--overview-amber); stroke-dasharray: 3 2; }
 .topology-device-card text { fill: var(--overview-text); font-family: system-ui, sans-serif; pointer-events: none; }
 .topology-device-card__icon rect { fill: rgba(85, 222, 246, .12); stroke: var(--overview-cyan); }

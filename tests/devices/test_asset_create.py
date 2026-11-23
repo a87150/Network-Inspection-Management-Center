@@ -13,15 +13,20 @@ class AssetCreateTests(TestCase):
         for kind, model, fields in (
             ('networks', Network_Device, {'device_name': '新交换机'}),
             ('servers', Server, {'name': '新服务器', 'server_type': 'windows', 'api_url': 'http://192.0.2.5:9180/'}),
-            ('weakcurrent', WeakCurrentDevice, {'device_name': '前门闸机', 'device_type': '门禁闸机'}),
         ):
             with self.subTest(kind=kind):
                 page = self.client.get(reverse('asset_list', args=[kind]))
-                self.assertContains(page, 'data-bs-target="#addDeviceModal"')
+                self.assertContains(page, 'data-bs-target="#deviceFormModal"')
                 response = self.client.post(f'/assets/{kind}/add/', {'ip': '192.0.2.5', **fields})
                 self.assertEqual(response.status_code, 302)
                 self.assertEqual(model.objects.count(), 1)
                 self.assertEqual(model.objects.get().ip, '192.0.2.5')
+        # 弱电页右上角不再放添加入口，但建设备的接口还在。
+        response = self.client.post('/assets/weakcurrent/add/', {
+            'ip': '192.0.2.6', 'device_name': '前门闸机', 'device_type': '门禁闸机',
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(WeakCurrentDevice.objects.count(), 1)
         self.assertFalse(TaskRun.objects.exists())
 
     def test_snmp_validation_and_password_fields(self):

@@ -19,15 +19,29 @@ export default {
         emptyMessage: {type: String, default: ''},
         label: {type: String, default: '数据'},
         regionLabel: {type: String, default: ''},
+        // 列宽按表格分开放，同一个 key 的列宽在刷新后仍然生效。
+        tableKey: {type: String, default: ''},
     },
     emits: ['sort', 'open-detail', 'row-click'],
+    data() {
+        return {widths: {}};
+    },
     computed: {
+        /** 拖动过的列宽，直接写进 colgroup。 */
+        colStyles() {
+            return this.visibleColumns.map((column) => (
+                this.widths[column.key] ? {width: this.widths[column.key] + 'px'} : {}
+            ));
+        },
         visibleColumns() {
             return this.columns.filter((column) => this.visible[column.key] !== false);
         },
         columnCount() {
             return this.visibleColumns.length + (this.selectAttr ? 1 : 0) + 1;
         },
+    },
+    mounted() {
+        this.loadWidths();
     },
     methods: {
         cell(row, key) { return cellOf(row, key); },
@@ -45,15 +59,65 @@ export default {
         onAction(row, action) {
             if (action.detail_modal) this.$emit('open-detail', row);
         },
+        storageKey() {
+            return this.tableKey ? 'table-widths:' + this.tableKey : '';
+        },
+        loadWidths() {
+            const key = this.storageKey();
+            if (!key) return;
+            try {
+                this.widths = JSON.parse(localStorage.getItem(key) || '{}') || {};
+            } catch (error) {
+                this.widths = {};
+            }
+        },
+        saveWidths() {
+            const key = this.storageKey();
+            if (!key) return;
+            try {
+                localStorage.setItem(key, JSON.stringify(this.widths));
+            } catch (error) {
+                /* 存不下就算了，本次会话内仍然生效。 */
+            }
+        },
+        startResize(column, event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const th = event.currentTarget.closest('th');
+            if (!th) return;
+            const startX = event.clientX;
+            const startWidth = th.getBoundingClientRect().width;
+            const move = (moveEvent) => {
+                const next = Math.max(72, Math.round(startWidth + moveEvent.clientX - startX));
+                this.widths = {...this.widths, [column.key]: next};
+            };
+            const stop = () => {
+                document.removeEventListener('mousemove', move);
+                document.removeEventListener('mouseup', stop);
+                document.body.classList.remove('table-resizing');
+                this.saveWidths();
+            };
+            document.body.classList.add('table-resizing');
+            document.addEventListener('mousemove', move);
+            document.addEventListener('mouseup', stop);
+        },
     },
     template: `
     <div class="table-responsive" role="region" :aria-label="regionLabel || (label + '数据表')" tabindex="0" :aria-busy="loading ? 'true' : 'false'">
         <table class="table data-table table-hover align-middle mb-0">
+            <colgroup>
+                <col v-if="selectAttr" style="width:3rem">
+                <col v-for="(style, index) in colStyles" :key="index" :style="style">
+                <col>
+            </colgroup>
             <thead><tr>
                 <th v-if="selectAttr" scope="col" class="table-selection-column" data-device-selection-column><span class="visually-hidden">选择目标</span></th>
                 <th v-for="column in visibleColumns" :key="column.key" scope="col" :data-column-key="column.key" :aria-sort="ariaSort(column)">
                     <a v-if="column.sortable" class="table-sort-link" href="#" :data-sort-key="column.key" @click.prevent="$emit('sort', column)">[[ column.label ]]</a>
                     <template v-else>[[ column.label ]]</template>
+                    <span class="table-resize-handle" role="separator" aria-orientation="vertical"
+                          :aria-label="'拖动调整「' + column.label + '」列宽'"
+                          @mousedown="startResize(column, $event)" @click.stop></span>
                 </th>
                 <th scope="col" class="table-actions-column table-actions-cell">操作</th>
             </tr></thead>
@@ -80,7 +144,9 @@ export default {
                                     data-bs-toggle="modal" :data-bs-target="action.modal_target ? '#' + action.modal_target : null">[[ action.label ]]</button>
                             <button v-else-if="action.detail_modal" type="button" :class="actionClass(action)"
                                     @click.stop.prevent="onAction(row, action)">[[ action.label ]]</button>
-                            <a v-else :class="actionClass(action)" :href="action.url" :data-modal-load="action.modal_target || null">[[ action.label ]]</a>
+                            <a v-else :class="actionClass(action)" :href="action.url"
+                   :data-modal-load="action.modal_target || null"
+                   :data-single-device-run="action.single_device_run ? '' : null">[[ action.label ]]</a>
                         </template>
                     </div></td>
                 </tr>

@@ -152,6 +152,8 @@ def _node(*, node_id, kind, role, label, subtitle, ip, vendor='', model='',
           attachment_source='', child_count=0, details=(), site=''):
     return {
         'details': list(details),
+        # 详情按需取：抽屉打开时前端打这个地址，首屏不再背每个节点的明细。
+        'detailsUrl': reverse('operations_overview_node', args=[node_id]),
         'id': node_id,
         'kind': kind,
         'role': role,
@@ -192,7 +194,7 @@ def _network_node(device):
     return node
 
 
-def _endpoint_nodes(computers, servers, weak_current):
+def _endpoint_nodes(computers, servers, weak_current, with_details=True):
     nodes = []
     for computer in computers:
         node = _node(
@@ -201,7 +203,7 @@ def _endpoint_nodes(computers, servers, weak_current):
             vendor=computer.manufacturer, model=computer.model,
             status='normal' if computer.is_active else 'disabled',
             url=reverse('asset_detail', args=['computers', computer.pk]),
-            details=_details(computer, 'computers'),
+            details=_details(computer, 'computers') if with_details else (),
             site=_site_hint(computer),
         )
         node['_networks'] = address_networks(computer.ip_addresses)
@@ -212,7 +214,7 @@ def _endpoint_nodes(computers, servers, weak_current):
             label=server.name or server.ip, subtitle=server.get_server_type_display(),
             ip=server.ip, vendor=server.manufacturer, model=server.model,
             url=reverse('asset_detail', args=['servers', server.pk]),
-            details=_details(server, 'servers'),
+            details=_details(server, 'servers') if with_details else (),
             site=_site_hint(server),
         )
         node['_networks'] = address_networks(server.ip)
@@ -224,7 +226,7 @@ def _endpoint_nodes(computers, servers, weak_current):
             subtitle=monitor.device_type or '弱电设备', ip=monitor.ip,
             vendor=monitor.vendor, model=monitor.model,
             url=reverse('asset_detail', args=['weakcurrent', monitor.pk]),
-            details=_details(monitor, 'weakcurrent'),
+            details=_details(monitor, 'weakcurrent') if with_details else (),
             site=_site_hint(monitor),
         )
         node['_networks'] = address_networks(monitor.ip)
@@ -422,12 +424,17 @@ def attach_endpoints(backbone_nodes, endpoint_nodes, physical_edges):
 
 
 def build_enterprise_topology(*, network_devices, computers, servers, weak_current,
-                              physical, asset_truncation=None):
+                              physical, asset_truncation=None, with_details=True):
     network_nodes = [_network_node(device) for device in network_devices]
+    # 首屏只要名称/IP/型号这些一眼要看的字段；每个节点 400 多字节的
+    # details 合计 67 KB，等抽屉打开再单独取。
+    if not with_details:
+        for node in network_nodes:
+            node['details'] = []
     backbone_nodes = [node for node in network_nodes if node['kind'] == 'backbone']
     endpoint_nodes = [
         *[node for node in network_nodes if node['kind'] == 'endpoint'],
-        *_endpoint_nodes(computers, servers, weak_current),
+        *_endpoint_nodes(computers, servers, weak_current, with_details=with_details),
     ]
     physical_edges = list(physical.get('links', []))
     hints = {node['id']: node.get('site', '') for node in backbone_nodes}

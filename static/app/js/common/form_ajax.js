@@ -1,8 +1,39 @@
 /* 模态框表单的 fetch 提交。
-   失败时把错误留在框里，成功时整页刷新让 flash 消息出现。
-   普通表单（没有 data-form-ajax）不受影响。 */
+   失败时把错误留在框里，成功后关弹窗 + 页内刷新表格 + 派发 app:modal-updated，
+   地址栏保持不动。普通表单（没有 data-form-ajax）不受影响。 */
 (function () {
     'use strict';
+
+    function flashText(html) {
+        try {
+            var page = new DOMParser().parseFromString(html, 'text/html');
+            return String(page.querySelector('[data-flash-message]')?.textContent || '').trim();
+        } catch (_error) {
+            return '';
+        }
+    }
+
+    /* 保存成功：关掉弹窗，页内换掉表格内容，并通知页面自己重取。 */
+    function afterSave(form, message) {
+        var doc = form.ownerDocument || document;
+        var win = doc.defaultView || window;
+        var modal = form.closest('.modal');
+        if (modal) win.bootstrap?.Modal.getInstance?.(modal)?.hide();
+        var region = doc.getElementById('app-live-region');
+        if (region && message) region.textContent = message;
+        var controller = win.AppTableWorkspace;
+        if (doc.querySelector('[data-table-workspace]')
+            && typeof controller?.refreshTableWorkspaces === 'function') {
+            var storage = null;
+            try {
+                storage = win.localStorage;
+            } catch (_error) {
+                storage = null;
+            }
+            controller.refreshTableWorkspaces(doc, win.location.href, storage, win);
+        }
+        doc.dispatchEvent(new win.CustomEvent('app:modal-updated', {detail: {modal: modal || null}}));
+    }
 
     function errorBox(form) {
         var body = form.querySelector('.modal-body') || form;
@@ -65,13 +96,14 @@
         }).then(function (response) {
             var type = response.headers.get('content-type') || '';
             if (type.indexOf('application/json') === -1) {
-                /* 成功：服务端已经重定向到带 flash 消息的页面。 */
-                window.location.assign(response.url || form.action);
-                return;
+                /* 成功：服务端重定向到了带 flash 消息的页面，只取那条消息播报。 */
+                return response.text().then(function (html) {
+                    afterSave(form, flashText(html));
+                });
             }
             return response.json().then(function (payload) {
                 if (payload.ok) {
-                    window.location.assign(payload.redirect || response.url || form.action);
+                    afterSave(form, payload.message || '');
                     return;
                 }
                 showErrors(form, '保存失败', payload.errors || []);

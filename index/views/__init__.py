@@ -13,7 +13,11 @@ from assets.views import (
 # re-exported it, which a linter correctly flags and removes.
 from index.dashboard.views import index
 from net.dashboard.assets import with_latest_status
-from index.dashboard.operations import operations_overview, operations_overview_data
+from index.dashboard.operations import (
+    operations_node_detail,
+    operations_overview,
+    operations_overview_data,
+)
 from domain.views import (
     domain_account_detail,
     domain_computer_detail,
@@ -93,6 +97,7 @@ __all__ = [
     'index',
     'operations_overview',
     'operations_overview_data',
+    'operations_node_detail',
     'infrastructure_inspection_detail',
     'inspection_records',
     'item_list',

@@ -256,68 +256,6 @@ def preserve_table_parameters(table_state, parameters):
     return table_state
 
 
-def _legacy_definition(search_fields, default_sort, model_name):
-    definitions = {
-        (('name', 'employee_id', 'department', 'email', 'leader'), 'name', 'People'): 'people',
-        (('computer_name', 'os', 'user_name'), 'computer_name', 'Computer'): 'computers',
-        (('device_name', 'ip', 'device_type', 'vendor'), 'device_name', 'Network_Device'): 'networks',
-        (('device_name', 'ip', 'device_type', 'vendor'), 'device_name', 'WeakCurrentDevice'): 'weakcurrent',
-        (('name', 'ip', 'server_type', 'os'), 'name', 'Server'): 'servers',
-        (('account_name', 'login_name', 'ou', 'allowed_workstations'), 'login_name', 'Domain_Account'): 'domain_accounts',
-        (('computer_name', 'os', 'ou'), 'computer_name', 'Domain_Computer'): 'domain_computers',
-    }
-    key = definitions.get((tuple(search_fields), default_sort, model_name))
-    return get_table_definition(key) if key else None
-
-
-def apply_queryset_table(
-    request,
-    queryset,
-    *,
-    search_fields,
-    sort_fields,
-    default_sort,
-    status_handler=None,
-    prefix='',
-):
-    definition = _legacy_definition(search_fields, default_sort, queryset.model.__name__)
-    if definition is not None:
-        queryset, state = apply_table_query(request, queryset, definition, prefix=prefix)
-        if state['status'] and status_handler:
-            queryset = status_handler(queryset, state['status'])
-        return queryset, state
-
-    q = request.GET.get(_parameter(prefix, 'q'), '').strip()
-    status = request.GET.get(_parameter(prefix, 'status'), '').strip()
-    requested_sort = request.GET.get(_parameter(prefix, 'sort'), default_sort)
-    sort = requested_sort if requested_sort in sort_fields else default_sort
-    order = request.GET.get(_parameter(prefix, 'order'), 'asc').lower()
-    order = order if order in {'asc', 'desc'} else 'asc'
-
-    if q:
-        condition = Q()
-        for field in search_fields:
-            condition |= Q(**{f'{field}__icontains': q})
-        queryset = queryset.filter(condition)
-    if status and status_handler:
-        queryset = status_handler(queryset, status)
-
-    ordering = sort_fields[sort]
-    if order == 'desc':
-        ordering = f'-{ordering}'
-    queryset = queryset.order_by(ordering, 'pk')
-    return queryset, {
-        'q': q,
-        'status': status,
-        'sort': sort,
-        'order': order,
-        'prefix': prefix,
-        'parameter_names': {
-            name: _parameter(prefix, name) for name in ('q', 'status', 'sort', 'order')
-        },
-    }
-
-
 def _record_value(record, field):
     from net.data_exchange.table_csv import _raw_value
     return _raw_value(record, field.source)

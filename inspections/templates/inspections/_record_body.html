@@ -1,4 +1,56 @@
-<div class="mb-4">{% include 'inspections/taskbar.html' %}</div>
+{% load extras %}{% load static %}
+{% comment %}
+任务栏只有一份实现：Vue 岛 static/app/vue/components/task_bar.mjs。
+整页加载时内联脚本挂载；devices 页的页签/片段切换走 app:pane-loaded 重扫，
+翻页在这里 fetch 同一页的任务栏节点就地替换，地址栏不动。
+{% endcomment %}
+<div class="mb-4" data-inspection-taskbar>
+    <script type="application/json" data-taskbar-bootstrap>{"rows": [{% for summary in task_page %}{"id": "{{ summary.task.pk }}", "type_label": "{{ summary.type_label|escapejs }}", "profile_label": "{{ summary.profile_label|escapejs }}", "source_label": "{{ summary.source_label|escapejs }}", "status": "{{ summary.task.status|escapejs }}", "status_label": "{{ summary.status_label|escapejs }}", "created_at": "{{ summary.task.created_at|date:'Y-m-d H:i:s' }}", "finished_at": "{{ summary.task.finished_at|date:'Y-m-d H:i:s' }}", "total": {{ summary.total|default:0 }}, "normal": {{ summary.normal|default:0 }}, "abnormal": {{ summary.abnormal|default:0 }}, "pending": {{ summary.pending|default:0 }}, "cancelled": {{ summary.cancelled|default:0 }}, "fetch_success": {% if summary.fetch_success %}"{{ summary.fetch_success|escapejs }}"{% else %}""{% endif %}, "integrity_warning": {% if summary.integrity_warning %}"{{ summary.integrity_warning|escapejs }}"{% else %}""{% endif %}, "detail_url": "{% url 'task_detail' summary.task.pk %}"}{% if not forloop.last %}, {% endif %}{% endfor %}], "count": {{ task_page.paginator.count }}, "page": {{ task_page.number }}, "pages": {{ task_page.paginator.num_pages }}, "sectionTitle": "{{ task_section_title|default:'巡检任务栏'|escapejs }}", "emptyTitle": "{{ task_empty_title|default:'暂无巡检任务'|escapejs }}", "selectedId": "{{ selected_task_id|default:'' }}"}</script>
+</div>
+{% if task_page.has_next %}{% query_transform request task_page=task_page.next_page_number as next_task_page_query %}<noscript><a class="btn btn-outline-secondary btn-sm" href="?{{ next_task_page_query }}">下一页任务</a></noscript>{% endif %}
+<script type="module">
+import { createApp } from '{% static "vendor/vue/vue.esm-browser.prod.js" %}';
+import TaskBar from '{% static "app/vue/components/task_bar.mjs" %}';
+
+async function goToTaskPage(pageNumber) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('task_page', pageNumber);
+    const response = await fetch(url.toString(), {
+        credentials: 'same-origin',
+        headers: {'X-Requested-With': 'XMLHttpRequest'},
+    });
+    if (!response.ok) return;
+    const parsed = new DOMParser().parseFromString(await response.text(), 'text/html');
+    const next = parsed.querySelector('[data-inspection-taskbar]');
+    const current = document.querySelector('[data-inspection-taskbar]');
+    if (!next || !current) return;
+    const host = document.importNode(next, true);
+    current.replaceWith(host);
+    mountBar(host);
+}
+
+function mountBar(host) {
+    if (!host || host.__vue_app__) return;
+    const node = host.querySelector('[data-taskbar-bootstrap]');
+    if (!node) return;
+    let props = {};
+    try {
+        props = JSON.parse(node.textContent || '{}');
+    } catch (error) {
+        console.error('任务栏数据解析失败', error);
+        return;
+    }
+    props.onPage = goToTaskPage;
+    createApp(TaskBar, props).mount(host);
+}
+
+function scanTaskbars(root) {
+    (root || document).querySelectorAll('[data-inspection-taskbar]').forEach(mountBar);
+}
+
+scanTaskbars();
+document.addEventListener('app:pane-loaded', () => scanTaskbars());
+</script>
 
 {% if pc_tab == 'analyses' or record_type == 'computer_analysis' %}
 {% comment %}分析记录不看设备巡检结果表：用最新任务统计和问题类型长条代替。{% endcomment %}

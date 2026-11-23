@@ -1,19 +1,38 @@
 /* 巡检任务栏：PC、网络设备、服务器、弱电设备四个工作区页面共用。
    纯展示，行数据由后端序列化好（见 workspace.py 的 task_rows）。 */
 
+import PagePagination from './page_pagination.mjs';
+
 export default {
     delimiters: ['[[', ']]'],
+    components: {PagePagination},
     props: {
         rows: {type: Array, default: () => []},
         count: {type: Number, default: 0},
         page: {type: Number, default: 1},
         pages: {type: Number, default: 1},
         selectedId: {type: String, default: ''},
-        sectionTitle: {type: String, default: '巡检任务栏'},
+        sectionTitle: {type: String, default: ''},
+        // 后端 bootstrap 用的是 snake_case，Vue 不会自动转成 camelCase prop。
+        section_title: {type: String, default: ''},
         emptyTitle: {type: String, default: '暂无巡检任务'},
         busy: {type: Boolean, default: false},
     },
-    emits: ['select', 'page', 'detail'],
+    emits: ['select', 'page'],
+    computed: {
+        /** 两个来源都认：外部显式传 camelCase，bootstrap 里是 snake_case。 */
+        heading() {
+            return this.sectionTitle || this.section_title || '巡检任务栏';
+        },
+    },
+    data() {
+        return {jumpPage: this.page};
+    },
+    watch: {
+        page(value) {
+            this.jumpPage = value;
+        },
+    },
     methods: {
         statusClass(status) {
             return {
@@ -34,13 +53,13 @@ export default {
         <div class="card-header surface-card__header inspection-taskbar__header">
             <div>
                 <p class="page-heading__eyebrow mb-1">执行中心</p>
-                <h2 class="h5 mb-0" id="inspection-taskbar-title">[[ sectionTitle ]]</h2>
+                <h2 class="h5 mb-0" id="inspection-taskbar-title">[[ heading ]]</h2>
             </div>
             <div class="execution-workspace__header-actions"><div class="execution-workspace__summary"><span>当前任务</span><strong>[[ count ]]</strong></div></div>
         </div>
         <div class="table-scroll-shell">
             <p class="table-scroll-hint">可横向滚动查看完整任务信息</p>
-            <div class="table-responsive" role="region" :aria-label="sectionTitle" tabindex="0">
+            <div class="table-responsive" role="region" :aria-label="heading" tabindex="0">
                 <table class="table data-table table-hover align-middle mb-0">
                     <thead><tr>
                         <th>类型</th><th>配置</th><th>来源</th><th>创建时间</th><th>完成时间</th><th>目标</th>
@@ -49,7 +68,7 @@ export default {
                     </tr></thead>
                     <tbody>
                         <tr v-for="row in rows" :key="row.id"
-                            class="inspection-taskbar__row" :class="{'is-selected': selectedId === row.id}"
+                            class="inspection-taskbar__row" data-task-row :data-task-id="row.id" :class="{'is-selected': selectedId === row.id}"
                             tabindex="0" role="link" @click="$emit('select', row)" @keydown="onRowKey(row, $event)">
                             <td class="fw-semibold">[[ row.type_label ]]</td>
                             <td>[[ row.profile_label ]]</td>
@@ -63,7 +82,7 @@ export default {
                             <td>[[ row.cancelled ]]</td>
                             <td><span class="badge status-badge" :class="statusClass(row.status)">[[ row.status_label ]]</span></td>
                             <td class="text-end table-actions-cell">
-                                <button class="btn btn-outline-dark btn-sm" type="button" @click.stop.prevent="$emit('detail', row)">查看详情</button>
+                                <a class="btn btn-outline-dark btn-sm" :href="row.detail_url || '#'" :data-detail-modal="row.detail_url || ''" @click.stop>查看详情</a>
                             </td>
                         </tr>
                         <tr v-if="!rows.length"><td colspan="12"><div class="empty-state"><strong>[[ emptyTitle ]]</strong><span>从资产或日志页面发起巡检、扫描或分析后，任务进度会显示在这里。</span></div></td></tr>
@@ -71,12 +90,9 @@ export default {
                 </table>
             </div>
         </div>
-        <nav v-if="pages > 1" class="inspection-taskbar__pagination page-pagination" :aria-label="sectionTitle + '分页'">
-            <div class="page-pagination__actions">
-                <button class="btn btn-outline-secondary page-pagination__button" type="button" :disabled="page <= 1 || busy" @click="$emit('page', page - 1)">上一页</button>
-                <span class="page-pagination__page">第 [[ page ]] / [[ pages ]] 页</span>
-                <button class="btn btn-outline-secondary page-pagination__button" type="button" :disabled="page >= pages || busy" @click="$emit('page', page + 1)">下一页</button>
-            </div>
-        </nav>
+        <div class="inspection-taskbar__pagination">
+            <page-pagination v-model="jumpPage" :page="page" :pages="pages" :loading="busy"
+                             :label="heading" @go="$emit('page', $event)"></page-pagination>
+        </div>
     </section>`,
 };

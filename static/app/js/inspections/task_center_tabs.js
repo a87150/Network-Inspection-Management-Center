@@ -30,10 +30,7 @@
             return;
         }
         highlight(view);
-        const resolved = new URL(url, window.location.href);
-        (push ? window.history.pushState : window.history.replaceState).call(
-            window.history, { view }, '', resolved.toString(),
-        );
+        // 面板切换是页面内部行为，不写地址栏；URL 只由外部入口决定。
         // 换进来的表要重新挂一次表格与弹窗行为。
         window.AppTableTools && window.AppTableTools.refresh && window.AppTableTools.refresh();
         window.AppModalWorkflows && window.AppModalWorkflows.bind && window.AppModalWorkflows.bind(document);

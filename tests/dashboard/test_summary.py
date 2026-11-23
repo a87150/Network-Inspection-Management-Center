@@ -6,6 +6,7 @@ from django.db import DatabaseError
 from django.test import TestCase
 from django.urls import reverse
 from tests.auth import login_admin
+from tests.payloads import payload_text, vue_component
 from django.utils import timezone
 
 from net.models import (
@@ -248,8 +249,10 @@ class DashboardSummaryTests(TestCase):
         self.assertEqual(items['computers']['note'], '等待首次分析 1 台')
         for key in ('networks', 'servers', 'weakcurrent'):
             self.assertEqual(items[key]['note'], '等待首次巡检 1 台')
-        self.assertContains(response, '等待首次分析 1 台', count=1)
-        self.assertContains(response, '等待首次巡检 1 台', count=3)
+        # 首页卡片由 Vue 从 bootstrap JSON 渲染，文案断言落在 JSON 上。
+        body = payload_text(response, 'dashboard-index-bootstrap')
+        self.assertEqual(body.count('等待首次分析 1 台'), 1)
+        self.assertEqual(body.count('等待首次巡检 1 台'), 3)
 
     def test_dashboard_isolates_one_category_database_error(self):
         """A failed category query must render an error without zeroing or losing peers."""
@@ -267,8 +270,10 @@ class DashboardSummaryTests(TestCase):
         self.assertIn('error', items['computers'])
         self.assertNotIn('total', items['computers'])
         self.assertNotIn('normal', items['computers'])
-        self.assertContains(response, 'PC 统计数据加载失败')
-        self.assertContains(response, 'data-dashboard-card-state="error"')
+        # 错误文案与卡片状态由组件渲染，数据在 JSON、结构在组件模板。
+        self.assertIn('"error"', payload_text(response, 'dashboard-index-bootstrap'))
+        self.assertIn('data-dashboard-card-state', vue_component('pages/dashboard_index.mjs'))
+        self.assertIn('统计数据加载失败', vue_component('pages/dashboard_index.mjs'))
 
     def test_summary_query_count_does_not_grow_with_asset_count(self):
         """Per-asset queries would make dashboard loading slow as inventory grows."""
@@ -317,8 +322,10 @@ class DashboardSummaryTests(TestCase):
 
         self.assertEqual(items['computers']['name'], 'PC')
         self.assertEqual(items['computers']['total_label'], 'PC 总数')
-        self.assertContains(response, '<h2 class="h5 mb-0">PC</h2>')
-        self.assertNotContains(response, 'PC 计算机')
+        # 标题结构在组件模板里，数据在 JSON 里。
+        self.assertIn('<h2 class="h5 mb-0">[[ item.name ]]</h2>',
+                      vue_component('pages/dashboard_index.mjs'))
+        self.assertNotIn('PC 计算机', payload_text(response, 'dashboard-index-bootstrap'))
         self.assertIn('domain', items)
         domain = items['domain']
         self.assertEqual(domain['name'], '域控管理')
@@ -332,31 +339,19 @@ class DashboardSummaryTests(TestCase):
 
         self.assertEqual(items['computers']['normal_label'], '正常')
         self.assertEqual(items['computers']['abnormal_label'], '异常')
-        self.assertContains(response, 'class="metric-card__domain-status"', count=6)
-        self.assertContains(
-            response,
-            'class="metric-card__domain-breakdown flex-column align-items-center"',
-            count=3,
-        )
-        self.assertContains(
-            response,
-            '<strong class="text-success">0</strong>',
-            count=2,
-            html=True,
-        )
-        self.assertContains(
-            response,
-            '<strong class="text-danger">0</strong>',
-            count=2,
-            html=True,
-        )
-        self.assertContains(
-            response,
-            'class="metric-card__last-run text-secondary mb-0 text-end"',
-            count=4,
-        )
-        self.assertContains(
-            response,
-            'class="card-footer metric-card__footer metric-card__actions px-4 pb-4 d-flex gap-2 flex-wrap align-items-center justify-content-end"',
-            count=6,
+        # 卡片结构搬进组件模板，class 计数改在源码上断言；数字仍在 JSON 里。
+        # 卡片结构搬进组件模板：方块统一成 PC 式（标题 + 单数字 + 说明行 + 入口）。
+        # 卡片结构搬进组件模板，class 计数改在源码上断言；数字仍在 JSON 里。
+        # 首页方块保持 dashboard/card.html 的三列数字布局，不并入其它页的单数字 metric-card。
+        component = vue_component('pages/dashboard_index.mjs')
+        self.assertIn('metric-card__metrics', component)
+        self.assertIn('metric-card__domain-columns', component)
+        self.assertIn('域账户', component)
+        self.assertIn('metric-label', component)
+        self.assertEqual(component.count('metric-card__last-run text-secondary mb-0 text-end'), 1)
+        domain = items['domain']
+        self.assertEqual(
+            (domain['account_normal'], domain['account_abnormal'],
+             domain['computer_normal'], domain['computer_abnormal']),
+            (0, 0, 0, 0),
         )

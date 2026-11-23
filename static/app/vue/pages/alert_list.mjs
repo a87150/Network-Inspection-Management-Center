@@ -37,10 +37,40 @@ export default {
             to: this.end_index,
             loading: false,
             error: '',
+            // 表头复用列表页的 table-sort-link，外观和排序行为都不分叉。
+            // key 必须和 index/common/table_registry.py 的 alert_events 字段完全一致：
+            // 「自定义表格」的列开关按 data-column-key 给 th/td 打 hidden，
+            // 也对不上集合的列会被永久藏掉；sort 参数同样按这套 key 过滤。
+            columns: [
+                {key: 'event_type', label: '事件类型'},
+                {key: 'profile_type', label: '项目'},
+                {key: 'target_id', label: '目标'},
+                {key: 'severity', label: '严重级别'},
+                {key: 'status', label: '事件状态'},
+                {key: 'delivery_outcome', label: '渠道结果', sortable: false},
+                {key: 'occurred_at', label: '发生时间'},
+            ],
+            sortKey: 'occurred_at',
+            sortOrder: 'desc',
         };
     },
     methods: {
         badgeClass,
+        async sortBy(column) {
+            this.sortKey = column.key;
+            this.sortOrder = this.nextOrder(column);
+            await this.load(1);
+        },
+        nextOrder(column) {
+            return this.sortKey === column.key && this.sortOrder === 'asc' ? 'desc' : 'asc';
+        },
+        sortLabel(column) {
+            return '按' + column.label + (this.nextOrder(column) === 'asc' ? '升序' : '降序') + '排列';
+        },
+        ariaSort(column) {
+            if (column.sortable === false || this.sortKey !== column.key) return null;
+            return this.sortOrder === 'asc' ? 'ascending' : 'descending';
+        },
         jumpTo() {
             const total = this.totalPages || 1;
             const page = Math.min(Math.max(Math.trunc(this.jumpPage || 1), 1), total);
@@ -54,6 +84,10 @@ export default {
             try {
                 const params = Object.fromEntries(new URLSearchParams(window.location.search));
                 params.page = page;
+                if (this.sortKey) {
+                    params.sort = this.sortKey;
+                    params.order = this.sortOrder;
+                }
                 const payload = await api.get(this.endpoint, params);
                 this.items = payload.results;
                 this.total = payload.count;
@@ -62,9 +96,7 @@ export default {
                 this.totalPages = payload.pages;
                 this.from = payload.start_index;
                 this.to = payload.end_index;
-                const url = new URL(window.location.href);
-                url.searchParams.set('page', payload.page);
-                window.history.replaceState({}, '', url);
+                // 翻页在岛内完成，不写地址栏。
             } catch (failure) {
                 this.error = failure.message || '加载失败';
             } finally {
@@ -82,20 +114,23 @@ export default {
                     <caption class="visually-hidden">告警事件类型、来源、目标、级别、状态、渠道结果与发生时间</caption>
                     <thead>
                         <tr>
-                            <th scope="col">事件类型</th><th scope="col">来源</th><th scope="col">目标</th>
-                            <th scope="col">严重级别</th><th scope="col">事件状态</th><th scope="col">渠道结果</th>
-                            <th scope="col">发生时间</th>
+                            <th v-for="column in columns" :key="column.key" scope="col"
+                                :data-column-key="column.key" :aria-sort="ariaSort(column)">
+                                <a v-if="column.sortable !== false" class="table-sort-link" :data-sort-key="column.key"
+                                   href="#" :aria-label="sortLabel(column)" @click.prevent="sortBy(column)">[[ column.label ]]</a>
+                                <template v-else>[[ column.label ]]</template>
+                            </th>
                             <th scope="col" class="table-actions-column table-actions-cell">操作</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr v-for="row in items" :key="row.id">
-                            <td><span class="badge status-badge" :class="badgeClass(row.event_type.status)" :data-status="row.event_type.status">[[ row.event_type.label ]]</span></td>
-                            <td>[[ row.name ]]</td>
-                            <td class="text-break">[[ row.target ]]</td>
-                            <td><span class="badge status-badge" :class="row.severity.class" :data-status="row.severity.status">[[ row.severity.label ]]</span></td>
-                            <td><span class="badge status-badge" :class="badgeClass(row.status.status)" :data-status="row.status.status">[[ row.status.label ]]</span></td>
-                            <td class="text-break">
+                            <td :data-column-key="'event_type'"><span class="badge status-badge" :class="badgeClass(row.event_type.status)" :data-status="row.event_type.status">[[ row.event_type.label ]]</span></td>
+                            <td :data-column-key="'profile_type'">[[ row.name ]]</td>
+                            <td :data-column-key="'target_id'" class="text-break">[[ row.target ]]</td>
+                            <td :data-column-key="'severity'"><span class="badge status-badge" :class="row.severity.class" :data-status="row.severity.status">[[ row.severity.label ]]</span></td>
+                            <td :data-column-key="'status'"><span class="badge status-badge" :class="badgeClass(row.status.status)" :data-status="row.status.status">[[ row.status.label ]]</span></td>
+                            <td :data-column-key="'delivery_outcome'" class="text-break">
                                 <div class="alert-delivery-summary" aria-label="渠道送达结果">
                                     <template v-if="row.deliveries.length">
                                         <span v-for="delivery in row.deliveries" :key="delivery.label" class="badge status-badge" :class="badgeClass(delivery.status)" :data-status="delivery.status">[[ delivery.label ]]</span>
@@ -103,7 +138,7 @@ export default {
                                     <span v-else class="text-secondary">暂无渠道结果</span>
                                 </div>
                             </td>
-                            <td>[[ row.occurred_at_display ]]</td>
+                            <td :data-column-key="'occurred_at'">[[ row.occurred_at_display ]]</td>
                             <td class="text-end table-actions-cell"><a class="btn btn-outline-dark btn-sm" :href="row.detail_url" :data-detail-modal="row.detail_url">查看详情</a></td>
                         </tr>
                         <tr v-if="!items.length">

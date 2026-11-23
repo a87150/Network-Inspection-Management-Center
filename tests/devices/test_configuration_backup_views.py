@@ -133,7 +133,7 @@ class BackupHistoryTests(TestCase):
         response = self.call_list([version])
         self.assertContains(response, f'/tasks/{task_id}/')
         self.assertNotContains(response, '<script>alert(1)</script>')
-        self.assertContains(response, '&lt;script&gt;')
+        self.assertIn('\\u003Cscript\\u003E', response.content.decode(response.charset))
 
     def test_detail_button_is_only_for_admin_networks_and_monitors(self):
         for admin in (True, False):
@@ -145,9 +145,9 @@ class BackupHistoryTests(TestCase):
                         back_url='/', manual_action_label='手动执行巡检',
                         can_administer=admin,
                     )
+                    # 详情弹窗不再放跳转按钮，配置备份入口一律不出现在 actions 里。
                     labels = [action['label'] for action in payload['actions']]
-                    self.assertEqual('配置备份历史' in labels,
-                                     admin and kind in ('networks', 'weakcurrent'))
+                    self.assertNotIn('配置备份历史', labels)
 
 
 @override_settings(ROOT_URLCONF=__name__)

@@ -6,9 +6,19 @@ from django.utils import timezone
 
 from index.common.badges import severity_badge
 from index.common.detail_payload import (
-    alert_section, detail_payload, field_section, group_section, link_action,
+    alert_section, detail_payload, field_section, group_section,
     list_section, table_section, text_section,
 )
+
+
+def _detail_action(label, url, variant=''):
+    """站内详情：弹窗里就地换成另一份详情，独立详情页上还是普通链接。"""
+    return {'kind': 'detail', 'label': label, 'url': url, 'variant': variant}
+
+
+def _close_action(label, url=''):
+    """返回列表：弹窗里点就是关掉弹窗（列表本来就在下面），独立页上才导航。"""
+    return {'kind': 'close', 'label': label, 'url': url, 'variant': ''}
 
 
 def _pretty(value):
@@ -114,7 +124,7 @@ def inspection_record_detail_payload(*, inspection, record_kind, item_name,
         title='%s 巡检详情' % asset_name,
         eyebrow='巡检记录',
         description='%s · %s' % (item_name, created),
-        actions=[link_action('返回巡检记录', back_url)],
+        actions=[_close_action('返回巡检记录', back_url)],
         sections=sections,
     )
 
@@ -125,11 +135,11 @@ def analysis_detail_payload(*, analysis, detail_fields, back_url):
     log_file_id = getattr(analysis, 'log_file_id', None)
     actions = []
     if log_file_id:
-        actions.append(link_action(
+        actions.append(_detail_action(
             '查看日志详情', reverse('computer_log_detail', args=[log_file_id]),
             variant='primary',
         ))
-    actions.append(link_action('返回日志分析记录', back_url))
+    actions.append(_close_action('返回日志分析记录', back_url))
 
     sections = []
     if 'software' in (analysis.analysis_items or []):

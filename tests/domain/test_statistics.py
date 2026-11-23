@@ -129,8 +129,9 @@ class DomainStatisticsTests(TestCase):
         # 方块改成同页切换后，href 是 ?object=...，不再是列表页路由。
         for slug, count in (('accounts', 2), ('computers', 1)):
             cards = re.findall(r'<a\b[^>]*href="\?object=' + slug + r'"[^>]*>(.*?)</a>', html, re.S)
-            card = next((item for item in cards if 'metric-label' in item), '')
-            card_text = re.sub(r'<[^>]+>', '', card)
+            self.assertTrue(cards, slug + ' 卡片缺失')
+            # 方块改成 PC 结构后没有 metric-label，直接取该 object 的第一张卡。
+            card_text = re.sub(r'<[^>]+>', '', cards[0])
             self.assertIn('超过 60 天未登录 ' + str(count), card_text)
         self.assertNotContains(response, '对象所在目录路径')
         self.assertNotContains(response, '计算机系统分布')

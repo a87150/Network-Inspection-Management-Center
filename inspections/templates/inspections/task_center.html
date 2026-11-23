@@ -12,40 +12,36 @@
 </header>
 {% include 'inspections/task_history_modal.html' %}
 <div class="row g-3 mb-3" role="tablist" aria-label="任务与异常">
-    <div class="col-12 col-md-6">
-        <button class="card surface-card metric-card glass-card h-100 w-100 text-start text-body d-flex flex-column{% if view == 'tasks' %} border-primary{% endif %}" type="button"
-                role="tab" aria-selected="{% if view == 'tasks' %}true{% else %}false{% endif %}"
+    <div class="col-12 col-md-4">
+        <button class="card surface-card metric-card h-100 w-100 text-start text-body border-0 d-flex flex-column{% if view == 'tasks' %} border-primary{% endif %}"
+                type="button" role="tab" aria-selected="{% if view == 'tasks' %}true{% else %}false{% endif %}"
                 data-center-tab="tasks" data-center-url="?object=tasks">
-            <div class="card-body p-4 d-flex flex-column">
-                <div class="metric-card__status-row d-flex justify-content-between align-items-start mb-3">
+            <div class="card-body p-4 d-flex flex-column flex-grow-1" style="width:100%">
+                <div class="metric-card__status-row mb-3" style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;width:100%">
                     <h2 class="h5 mb-0">后台任务</h2>
                     <span class="metric-card__ready"><span class="status-dot status-dot--ok"></span>执行</span>
                 </div>
-                <div class="row text-center g-2 metric-card__metrics" role="list" aria-label="任务统计">
-                    <div class="col-3"><div class="metric">{{ task_metrics.total|default:0 }}</div><div class="metric-label">任务总数</div></div>
-                    <div class="col-3"><div class="metric text-success">{{ task_metrics.success|default:0 }}</div><div class="metric-label">成功</div></div>
-                    <div class="col-3"><div class="metric">{{ task_metrics.running|default:0 }}</div><div class="metric-label">运行中</div></div>
-                    <div class="col-3"><div class="metric {% if task_metrics.attention %}text-danger{% endif %}">{{ task_metrics.attention|default:0 }}</div><div class="metric-label">需关注</div></div>
-                </div>
+                <div class="metric">{{ task_metrics.total|default:0 }}<span class="metric__unit">个</span></div>
+                <div class="metric-card__detail mt-2">成功 <span class="text-success">{{ task_metrics.success|default:0 }}</span> · 运行中 <span class="text-secondary">{{ task_metrics.running|default:0 }}</span></div>
+                <div class="metric-card__detail mt-1">需关注 <span class="{% if task_metrics.attention %}text-danger{% endif %}">{{ task_metrics.attention|default:0 }}</span></div>
+                <div class="metric-card__entry mt-auto pt-3 text-end text-primary">查看任务{% if view == 'tasks' %} · 当前{% endif %}</div>
             </div>
-            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary">查看任务{% if view == 'tasks' %} · 当前{% endif %}</div>
         </button>
     </div>
-    <div class="col-12 col-md-6">
-        <button class="card surface-card metric-card glass-card h-100 w-100 text-start text-body d-flex flex-column{% if view == 'errors' %} border-primary{% endif %}" type="button"
-                role="tab" aria-selected="{% if view == 'errors' %}true{% else %}false{% endif %}"
+    <div class="col-12 col-md-4">
+        <button class="card surface-card metric-card h-100 w-100 text-start text-body border-0 d-flex flex-column{% if view == 'errors' %} border-primary{% endif %}"
+                type="button" role="tab" aria-selected="{% if view == 'errors' %}true{% else %}false{% endif %}"
                 data-center-tab="errors" data-center-url="?object=errors">
-            <div class="card-body p-4 d-flex flex-column">
-                <div class="metric-card__status-row d-flex justify-content-between align-items-start mb-3">
+            <div class="card-body p-4 d-flex flex-column flex-grow-1" style="width:100%">
+                <div class="metric-card__status-row mb-3" style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;width:100%">
                     <h2 class="h5 mb-0">异常记录</h2>
-                    <span class="metric-card__ready"><span class="status-dot status-dot--ok"></span>待处理</span>
+                    <span class="metric-card__ready"><span class="status-dot status-dot--ok"></span>异常</span>
                 </div>
-                <div class="row text-center g-2 metric-card__metrics" role="list" aria-label="异常统计">
-                    <div class="col-6"><div class="metric">{{ error_metrics.total|default:0 }}</div><div class="metric-label">异常总数</div></div>
-                    <div class="col-6"><div class="metric {% if error_metrics.pending %}text-danger{% endif %}">{{ error_metrics.pending|default:0 }}</div><div class="metric-label">未处理</div></div>
-                </div>
+                <div class="metric">{{ error_metrics.total|default:0 }}<span class="metric__unit">条</span></div>
+                <div class="metric-card__detail mt-2">未处理 <span class="{% if error_metrics.pending %}text-danger{% endif %}">{{ error_metrics.pending|default:0 }}</span></div>
+                <div class="metric-card__detail mt-1"><span class="text-secondary">按设备与时间聚合，可逐条跟进</span></div>
+                <div class="metric-card__entry mt-auto pt-3 text-end text-primary">查看异常{% if view == 'errors' %} · 当前{% endif %}</div>
             </div>
-            <div class="card-footer metric-card__footer metric-card__actions px-4 pb-4 pt-0 border-0 text-primary">查看异常{% if view == 'errors' %} · 当前{% endif %}</div>
         </button>
     </div>
 </div>

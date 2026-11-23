@@ -36,8 +36,8 @@
         }
     });
 
-    // 带 ?object= 进来（外链直达）时，首屏就把对应面板打开，
-    // 然后把地址栏收拾成不带参数的形态，免得刷新后残留看着像又跳了一次页。
+    // 带 ?object= 进来（外链直达）时，首屏就把对应面板打开。地址栏保持原样。
+
     window.addEventListener('DOMContentLoaded', function () {
         const params = new URLSearchParams(window.location.search);
         const object = params.get('object');
@@ -45,10 +45,6 @@
         const trigger = document.querySelector('[data-bs-toggle="tab"][href="?object=' + object + '"]');
         if (!trigger) return;
         activate(trigger);
-        if (window.history.replaceState) {
-            params.delete('object');
-            const rest = params.toString();
-            window.history.replaceState({}, '', window.location.pathname + (rest ? '?' + rest : ''));
-        }
+        // 外部链接带 ?object= 进来就停在这个面板上；地址栏保持原样，刷新还能定位。
     });
 })();

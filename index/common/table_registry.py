@@ -81,6 +81,32 @@ def _field(
 
 
 TABLE_DEFINITIONS = {
+    # 分析详情弹窗里的问题明细表：行是 dict，source 直接取 dict 的键；
+    # query_source 指回 ORM 列，排序和筛选因此落在分页之前的那条 SQL 上。
+    # issue/metrics 的值只能从 exceptions JSON 里算出来，SQL 层无从下手，
+    # 所以它们不参与筛选，也不假装能筛。
+    'analysis_problems': TableDefinition(
+        key='analysis_problems',
+        title='问题明细',
+        fields=(
+            TableField('asset', '对象', 'asset', 'text', True, False, True,
+                       query_source='computer__computer_name'),
+            TableField('user', '人员名称', 'user', 'text', True, False, True,
+                       query_source='computer__user_name'),
+            TableField('issue', '具体问题', 'issue', 'text', True, False, False,
+                       filterable=False),
+            TableField('severity', '等级', 'severity', 'choice', True, False, True,
+                       choices=(('normal', '正常'), ('info', '提示'),
+                                ('warning', '警告'), ('critical', '严重')),
+                       option_mode='fixed', query_source='_report_level'),
+            TableField('metrics', '关键指标', 'metrics', 'text', True, False, False,
+                       filterable=False),
+        ),
+        default_sort='asset',
+        default_order='asc',
+        search_fields=(),
+        default_page_size=20,
+    ),
     'people': TableDefinition(
         'people', '人员', (
             _field('name', '姓名'),
@@ -106,12 +132,10 @@ TABLE_DEFINITIONS = {
             _field('last_report_at', '最后上报时间', 'datetime', default_filter=False),
             _field('mac_addresses', 'MAC 地址', visible=False, default_filter=False),
             _field('os_version', '系统版本', visible=False, default_filter=False, option_mode='suggest'),
-            _field('os_build', '系统构建号', visible=False, default_filter=False, option_mode='suggest'),
             _field('system_installed_at', '系统安装时间', visible=False, default_filter=False),
             _field('manufacturer', '制造商', visible=False, default_filter=False, option_mode='suggest'),
             _field('model', '型号', visible=False, default_filter=False, option_mode='suggest'),
             _field('serial_number', '序列号', visible=False, default_filter=False),
-            _field('architecture', '系统架构', visible=False, default_filter=False, option_mode='suggest'),
             _field('cpu_model', 'CPU 型号', visible=False, default_filter=False, option_mode='suggest'),
             _field('cpu_physical_core_count', 'CPU 物理核心数', 'number', visible=False, default_filter=False),
             _field('cpu_logical_processor_count', 'CPU 逻辑处理器数', 'number', visible=False, default_filter=False),
@@ -170,7 +194,7 @@ TABLE_DEFINITIONS = {
             _field('vendor', '厂商', 'choice'),
             _field('model', '型号', default_filter=False, option_mode='suggest'),
             _field('api_url', '巡检 API 地址', source='public_api_url', filterable=False, sortable=False),
-            _field('verify_ssl', '验证 TLS 证书', 'boolean'),
+            _field('verify_ssl', '验证 TLS 证书', 'boolean', default_filter=False),
             _field('cpu_model', 'CPU 型号', default_filter=False, option_mode='suggest'),
             _field('memory_total_gb', '内存总量', 'number', default_filter=False),
             _field('disk_total_gb', '磁盘总量', 'number', default_filter=False),

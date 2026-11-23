@@ -5,6 +5,7 @@ import re
 from html.parser import HTMLParser
 from io import StringIO
 from unittest.mock import patch
+from urllib.parse import urlsplit
 
 from django.contrib import admin
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -14,6 +15,7 @@ from django.urls import reverse
 from tests.auth import login_admin, login_reader
 
 from index.common.table_registry import get_table_definition
+from tests.payloads import asset_table, bootstrap as page_bootstrap
 from net.models import (
     Domain_Account,
     Domain_Computer,
@@ -194,6 +196,12 @@ class FilteredExportContractTests(TestCase):
             ('servers', 'servers'),
             ('weakcurrent', 'weakcurrent'),
         )
+        page_ids = {
+            'people': 'people-workspace-bootstrap',
+            'networks': 'network-workspace-bootstrap',
+            'servers': 'server-workspace-bootstrap',
+            'weakcurrent': 'weakcurrent-workspace-bootstrap',
+        }
         for kind, entity in cases:
             with self.subTest(kind=kind):
                 response = self.client.get(reverse('asset_list', args=[kind]))
@@ -220,8 +228,11 @@ class FilteredExportContractTests(TestCase):
                 self.assertNotIn('/export/', modal)
                 self.assertNotIn('导出 CSV', modal)
                 self.assertNotIn('数据工具', document)
-                self.assertIn(
-                    f'href="{reverse("table_export", args=[entity])}', document,
+                # 导出链接随整页搬进 bootstrap：路径必须仍指向本实体的导出端点。
+                self.assertTrue(page_bootstrap(response, page_ids[kind]))
+                self.assertEqual(
+                    urlsplit(asset_table(response)['exportUrl']).path,
+                    reverse('table_export', args=[entity]),
                 )
 
                 for other_entity in {'people', 'networks', 'servers', 'weakcurrent'} - {entity}:
@@ -232,11 +243,12 @@ class FilteredExportContractTests(TestCase):
     def test_automatic_source_pages_have_filtered_export_without_import_modal(self):
         login_admin(self.client)
         pages = (
-            (reverse('asset_list', args=['computers']), 'computers'),
-            (reverse('domain_computer_list'), 'domain_computers'),
-            (reverse('domain_group_list'), 'domain_groups'),
+            # 第三个元素是工作区页的 bootstrap id；空串表示该页仍由 Django 渲染。
+            (reverse('asset_list', args=['computers']), 'computers', 'pc-workspace-bootstrap'),
+            (reverse('domain_computer_list'), 'domain_computers', ''),
+            (reverse('domain_group_list'), 'domain_groups', ''),
         )
-        for url, table_key in pages:
+        for url, table_key, bootstrap_id in pages:
             with self.subTest(url=url):
                 response = self.client.get(url)
                 document = response.content.decode(response.charset)
@@ -247,9 +259,17 @@ class FilteredExportContractTests(TestCase):
                 self.assertNotIn('数据工具', document)
                 self.assertNotIn('/import/', document)
                 self.assertNotIn('/data/', document)
-                self.assertIn(
-                    f'href="{reverse("table_export", args=[table_key])}', document,
-                )
+                if bootstrap_id:
+                    # 自动来源页的导出入口在 bootstrap 里，链接由工具栏组件渲染。
+                    self.assertTrue(page_bootstrap(response, bootstrap_id))
+                    self.assertEqual(
+                        urlsplit(asset_table(response)['exportUrl']).path,
+                        reverse('table_export', args=[table_key]),
+                    )
+                else:
+                    self.assertIn(
+                        f'href="{reverse("table_export", args=[table_key])}', document,
+                    )
 
 
 class PersonnelApiImportContractTests(TestCase):

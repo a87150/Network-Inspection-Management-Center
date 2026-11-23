@@ -97,9 +97,42 @@ def _history_url(kind, asset):
     return f"{reverse('asset_list', args=[kind])}?{query}"
 
 
+def project_task_metrics(request, kind):
+    """一份请求内只算一次执行统计。
+
+    `_outcome_expression()` 要对 result_snapshot 做 JSON 解引用，全表扫一次约 200ms。
+    这里分两次算：一次是全部任务的总量（方块上「任务 N 个」用的），一次只算最新
+    那个任务（正常/异常口径要和右侧「最新任务统计」面板一致）。之前拿全部任务的
+    目标行一起算，35 个任务累计 28210 行，既把「台」写成目标数，又让每条解引用都
+    白算了一遍。
+    """
+    cached = getattr(request, '_project_task_metrics', None)
+    if cached is None:
+        from net.inspections.task_summary import (
+            build_project_task_metrics, project_task_queryset,
+        )
+
+        tasks = project_task_queryset(kind)
+        total = tasks.count()
+        latest = tasks.first()
+        # 只算最新一个任务：口径跟着统计面板走，行数从上万掉到一两百。
+        # 任务总数单独 count，别为了一个数字把全部目标行再解引用一遍。
+        cached = build_project_task_metrics(tasks.filter(pk=latest.pk)) if latest else {
+            'task_count': 0, 'completed_count': 0, 'normal_count': 0,
+            'abnormal_count': 0, 'abnormal_rate': 0.0, 'latest_task_at': None,
+        }
+        cached['task_count'] = total
+        cached['latest'] = latest
+        request._project_task_metrics = cached
+    return cached
+
+
 def asset_list(request, kind, **kwargs):
     context = _asset_list_context(request, kind, **kwargs)
     # 方块切换走局部刷新：只要那一个视图的片段，页面本身不动。
+    # 记录表的排序、筛选、翻页只要数据，地址栏保持不动。
+    if request.GET.get('fragment') == 'table' and context.get('results_table'):
+        return JsonResponse(context['results_table'])
     if request.GET.get('fragment') == 'pane':
         return render(request, 'devices/_pane.html', context)
     return render(request, 'devices/list.html', context)
@@ -123,7 +156,6 @@ def _asset_list_context(request, kind, *, integration_context=None, creation_for
         'inventory_import_guide': inventory_import_guide(kind) if is_admin(request.user) else [],
         'item_key': kind,
         'item_name': page.title,
-        'switchable_kind': kind in SWITCHABLE_KINDS,
         'table_definition': table_definition,
         'page_obj': page_obj,
         'table_state': table_state,
@@ -134,7 +166,6 @@ def _asset_list_context(request, kind, *, integration_context=None, creation_for
             if is_admin(request.user) and kind in {'networks', 'weakcurrent'} else ''
         ),
         'pagination_query': query_without_page(request),
-        'inspection_type': page.inspection_kind,
         'collection_hint': page.collection_hint,
         'import_enabled': is_admin(request.user) and kind in IMPORTABLE_ENTITIES,
         'personnel_api_import': is_admin(request.user) and kind == 'people',
@@ -200,9 +231,7 @@ def _asset_list_context(request, kind, *, integration_context=None, creation_for
 
         context.update(computer_workspace_payloads(request))
         # 顶部大方块的执行统计跟分析记录 tab 共用一份，默认页也要有。
-        context['task_metrics'] = build_project_task_metrics(
-            project_task_queryset('computers'),
-        )
+        context['task_metrics'] = project_task_metrics(request, 'computers')
         # 分析记录 tab 的内容在默认页也要渲染正确，不能因为没切过去就换成巡检结果表。
         context.setdefault('record_type', 'computer_analysis')
     elif kind != 'people':
@@ -211,12 +240,6 @@ def _asset_list_context(request, kind, *, integration_context=None, creation_for
         if kind == 'weakcurrent':
             context.update(access_records_payload(request))
     context['view'] = request.GET.get('object', 'rows')
-    # 记录类视图（巡检记录、门禁记录、日志）没有设备级动作，头部按钮跟着视图走。
-    if context['view'] != 'rows':
-        for flag in ('action_can_manage_devices', 'action_can_import',
-                     'action_issue_settings', 'action_script_download'):
-            context[flag] = False
-        context['task_project_kind'] = ''
     if kind == 'people':
         context['departments'] = department_totals()
         # 首页"手动同步人员"直接落到这里，把导入弹窗打开到人员同步。
@@ -237,9 +260,6 @@ def _asset_list_context(request, kind, *, integration_context=None, creation_for
                   else record_list_context(request, kind))
         context.update(shared)
         context['view'] = request.GET.get('object')
-        for flag in ('action_can_manage_devices', 'action_can_import',
-                     'action_issue_settings', 'action_script_download'):
-            context[flag] = False
     context['overview'] = (
         people_overview() if kind == 'people' else device_overview(kind, page.model)
     )
@@ -443,10 +463,15 @@ def people_statistics(request):
         departments.append(row)
     departments.sort(key=lambda row: (-row['total'], row['department']))
 
+    from people.payloads import statistics_bootstrap
+
     return render(request, 'people/statistics.html', {
         'as_of': as_of,
         'metrics': metrics,
         'departments': departments,
+        'statistics_bootstrap': statistics_bootstrap(
+            metrics=metrics, departments=departments, as_of=as_of,
+        ),
     })
 
 
@@ -481,4 +506,4 @@ def run_infrastructure_inspection(request):
 
     if asset_type == 'all':
         return redirect('index')
-    return redirect('item_list', item=asset_type)
+    return redirect('asset_list', kind=asset_type)

@@ -1,32 +1,11 @@
 from collections.abc import Mapping
 
-
 SUPPORTED_OPTION_MODES = frozenset({'fixed', 'distinct', 'suggest', 'none'})
 
 
 def _option(value):
     submitted = str(value)
     return submitted, submitted
-
-
-def _queryset_values(queryset, field, *, complete=False):
-    lookup = field.query_source or field.source
-    values_query = (
-        queryset.order_by()
-        .exclude(**{f'{lookup}__isnull': True})
-    )
-    try:
-        values_query = values_query.exclude(**{lookup: ''})
-    except (TypeError, ValueError):
-        # Numeric and other non-text fields cannot prepare an empty string.
-        pass
-    values_query = (
-        values_query
-        .values_list(lookup, flat=True)
-        .distinct()
-        .order_by(lookup)
-    )
-    return list(values_query if complete else values_query[:field.option_limit + 1])
 
 
 def _record_value(record, source):
@@ -50,12 +29,61 @@ def _record_values(records, field, *, complete=False):
     return values if complete else values[:field.option_limit + 1]
 
 
+def _queryset_values_bulk(queryset, fields, complete=False):
+    """一条 UNION 把所有字段的去重值一次拿回来。
+
+    每个可筛字段各跑一次 SELECT DISTINCT，PC 台账十几个字段就是十几次
+    数据库往返，占首屏查询数的大头。合成一条 UNION 之后只有一个往返，
+    截断和排序挪到 Python 侧做（每字段各自的 LIMIT 在 SQL 里表达不了）。
+    """
+    from django.db.models import CharField, Value
+    from django.db.models.functions import Cast
+
+    parts = []
+    for field in fields:
+        lookup = field.query_source or field.source
+        branch = queryset.order_by().exclude(**{f'{lookup}__isnull': True})
+        try:
+            branch = branch.exclude(**{lookup: ''})
+        except (TypeError, ValueError):
+            pass
+        parts.append(
+            branch.annotate(
+                _k=Value(field.key, output_field=CharField()),
+                _v=Cast(lookup, output_field=CharField()),
+            ).values_list('_k', '_v').distinct()
+        )
+    grouped = {}
+    if not parts:
+        return grouped
+    # union 之后模型 Meta.ordering 仍在，而结果集里没有那些列，必须清掉。
+    rows = parts[0].union(*parts[1:], all=False) if len(parts) > 1 else parts[0]
+    for key, value in rows.order_by():
+        if value in (None, ''):
+            continue
+        grouped.setdefault(key, set()).add(value)
+    result = {}
+    for field in fields:
+        values = sorted(grouped.get(field.key, ()), key=str)
+        result[field.key] = values if complete else values[:field.option_limit + 1]
+    return result
+
+
 def build_field_option_context(source, definition):
     """Return allowlisted field options and their effective rendering modes."""
     options = {}
     modes = {}
     is_queryset = hasattr(source, 'values_list') and hasattr(source, 'order_by')
     records = None if is_queryset else list(source)
+    bulk_values = {}
+    if is_queryset:
+        wanted = [
+            field for field in definition.fields
+            if field.filterable and field.option_mode in ('distinct', 'suggest')
+        ]
+        bulk_values = _queryset_values_bulk(
+            source, wanted, complete=definition.complete_options,
+        )
 
     for field in definition.fields:
         mode = field.option_mode
@@ -72,11 +100,10 @@ def build_field_option_context(source, definition):
             modes[field.key] = 'fixed'
             continue
 
-        values = (
-            _queryset_values(source, field, complete=definition.complete_options)
-            if is_queryset
-            else _record_values(records, field, complete=definition.complete_options)
-        )
+        if is_queryset:
+            values = bulk_values.get(field.key, ())
+        else:
+            values = _record_values(records, field, complete=definition.complete_options)
         overflow = len(values) > field.option_limit
         options[field.key] = tuple(
             _option(value) for value in (values if definition.complete_options else values[:field.option_limit])

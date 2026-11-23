@@ -1,5 +1,6 @@
 """Numeric column filters: one operator vocabulary, three comparisons."""
 from decimal import Decimal
+from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -58,7 +59,17 @@ class NumericFilterTests(TestCase):
 
     def test_filter_control_renders_operator_dropdown_and_number_box(self):
         response = self.client.get(reverse("asset_list", args=["servers"]))
-        self.assertContains(response, "table-number-filter__op")
-        self.assertContains(response, ">大于<")
-        self.assertContains(response, ">小于<")
-        self.assertContains(response, ">等于<")
+
+        # 服务端只剩列元数据：数值列决定渲染哪种筛选控件。
+        memory = next(
+            column for column in asset_table(response)["columns"]
+            if column["key"] == "memory_total_gb"
+        )
+        self.assertEqual(memory["kind"], "number")
+        # 控件本体在工具栏组件：比较方式下拉 + 数值输入框是同一套。
+        toolbar = (Path(__file__).resolve().parents[2] / "static" / "app" / "vue"
+                   / "components" / "table_toolbar.mjs").read_text(encoding="utf-8")
+        self.assertIn("table-number-filter__op", toolbar)
+        self.assertIn('type="number"', toolbar)
+        for label in (">大于<", ">小于<", ">等于<"):
+            self.assertIn(label, toolbar)

@@ -106,6 +106,30 @@ function createPeopleTaskController({document, window, fetchImpl = fetch, pollIn
     closeElements.forEach(element => {
         element.addEventListener('click', () => acknowledgeTerminal());
     });
+    /* 结果页本身是带 auto-open 预览弹窗的整页；只把那个弹窗取回来放进当前页，
+       地址栏和列表都不动。 */
+    async function showResultModal(task) {
+        const response = await fetchImpl(task.jump_url, {
+            credentials: 'same-origin', headers: {'X-Requested-With': 'XMLHttpRequest'},
+        });
+        if (!response.ok) throw new Error('result page failed');
+        const page = new window.DOMParser().parseFromString(await response.text(), 'text/html');
+        const incoming = page.querySelector('#peoplePreviewModal');
+        if (!incoming) throw new Error('result modal missing');
+        const existing = document.querySelector('#peoplePreviewModal');
+        let resultModal = existing;
+        if (resultModal) {
+            const current = resultModal.querySelector('.modal-content');
+            const fresh = incoming.querySelector('.modal-content');
+            if (current && fresh) current.replaceWith(fresh.cloneNode(true));
+        } else {
+            resultModal = incoming.cloneNode(true);
+            (document.body || document.documentElement).appendChild(resultModal);
+        }
+        window.bootstrap?.Modal.getOrCreateInstance(resultModal).show();
+        document.dispatchEvent?.(new window.CustomEvent('app:modal-updated', {detail: {modal: resultModal}}));
+    }
+
     async function followTerminalResult(event) {
         event.preventDefault();
         const task = currentTerminal;
@@ -117,7 +141,13 @@ function createPeopleTaskController({document, window, fetchImpl = fetch, pollIn
             messageElement.textContent = '结果确认失败，请重试后再查看。';
             return;
         }
-        if (!workflow) window.location.assign(task.jump_url);
+        if (workflow) return;
+        window.bootstrap?.Modal.getInstance?.(modalElement)?.hide?.();
+        try {
+            await showResultModal(task);
+        } catch (_error) {
+            messageElement.textContent = '结果页加载失败，请稍后重试。';
+        }
     }
     jumpElement?.addEventListener('click', followTerminalResult);
     return {start, stop, poll, dismissRunning, acknowledgeTerminal};

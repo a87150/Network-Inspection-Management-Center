@@ -107,7 +107,7 @@ export default {
             } else {
                 url.searchParams.delete('page');
             }
-            window.history.replaceState({}, '', url);
+            // 翻页在岛内完成，不写地址栏。
         },
     },
     template: `

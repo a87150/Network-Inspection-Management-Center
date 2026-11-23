@@ -500,6 +500,6 @@ class WorkerCommandAndLegacyEntryTests(TestCase):
             'asset_id': str(device.pk),
         })
 
-        self.assertRedirects(response, reverse('item_list', args=['networks']))
+        self.assertRedirects(response, reverse('asset_list', args=['networks']))
         self.assertEqual(Network_Device_Inspection.objects.count(), 0)
         self.assertEqual(TaskRun.objects.filter(status=TaskRun.Status.QUEUED).count(), 1)

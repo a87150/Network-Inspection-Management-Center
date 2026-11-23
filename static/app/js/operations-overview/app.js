@@ -29,6 +29,9 @@ if (mountElement && bootstrapElement) {
         selectedEdgeId: '',
         expandedNodeIds: new Set(),
         drawerNodeId: '',
+        // 节点详情点开抽屉时才取，首屏 snapshot 不带。
+        nodeDetails: {},
+        nodeDetailsBusy: false,
         liveStatus: '网络拓扑已就绪',
         controller: null,
         unsubscribe: null,
@@ -79,8 +82,11 @@ if (mountElement && bootstrapElement) {
         return Math.max(this.topologyWidth, Math.ceil(maxX + 24));
       },
       drawerDetails() {
-        const details = (this.drawerNode && this.drawerNode.details) || [];
-        return details.length ? details : [{ label: 'IP / 备注', value: this.drawerNode?.ip || '未配置' }];
+        const node = this.drawerNode;
+        const cached = this.nodeDetails[node && node.id];
+        const details = cached || (node && node.details) || [];
+        if (this.nodeDetailsBusy) return [{ label: '加载中', value: '正在读取该节点详情…' }];
+        return details.length ? details : [{ label: 'IP / 备注', value: node?.ip || '未配置' }];
       },
     },
     methods: {
@@ -271,6 +277,23 @@ if (mountElement && bootstrapElement) {
       openDrawer(node) {
         this.drawerNodeId = node.id;
         this.liveStatus = `已打开 ${node.label} 的详情`;
+        this.loadNodeDetails(node);
+      },
+      /** 抽屉里的详情按节点 id 单独取，取过一次就缓存，来回点不再发请求。 */
+      async loadNodeDetails(node) {
+        const id = node && node.id;
+        if (!id || this.nodeDetails[id] || !node.detailsUrl) return;
+        this.nodeDetailsBusy = true;
+        try {
+          const response = await fetch(node.detailsUrl, {headers: {'X-Requested-With': 'XMLHttpRequest'}});
+          if (!response.ok) return;
+          const data = await response.json();
+          this.nodeDetails = {...this.nodeDetails, [id]: data.details || []};
+        } catch (error) {
+          console.error('取节点详情失败：', error);
+        } finally {
+          this.nodeDetailsBusy = false;
+        }
       },
       closeDrawer() {
         this.drawerNodeId = '';

@@ -13,6 +13,7 @@ from zipfile import ZipFile
 from cryptography.fernet import Fernet
 import requests
 from django.test import RequestFactory, TestCase, override_settings
+from django.urls import reverse
 from django.utils import timezone
 
 from inspections.forms import inspection_item_choices
@@ -472,46 +473,67 @@ class ConfigurationTests(TestCase):
                 self.assertNotIn('..', name)
 
     def test_ui_exposes_scoped_downloads_without_changing_other_asset_actions(self):
+        from pathlib import Path
+
+        toolbar = Path('static/app/vue/components/table_toolbar.mjs').read_text(encoding='utf-8')
         for kind, asset in (('networks', self.device), ('weakcurrent', self.camera)):
             result = self.client.get(f'/assets/{kind}/', {'filter_vendor': asset.vendor})
-            html = result.content.decode()
-            self.assertContains(result, f'href="/assets/{kind}/configurations.zip"')
-            self.assertContains(result, 'data-selected-config-export')
-            self.assertContains(result, '请先选择设备')
+            table = asset_table(result)
+            # 配置 ZIP 的地址由 bootstrap 给，按钮与文案由工具栏组件渲染。
+            self.assertEqual(
+                table['configurationZip'], reverse('configuration_zip', args=[kind]),
+            )
+            self.assertIn('data-selected-config-export', toolbar)
+            self.assertIn('请先选择设备', toolbar)
+            self.assertLess(
+                toolbar.index('data-filtered-export'),
+                toolbar.index('data-selected-config-export'),
+            )
             self.assertNotContains(result, '导出筛选设备配置 ZIP')
             self.assertNotContains(result, '配置下载仅使用最近成功的已保存配置项')
             self.assertNotContains(result, f'/assets/{kind}/{asset.pk}/configuration/')
-            self.assertLess(html.index('导出筛选结果'), html.index('data-selected-config-export'))
             detail = self.client.get(f'/assets/{kind}/{asset.pk}/')
-            self.assertContains(detail, f'/assets/{kind}/{asset.pk}/configuration/')
+            # 详情弹窗不再放跳转按钮，配置下载入口随「配置备份历史」一起移除。
+        self.assertNotContains(detail, f'/assets/{kind}/{asset.pk}/configuration/')
         server_page = self.client.get('/assets/servers/')
+        # 服务器没有配置备份：bootstrap 里就不该出现这个入口。
+        self.assertNotIn('configurationZip', asset_table(server_page))
         self.assertNotContains(server_page, 'configurations.zip')
-        self.assertNotContains(server_page, 'data-selected-config-export')
         self.assertEqual(self.client.get('/assets/servers/configurations.zip').status_code, 404)
 
     def test_device_selection_is_first_column_with_current_page_bulk_actions(self):
         from pathlib import Path
 
         result = self.client.get('/assets/networks/')
-        html = result.content.decode()
+        table = asset_table(result)
+        toolbar = Path('static/app/vue/components/table_toolbar.mjs').read_text(encoding='utf-8')
+        grid = Path('static/app/vue/components/data_table.mjs').read_text(encoding='utf-8')
+        workspace = Path('static/app/vue/components/workspace_table.mjs').read_text(encoding='utf-8')
 
-        # 选择列由组件渲染，服务端只给开关；select-all 仍在工具栏里。
-        self.assertEqual(asset_table(result)['selectAttr'], 'data-device-selection-target')
-        self.assertContains(result, 'data-device-select-all')
-        self.assertContains(result, 'data-device-select-invert')
-        self.assertContains(result, 'data-configuration-export-feedback')
+        # 选择列由组件渲染，服务端只给开关；批量按钮的标记在工具栏模板里。
+        self.assertEqual(table['selectAttr'], 'data-device-selection-target')
+        for marker in ('data-device-select-all', 'data-device-select-invert',
+                       'data-configuration-export-feedback', 'data-selected-config-export'):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, toolbar)
+        # 勾选与反转之后要补发 change，维护窗口脚本才跟得上工具栏的选中数。
+        self.assertIn("new Event('change'", workspace)
+        self.assertIn('selectInvert()', workspace)
         # 表头由组件渲染：选择列必须排在列循环之前这条顺序，只能验组件模板。
-        template = Path('static/app/vue/pages/asset_workspace.mjs').read_text(encoding='utf-8')
+        # networks 页已换成工作区页，表格由共享的 data_table 组件画。
         self.assertLess(
-            template.index('data-device-selection-column'),
-            template.index('v-for="column in visibleColumns"'),
+            grid.index('data-device-selection-column'),
+            grid.index('v-for="column in visibleColumns"'),
         )
-        self.assertLess(html.index('data-device-select-all'), html.index('data-selected-config-export'))
+        # 导出筛选结果排在下载所选配置之前。
+        self.assertLess(
+            toolbar.index('data-filtered-export'),
+            toolbar.index('data-selected-config-export'),
+        )
         for kind in ('servers', 'weakcurrent'):
             with self.subTest(kind=kind):
                 page = self.client.get(f'/assets/{kind}/')
                 self.assertEqual(asset_table(page)['selectAttr'], 'data-device-selection-target')
-                self.assertContains(page, 'data-device-select-all')
 
     def test_unknown_network_vendor_never_opens_a_config_connection(self):
         self.device.vendor = 'notcisco'

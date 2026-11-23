@@ -5,7 +5,10 @@ const {createPeopleTaskController} = require('../../static/app/js/people/import_
 
 function fixture(payloads, {workflowOpen = false} = {}) {
     const posts = [];
-    const state = {running: [], message: '', href: '', shows: 0, inline: [], jumpHandler: null};
+    const state = {
+        running: [], message: '', href: '', shows: 0, inline: [], jumpHandler: null,
+        resultRequests: [], events: [], appended: [],
+    };
     const root = {
         dataset: {statusUrl: '/status/', csrfToken: 'csrf'},
         querySelector(selector) {
@@ -21,10 +24,21 @@ function fixture(payloads, {workflowOpen = false} = {}) {
             }[selector];
         },
     };
+    const incomingModal = {
+        cloneNode() {
+            return {
+                id: 'peoplePreviewModal',
+                querySelector: () => null,
+                setAttribute() {},
+            };
+        },
+    };
     const document = {
         querySelector: selector => selector === '[data-people-task-notifications]' ? root : (
             workflowOpen ? {querySelector: () => ({prepend: notice => state.inline.push(notice)})} : null
         ),
+        body: {appendChild(node) { state.appended.push(node); }},
+        dispatchEvent(event) { state.events.push(event); },
         createElement(tag) {
             return {
                 tag, className: '', textContent: '', type: '', dataset: {}, children: [],
@@ -36,6 +50,16 @@ function fixture(payloads, {workflowOpen = false} = {}) {
     const window = {
         location: {assignCalls: [], assign(value) { this.assignCalls.push(value); }},
         bootstrap: {Modal: {getOrCreateInstance: () => ({show: () => { state.shows += 1; }})}},
+        CustomEvent: class {
+            constructor(type, options) { this.type = type; this.detail = options?.detail; }
+        },
+        DOMParser: class {
+            parseFromString(html, type) {
+                assert.equal(html, '<html>result page</html>');
+                assert.equal(type, 'text/html');
+                return {querySelector: selector => selector === '#peoplePreviewModal' ? incomingModal : null};
+            }
+        },
         setTimeout: () => 1,
         clearTimeout() {},
     };
@@ -43,6 +67,10 @@ function fixture(payloads, {workflowOpen = false} = {}) {
         if (options.method === 'POST') {
             posts.push([url, options.body]);
             return {ok: true, json: async () => ({acknowledged: true})};
+        }
+        if (url !== root.dataset.statusUrl) {
+            state.resultRequests.push(url);
+            return {ok: true, text: async () => '<html>result page</html>'};
         }
         return {ok: true, json: async () => payloads.shift() || {tasks: []}};
     };
@@ -97,7 +125,7 @@ test('completed task stays inside an open workflow without stacking a second mod
     assert.equal(state.inline[0].children[0].href, '/task/4/');
 });
 
-test('result jump acknowledges the terminal task before navigating to its auto-open preview', async () => {
+test('result jump acknowledges the task then opens the preview in place', async () => {
     const task = {id: '5', status: 'success', show_terminal: true,
         message: '预览已完成', jump_url: '/task/5/', ack_url: '/ack/5/'};
     const {controller, state, posts, window} = fixture([{tasks: [task]}]);
@@ -111,5 +139,11 @@ test('result jump acknowledges the terminal task before navigating to its auto-o
 
     assert.equal(event.defaultPrevented, true);
     assert.deepEqual(posts, [['/ack/5/', 'kind=terminal']]);
-    assert.deepEqual(window.location.assignCalls, ['/task/5/']);
+    // 结果页的预览弹窗就地展开：不整页跳，也不改地址栏。
+    assert.deepEqual(window.location.assignCalls, []);
+    assert.deepEqual(state.resultRequests, ['/task/5/']);
+    assert.deepEqual(state.appended.map(node => node.id), ['peoplePreviewModal']);
+    assert.equal(state.shows, 2);
+    assert.equal(state.events.length, 1);
+    assert.equal(state.events[0].type, 'app:modal-updated');
 });

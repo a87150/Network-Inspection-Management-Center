@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
@@ -58,6 +60,22 @@ class DomainGroupMemberInterfaceTests(TestCase):
             response,
             'class="modal-footer modal-footer--sticky domain-members-footer"',
         )
+
+    def test_member_table_has_page_tools_and_keeps_selection_across_pages(self):
+        response = self.client.get(reverse('domain_group_members', args=[self.group.pk]))
+
+        # 列宽由 table_resize.js 认的 data-table / data-table-key 提供，翻页工具是列表自己的一套。
+        for hook in ('data-member-page="1"', 'data-member-sort="type"',
+                     'data-member-page-filter', 'data-member-export',
+                     'data-table-key="domain-group-members"'):
+            self.assertContains(response, hook)
+
+        island = (Path(__file__).resolve().parents[2]
+                  / 'static' / 'app' / 'js' / 'domain' / 'group_members_island.js').read_text(encoding='utf-8')
+        for selector in ('[data-member-sort]', '[data-member-page-filter]', '[data-member-export]'):
+            self.assertIn(selector, island)
+        # 勾选存在外层 modal 的 dataset 上：翻页会整段换掉 .modal-content，只有 modal 活得下来。
+        self.assertIn('memberSelection', island)
 
     def test_group_list_loading_dialog_uses_the_same_modal_shell(self):
         response = self.client.get(reverse('domain_group_list'))

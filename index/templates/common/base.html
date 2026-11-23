@@ -7,8 +7,8 @@
     <title>{% block title %}{% endblock %} · 天枢</title>
     <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
     <link href="{% static 'app/css/tokens.css' %}" rel="stylesheet">
-    <link href="{% static 'app/css/foundation.css' %}?v=167" rel="stylesheet">
-    <link href="{% static 'app/css/operations.css' %}?v=167" rel="stylesheet">
+    <link href="{% static 'app/css/foundation.css' %}?v=169" rel="stylesheet">
+    <link href="{% static 'app/css/operations.css' %}?v=169" rel="stylesheet">
     <link href="{% static 'app/css/modal-workflows.css' %}" rel="stylesheet">
     <link href="{% static 'app/css/style.css' %}" rel="stylesheet">
     {% block page_css %}{% endblock %}
@@ -16,9 +16,11 @@
     <script defer src="{% static 'app/js/common/form_accessibility.js' %}"></script>
     <script defer src="{% static 'app/js/common/confirm_dialog.js' %}"></script>
     <script defer src="{% static 'app/js/common/form_ajax.js' %}"></script>
-    <script defer src="{% static 'app/js/common/detail_modal.js' %}?v=167"></script>
-<script defer src="{% static 'app/js/common/page_jump.js' %}?v=167"></script>
-<script defer src="{% static 'app/js/common/tabs.js' %}?v=167"></script>
+    <script defer src="{% static 'app/js/common/detail_modal.js' %}?v=169"></script>
+<script defer src="{% static 'app/js/common/page_jump.js' %}?v=169"></script>
+<script defer src="{% static 'app/js/common/panel_switch.js' %}?v=1"></script>
+<script defer src="{% static 'app/js/common/tabs.js' %}?v=169"></script>
+<script defer src="{% static 'app/js/common/table_resize.js' %}?v=1"></script>
 </head>
 <body class="app-shell">
     <a class="skip-link" href="#main-content">跳至主要内容</a>
@@ -32,7 +34,7 @@
             <div class="collapse navbar-collapse" id="mainNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item"><a class="nav-link" href="{% url 'asset_list' 'people' %}">人员·部门</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{% if can_administer %}{% url 'domain_controller_settings' %}?object=accounts{% else %}{% url 'domain_account_list' %}{% endif %}">域控管理</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% if can_administer %}{% url 'domain_controller_settings' %}{% else %}{% url 'domain_account_list' %}{% endif %}">域控管理</a></li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'asset_list' 'computers' %}">PC</a></li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'asset_list' 'networks' %}">网络设备</a></li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'asset_list' 'servers' %}">服务器</a></li>

@@ -84,6 +84,12 @@ function workspaceFixture({selectedPageSize = '20'} = {}) {
     };
     const workspace = {
         dataset: {tableKey: 'people'},
+        attributes: {},
+        replacedWith: null,
+        setAttribute(name, value) { this.attributes[name] = value; },
+        removeAttribute(name) { delete this.attributes[name]; },
+        getAttribute(name) { return this.attributes[name] ?? null; },
+        replaceWith(value) { this.replacedWith = value; },
         querySelectorAll(selector) {
             return {
                 '[data-column-toggle]': columnToggles,
@@ -109,6 +115,67 @@ function workspaceFixture({selectedPageSize = '20'} = {}) {
         pageSize, reset, moreFilters, exportLink, configExportLink, suggestionSelect,
     };
 }
+
+// 页内刷新用的最小页面：一个能被替换的表格容器，加上会返回同名容器的 fetch。
+function partialPage({
+    href = 'https://example.test/assets/people/?filter_department=IT&target=asset-1&page=4&page_size=20',
+    storage = memoryStorage(),
+} = {}) {
+    const host = workspaceFixture();
+    const served = workspaceFixture();
+    const requests = [];
+    const liveRegion = {textContent: ''};
+    const documentRoot = {
+        querySelectorAll(selector) {
+            assert.equal(selector, '[data-table-workspace]');
+            return [host.workspace];
+        },
+        getElementById(id) {
+            return id === 'app-live-region' ? liveRegion : null;
+        },
+    };
+    const location = {
+        href,
+        origin: 'https://example.test',
+        pathname: new URL(href).pathname,
+        replacements: [],
+        assigned: [],
+        replace(url) {
+            this.replacements.push(url);
+        },
+        assign(url) {
+            this.assigned.push(url);
+        },
+    };
+    const browserWindow = {
+        location,
+        localStorage: storage,
+        async fetch(url) {
+            requests.push(url);
+            // 服务端按请求里的 page_size 渲染下一页，select 的选中项跟着变。
+            const requested = new URL(url, location.href).searchParams.get('page_size');
+            if (requested) served.pageSize.value = requested;
+            return {ok: true, url: String(url), async text() { return '<html></html>'; }};
+        },
+        DOMParser: class {
+            parseFromString() {
+                return {
+                    querySelectorAll(selector) {
+                        assert.equal(selector, '[data-table-workspace]');
+                        return [served.workspace];
+                    },
+                };
+            }
+        },
+    };
+    documentRoot.defaultView = browserWindow;
+    host.workspace.ownerDocument = documentRoot;
+    served.workspace.ownerDocument = documentRoot;
+    return {host, served, requests, documentRoot, browserWindow, liveRegion, location, storage};
+}
+
+// 页内刷新是 fetch 驱动的，事件回调不等它；断言前先让微任务跑完。
+const flushRefresh = () => new Promise((resolve) => setImmediate(resolve));
 
 function memoryStorage(initialValue = null) {
     return {
@@ -327,7 +394,8 @@ test('saves checkbox and page-size changes with the versioned schema', () => {
         filterFields: ['department'],
         pageSize: 100,
     });
-    assert.equal(fixture.pageSize.form.submissions, 1);
+    // 换每页条数走页内刷新，不再提交表单。
+    assert.equal(fixture.pageSize.form.submissions, 0);
 });
 
 test('keeps compact filter preferences and suggestion values after reload', () => {
@@ -368,20 +436,18 @@ test('copies a dropdown suggestion into the editable filter and keeps all choice
     assert.equal(fixture.filterFields[1].value, '自定义部门');
 });
 
-test('hiding an active filter clears it from controls URL and export state', () => {
-    const fixture = workspaceFixture();
+test('hiding an active filter clears it from controls URL and export state', async () => {
+    const page = partialPage();
+    const fixture = page.host;
     fixture.filterToggles[1].dataset.filterActive = 'true';
     fixture.filterFields[1].dataset.filterActive = 'true';
-    const storage = memoryStorage();
-    const location = {
-        href: 'https://example.test/assets/people/?filter_department=%E6%8A%80%E6%9C%AF%E9%83%A8&page=3&target=asset-1',
-        replacements: [],
-        replace(url) { this.replacements.push(url); },
-    };
+    const storage = page.storage;
+    const originalHref = page.location.href;
 
-    controller.initializeWorkspace(fixture.workspace, storage, location);
+    controller.initializeWorkspace(fixture.workspace, storage, page.location);
     fixture.filterToggles[1].checked = false;
     fixture.filterToggles[1].dispatch('change');
+    await flushRefresh();
 
     assert.equal(fixture.filterFields[1].value, '');
     assert.equal(fixture.filterFields[1].disabled, true);
@@ -389,37 +455,42 @@ test('hiding an active filter clears it from controls URL and export state', () 
     assert.equal(new URL(fixture.configExportLink.href).searchParams.has('filter_department'), false);
     assert.equal(new URL(fixture.configExportLink.href).searchParams.has('page'), false);
     assert.equal(new URL(fixture.configExportLink.href).pathname, '/assets/networks/configurations.zip');
-    assert.equal(location.replacements.length, 1);
-    const replacement = new URL(location.replacements[0]);
-    assert.equal(replacement.searchParams.has('filter_department'), false);
-    assert.equal(replacement.searchParams.has('page'), false);
-    assert.equal(replacement.searchParams.get('target'), 'asset-1');
+    // 只换表格内容：地址栏不动，取消筛选靠一次页内请求。
+    assert.equal(page.requests.length, 1);
+    const requested = new URL(page.requests[0]);
+    assert.equal(requested.searchParams.has('filter_department'), false);
+    assert.equal(requested.searchParams.has('page'), false);
+    assert.equal(requested.searchParams.get('target'), 'asset-1');
+    assert.equal(fixture.workspace.replacedWith, page.served.workspace);
+    assert.deepEqual(page.location.replacements, []);
+    assert.equal(page.location.href, originalHref);
     assert.deepEqual(JSON.parse(storage.value).filterFields, ['name']);
 });
 
-test('stored page size replaces a mismatched query and drops the stale page', () => {
+test('stored page size refreshes the table in place and drops the stale page', async () => {
     assert.equal(typeof controller.initializeWorkspace, 'function');
-    const fixture = workspaceFixture();
     const storage = memoryStorage(JSON.stringify({
         visibleFields: ['name'],
         filterFields: ['name'],
         pageSize: 50,
     }));
-    const location = {
+    const page = partialPage({
         href: 'https://example.test/item/people/?q=%E5%BC%A0&page=3&page_size=20',
-        replacements: [],
-        replace(url) {
-            this.replacements.push(url);
-        },
-    };
+        storage,
+    });
+    const fixture = page.host;
 
-    controller.initializeWorkspace(fixture.workspace, storage, location);
+    controller.initializeWorkspace(fixture.workspace, storage, page.location);
+    await flushRefresh();
 
-    assert.equal(location.replacements.length, 1);
-    const replacement = new URL(location.replacements[0]);
-    assert.equal(replacement.searchParams.get('q'), '张');
-    assert.equal(replacement.searchParams.get('page_size'), '50');
-    assert.equal(replacement.searchParams.has('page'), false);
+    // 服务端这一版是按 20 条渲染的，和存下来的 50 条不一致，补一次页内请求。
+    assert.equal(page.requests.length, 1);
+    const requested = new URL(page.requests[0]);
+    assert.equal(requested.searchParams.get('q'), '张');
+    assert.equal(requested.searchParams.get('page_size'), '50');
+    assert.equal(requested.searchParams.has('page'), false);
+    assert.equal(fixture.workspace.replacedWith, page.served.workspace);
+    assert.deepEqual(page.location.replacements, []);
 });
 
 test('reset removes storage and restores DOM defaults', () => {
@@ -440,7 +511,7 @@ test('reset removes storage and restores DOM defaults', () => {
     assert.deepEqual(fixture.filterToggles.map((toggle) => toggle.checked), [true, true]);
     assert.deepEqual(fixture.filterFields.map((field) => field.hidden), [false, false]);
     assert.equal(fixture.pageSize.value, '20');
-    assert.equal(fixture.pageSize.form.submissions, 1);
+    assert.equal(fixture.pageSize.form.submissions, 0);
 });
 
 test('keeps server defaults operational when storage access throws', () => {
@@ -544,7 +615,7 @@ test('opens an import modal marked for one-time auto-open', () => {
 
     assert.equal(modalInstance.showCount, 1);
 });
-test('clearing one filter preserves unrelated query state and focuses its control', () => {
+test('clearing one filter preserves unrelated query state and focuses its control', async () => {
     assert.equal(typeof controller.clearActiveFilterSource, 'function');
     const control = element({name: 'filter_department', value: 'IT'});
     control.focused = false;
@@ -554,18 +625,22 @@ test('clearing one filter preserves unrelated query state and focuses its contro
     }});
     source.querySelectorAll = selector => selector === '[name]' ? [control] : [];
     source.querySelector = () => control;
-    const location = {
-        href: 'https://example.test/assets/people/?filter_department=IT&target=asset-1&page=4',
-        replacements: [],
-        replace(url) { this.replacements.push(url); },
-    };
+    const page = partialPage();
 
-    controller.clearActiveFilterSource({exportLinks: []}, source, location);
+    controller.clearActiveFilterSource({
+        exportLinks: [],
+        documentRoot: page.documentRoot,
+        browserWindow: page.browserWindow,
+        storage: page.storage,
+    }, source, page.location);
+    await flushRefresh();
 
-    const replacement = new URL(location.replacements[0]);
-    assert.equal(replacement.searchParams.has('filter_department'), false);
-    assert.equal(replacement.searchParams.has('page'), false);
-    assert.equal(replacement.searchParams.get('target'), 'asset-1');
+    const requested = new URL(page.requests[0]);
+    assert.equal(page.requests.length, 1);
+    assert.equal(requested.searchParams.has('filter_department'), false);
+    assert.equal(requested.searchParams.has('page'), false);
+    assert.equal(requested.searchParams.get('target'), 'asset-1');
+    assert.equal(page.host.workspace.replacedWith, page.served.workspace);
     assert.equal(control.focused, true);
 });
 function partialNavigationFixture({fetchError = null} = {}) {
@@ -666,7 +741,7 @@ test('sort click fetches the server-sorted page and replaces the table workspace
         metaKey: false, ctrlKey: false, shiftKey: false, altKey: false,
         prevented: false,
         preventDefault() { this.prevented = true; },
-        target: {closest(selector) { return selector === '.table-sort-link, [data-query-reset]' ? link : null; }},
+        target: {closest(selector) { return selector.includes('.table-sort-link') ? link : null; }},
     };
 
     await binding.handleClick(event);
@@ -676,7 +751,8 @@ test('sort click fetches the server-sorted page and replaces the table workspace
     assert.equal(fixture.requests[0].url, link.href);
     assert.equal(fixture.requests[0].options.headers['X-Requested-With'], 'XMLHttpRequest');
     assert.equal(fixture.current.replacedWith, fixture.replacement);
-    assert.deepEqual(fixture.history.pushed, [link.href]);
+    // 排序只换表格内容，地址栏保持不动。
+    assert.deepEqual(fixture.history.pushed, []);
     assert.equal(fixture.focusedSortLink.focused, true);
     assert.equal(fixture.liveRegion.textContent, '列表已更新。共 18 条，当前显示第 1–18 条');
     assert.deepEqual(fixture.location.assigned, []);
@@ -711,7 +787,7 @@ test('filter submit serializes all current controls and updates without a page r
     assert.equal(requested.searchParams.get('page_size'), '50');
     assert.equal(requested.searchParams.has('page'), false);
     assert.equal(fixture.current.replacedWith, fixture.replacement);
-    assert.equal(fixture.history.pushed.length, 1);
+    assert.deepEqual(fixture.history.pushed, []);
     assert.deepEqual(fixture.location.assigned, []);
 });
 

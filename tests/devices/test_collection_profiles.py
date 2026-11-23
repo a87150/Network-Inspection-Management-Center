@@ -153,7 +153,8 @@ class CollectionProfilesTests(TestCase):
         from tests.auth import login_admin
         from django.urls import reverse
         login_admin(self.client)
-        for kind in ('networks','servers','weakcurrent'):
+        # 弱电页右上角不再放采集模板入口，只留平台配置与报表配置。
+        for kind in ('networks','servers'):
             # Both workspaces expose the template action and its modal.
             response=self.client.get(reverse('record_list',args=[kind]))
             self.assertContains(response,'data-modal-load="collectionTemplateModal"')

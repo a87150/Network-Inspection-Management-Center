@@ -11,6 +11,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from assets.payloads import asset_detail_payload
+from index.common.table_payload import attach_column_options
 from index.common.table_payload import row_payloads as table_row_payloads
 from index.common.table_payload import table_payload
 from index.common.table_query import PAGE_SIZES, apply_table_filters, query_without_page
@@ -182,6 +183,9 @@ def _domain_panels(request):
     selected = request.GET.get('object', 'accounts')
     if selected not in DOMAIN_OBJECT_PAGES:
         selected = 'accounts'
+    # 岛内用的是 resource_table，它只渲染表体和翻页、没有工具栏；岛接管工具栏的
+    # 那套开关（showToolbar）在这三张表上等于把筛选和导出一并藏掉，所以这里让
+    # 服务端工具栏照常渲染，和域对象列表页保持同一套筛选/导出。
     panels = [
         _domain_panel(request, kind, active=(kind == selected))
         for kind in DOMAIN_OBJECT_PAGES
@@ -236,6 +240,13 @@ def _alias_legacy_parameters(request, object_type):
     return alias
 
 
+def _export_href(request, table_key, object_type):
+    """导出筛选结果：带上当前筛选、去掉页码，导的是整个结果集而不是这一页。"""
+    query = query_without_page(request, f'{object_type}_page')
+    url = reverse('table_export', args=[table_key])
+    return url + ('?' + query if query else '')
+
+
 def _domain_panel(request, object_type, *, active, operation_form=None):
     """一个域对象视图渲染所需的全部数据；三个页签各取一份。
 
@@ -277,7 +288,7 @@ def _domain_panel(request, object_type, *, active, operation_form=None):
             })
         return actions
 
-    domain_objects = table_payload(
+    domain_objects = attach_column_options(table_payload(
         page_obj, table_definition,
         table_row_payloads(
             page_obj.object_list, table_definition,
@@ -285,12 +296,28 @@ def _domain_panel(request, object_type, *, active, operation_form=None):
         ),
         extra={
             'endpoint': f'/api/v1/domain-{object_type}/',
+            # 岛内是 resource_table，没有工具栏；False 让模板渲染服务端那一份。
+            'showToolbar': False,
+            # 筛选栏、列选择和导出都在服务端工具栏里，参数带页签前缀。
+            'tableKey': table_definition.key,
+            'exportUrl': _export_href(request, table_definition.key, object_type),
+            # 首屏就把服务端算好的筛选态交给表格，选中的筛选框、排序箭头才对得上。
+            'filters': table_state['filters'],
+            'sort': table_state['sort'],
+            'order': table_state['order'],
+            'shownFilters': {
+                field.key: bool(field.default_filter) or field.key in table_state['filters']
+                for field in table_definition.fields if field.filterable
+            },
+            'visibleColumns': {
+                field.key: bool(field.default_visible) for field in table_definition.fields
+            },
             'label': page.title,
             'region_label': f'{page.title}数据表',
             'select_attr': 'data-domain-target-checkbox' if can_select else '',
             'select_value_key': 'id',
         },
-    )
+    ), table_definition, table_state)
 
     return {
         'object_type': object_type,

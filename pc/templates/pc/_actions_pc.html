@@ -1,0 +1,10 @@
+{% comment %}
+PC 工作区页头：采集包下载 + 分析配置。PC 清单由采集器上报，
+没有设备表单也没有导入入口（assets.views 不给 computers 这两样上下文）。
+{% endcomment %}
+{% if can_administer %}
+{% if action_issue_settings %}<a class="btn btn-outline-primary" href="{% url 'issue_severity_settings' %}?project=computers" data-modal-load="issueSeverityModal">问题等级设置</a>{% endif %}
+{% if task_project_kind %}<button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#profileConfigModal">{{ task_config_label }}</button><button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#alertPolicyModal">告警配置</button>{% endif %}
+{% if task_project_kind == 'computers' and pc_upload_config and task_default_profile %}<a class="btn btn-primary" href="{% url 'pc_script_download' task_default_profile.pk 'windows' %}">下载 Windows 采集包</a><a class="btn btn-primary" href="{% url 'pc_script_download' task_default_profile.pk 'macos' %}">下载 macOS 采集脚本</a>{% endif %}
+{% if task_project_kind %}<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#runTaskModal">{{ task_action_label }}</button>{% endif %}
+{% endif %}

@@ -7,10 +7,13 @@ from django.utils.cache import add_never_cache_headers, patch_vary_headers
 from django.utils.deprecation import MiddlewareMixin
 
 
-PUBLIC_VIEWS = frozenset({'index', 'asset_list', 'people_statistics', 'item_list'})
+# 资产台账（PC / 网络设备 / 服务器 / 弱电设备 / 人员部门）统一要求登录：
+# 匿名只发登录页，不再给脱敏列表。
+PUBLIC_VIEWS = frozenset({'index', 'people_statistics', 'item_list'})
 READER_VIEWS = PUBLIC_VIEWS | frozenset({
+    'asset_list', 'asset_detail', 'asset_detail_json', 'pc_task_page', 'pc_task_stats',
     'access_record_list',
-    'asset_detail', 'asset_detail_json', 'person_detail',
+    'person_detail',
     'computer_analysis_list', 'computer_log_list',
     'computer_log_detail', 'computer_analysis_detail', 'computer_error_list',
     'task_list', 'task_detail', 'alert_list', 'alert_detail',
@@ -18,7 +21,9 @@ READER_VIEWS = PUBLIC_VIEWS | frozenset({
     'domain_computer_list', 'domain_computer_detail', 'domain_group_list', 'domain_group_detail',
     'inspection_records', 'error_records', 'record_list', 'record_detail',
     'infrastructure_inspection_detail', 'analysis_problem_list',
-    'operations_overview', 'operations_overview_data', 'ip_management', 'maintenance_list',
+    'inspection_problem_list',
+    'operations_overview', 'operations_overview_data', 'operations_overview_node',
+    'ip_management', 'maintenance_list',
     'topology_data', 'topology_batches', 'topology_interfaces', 'topology_links', 'topology_evidence',
 })
 AUTH_VIEWS = frozenset({

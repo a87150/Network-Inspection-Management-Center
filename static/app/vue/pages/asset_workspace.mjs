@@ -28,6 +28,9 @@ export default {
     },
     data() {
         return {
+            // 排序状态放 data：sortBy 要能改它，computed 写不进去。
+            sort: new URLSearchParams(window.location.search).get('sort') || '',
+            order: new URLSearchParams(window.location.search).get('order') || 'asc',
             items: this.rows,
             total: this.count,
             currentPage: this.page,
@@ -47,12 +50,6 @@ export default {
     computed: {
         visibleColumns() {
             return this.columns.filter((column) => this.visible[column.key] !== false);
-        },
-        sort() {
-            return new URLSearchParams(window.location.search).get('sort') || '';
-        },
-        order() {
-            return new URLSearchParams(window.location.search).get('order') || 'asc';
         },
         columnCount() {
             return this.visibleColumns.length + (this.selectAttr ? 1 : 0) + 1;
@@ -95,6 +92,10 @@ export default {
             try {
                 const params = Object.fromEntries(new URLSearchParams(window.location.search));
                 params.page = page;
+                if (this.sort) {
+                    params.sort = this.sort;
+                    params.order = this.order;
+                }
                 const payload = await api.get(this.endpoint, params);
                 this.items = payload.results || [];
                 this.total = payload.count;
@@ -112,25 +113,14 @@ export default {
         },
         async sortBy(column) {
             if (!column.sortable) return;
-            this.syncUrl({ sort: column.key, order: this.nextOrder(column), page: null });
+            // 排序状态留在组件里，load() 直接带进请求；syncUrl 是空实现，别指望它。
+            this.order = this.nextOrder(column);
+            this.sort = column.key;
             await this.load(1);
         },
         // 地址栏只留真正有值的参数：空筛选项和默认值一律不写。
-        syncUrl(changes) {
-            if (!window.history.replaceState) return;
-            const params = new URLSearchParams(window.location.search);
-            Object.keys(changes).forEach((key) => {
-                const value = changes[key];
-                if (value === null || value === undefined || String(value).trim() === '' || value === 1 || value === '1') {
-                    params.delete(key);
-                } else {
-                    params.set(key, String(value));
-                }
-            });
-            const kept = Array.from(params.entries()).filter(([, value]) => String(value).trim() !== '');
-            const search = new URLSearchParams(kept).toString();
-            window.history.replaceState({}, '', window.location.pathname + (search ? '?' + search : ''));
-        },
+        /** 排序、筛选、翻页都在岛内完成，地址栏只由外部入口决定。 */
+        syncUrl() {},
         nextOrder(column) {
             return this.sort === column.key && this.order === 'asc' ? 'desc' : 'asc';
         },
@@ -258,5 +248,5 @@ export default {
             </div>
         </div>
         </Teleport>
-    </div>`,
+</div>`,
 };

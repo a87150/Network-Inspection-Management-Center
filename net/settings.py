@@ -129,6 +129,9 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'net.infrastructure.page_cache.PageCacheMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # 放在最后：压缩内层中间件已经生成好的响应。拓扑页那份 286 KB 的内联
+    # snapshot 压缩后只剩几十 KB，全站 HTML/JSON 一起受益。
+    'django.middleware.gzip.GZipMiddleware',
 ]
 
 ROOT_URLCONF = 'net.urls'
@@ -310,6 +313,10 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = Path(os.getenv('DJANGO_STATIC_ROOT', str(BASE_DIR / 'staticfiles')))
+
+# 前端是原生 ES module，import 路径上写不了版本号，浏览器会把旧脚本一直用下去，
+# 改完看不到效果。让 WhiteNoise 每次都回源校验（命中通常是 304，开销可忽略）。
+WHITENOISE_MAX_AGE = 0
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/6.1/ref/settings/#default-auto-field

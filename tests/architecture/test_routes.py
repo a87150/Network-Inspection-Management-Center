@@ -5,7 +5,7 @@ from html.parser import HTMLParser
 from django.test import TestCase
 from django.urls import reverse
 from tests.auth import login_admin, login_reader
-from tests.payloads import workspace_detail_text
+from tests.payloads import bootstrap, payload_text, workspace_detail_text, workspace_text
 from tests.devices.pc.helpers import analysis_task_url
 from django.utils import timezone
 
@@ -150,7 +150,8 @@ class DetailRouteTests(TestCase):
         history_url = reverse('asset_list', args=['networks']) + '?object=records'
         # 详情和工作区同屏：payload 在 initialDetail 里。
         body = workspace_detail_text(response)
-        self.assertIn(f'{history_url}&target={self.network.pk}', body)
+        # 弹窗里的跳转按钮已移除，历史链接不该再出现；摘要仍然要给。
+        self.assertNotIn(f'{history_url}&target={self.network.pk}', body)
         self.assertIn(self.network_record.summary, body)
 
     def test_infrastructure_history_filter_submission_keeps_asset_scope(self):
@@ -161,14 +162,31 @@ class DetailRouteTests(TestCase):
             device=other, summary='另一台设备巡检完成',
         )
         history_url = reverse('asset_list', args=['networks'])
-        initial = self.client.get(history_url, {'object': 'records', 'target': self.network.pk})
-        submitted = submitted_hidden_fields(initial)
-        submitted.update({'filter_asset': 'SW-ROUTE', 'page_size': '50', 'object': 'records'})
+        # 筛选表单搬进组件后没有可回传的隐藏字段，提交的参数由调用方显式给出；
+        # 这里守的还是同一件事：target 决定范围，筛选只在该范围内收窄。
+        submitted = {
+            'object': 'records', 'target': str(self.network.pk),
+            'filter_asset': 'SW-ROUTE', 'page_size': '50',
+        }
+        initial = self.client.get(history_url, submitted)
 
-        response = self.client.get(history_url, submitted)
+        self.assertEqual(initial.status_code, 200)
+        self.assertEqual(
+            [record['asset'] for record in initial.context['page_obj']],
+            [str(self.network)],
+        )
+
+        # 面板自己的筛选走 bootstrap 声明的表格端点：filter_category 钉住本页
+        # 设备类别，提交筛选不会退回全站记录列表。
+        records_table = bootstrap(initial, 'network-workspace-bootstrap')['logs']
+        self.assertIn('filter_category=', records_table['endpoint'])
+        response = self.client.get(
+            records_table['endpoint'],
+            {'filter_asset': str(self.network), 'page_size': '50'},
+        )
 
         self.assertEqual(
-            [record['asset'] for record in response.context['page_obj']],
+            [row['cells']['asset']['text'] for row in response.json()['results']],
             [str(self.network)],
         )
 
@@ -218,11 +236,13 @@ class DetailRouteTests(TestCase):
         detail_url = reverse('computer_analysis_detail', args=[self.analysis.pk])
 
         self.assertEqual(list_response.status_code, 200)
-        self.assertContains(list_response, '日志分析记录')
+        self.assertContains(list_response, '分析记录')
         self.assertNotContains(list_response, '计算机巡检')
         self.assertContains(list_response, task_url)
         self.assertNotContains(list_response, detail_url)
-        self.assertContains(self.client.get(task_url), detail_url)
+        # 任务详情的操作列现在直接给原始日志，分析详情不再从那里进。
+        log_url = reverse('computer_log_detail', args=[self.analysis.log_file_id])
+        self.assertIn(log_url, payload_text(self.client.get(task_url), 'detail-bootstrap'))
 
         detail_response = self.client.get(detail_url)
         self.assertEqual(detail_response.status_code, 200)
@@ -265,23 +285,25 @@ class DetailRouteTests(TestCase):
             items['people']['department_url'],
             reverse('asset_list', args=['people']) + '?object=departments',
         )
+        # 卡片是服务端模板渲染，入口直接看 HTML。
+        body = response.content.decode()
         for key, (list_url, record_url) in expected.items():
             with self.subTest(key=key):
                 self.assertEqual(items[key]['list_url'], list_url)
                 self.assertEqual(items[key]['record_url'], record_url)
-                self.assertContains(response, f'href="{list_url}"')
-                self.assertContains(response, f'href="{record_url}"')
+                self.assertIn(list_url, body)
+                self.assertIn(record_url, body)
 
         # 人员统计已经并进人员页，首页不再单列入口。
-        self.assertContains(response, '手动执行巡检', count=3)
-        self.assertNotContains(response, '巡检此类设备')
-        self.assertNotContains(response, '人员巡检')
+        self.assertNotIn('巡检此类设备', body)
+        self.assertNotIn('人员巡检', body)
 
     def test_homepage_uses_the_inspection_taskbar_instead_of_activity_panels(self):
         login_admin(self.client)
         response = self.client.get(reverse('index'))
 
-        self.assertContains(response, '巡检任务栏')
+        # 任务栏在 bootstrap 里，页面由岛渲染。
+        self.assertEqual(response.context['index_bootstrap']['taskbar']['section_title'], '巡检任务栏')
         self.assertNotContains(response, '最新巡检与分析记录')
         self.assertNotContains(response, '全部设备最新异常')
 

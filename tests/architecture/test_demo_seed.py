@@ -3,7 +3,7 @@ import json
 import re
 
 from tests import response_body
-from tests.payloads import payload_text, workspace_detail_text
+from tests.payloads import bootstrap, payload_text, workspace_detail_text
 import uuid
 from datetime import timedelta
 from io import StringIO
@@ -16,6 +16,22 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 from tests.auth import login_admin
+
+
+# 五个工作区页各自把表格数据放在 <page>-workspace-bootstrap 里；
+# 服务端不再渲染表格标记，所以断言改读那份 JSON。
+WORKSPACE_PAGES = {
+    'computers': 'pc',
+    'networks': 'network',
+    'servers': 'server',
+    'weakcurrent': 'weakcurrent',
+    'people': 'people',
+}
+
+
+def _workspace_text(response, kind):
+    """工作区页 bootstrap 的 JSON 文本，中文保持原样，便于直接搜中文与 URL。"""
+    return payload_text(response, WORKSPACE_PAGES[kind] + '-workspace-bootstrap')
 
 
 def _records_payload(response):
@@ -80,10 +96,11 @@ class DashboardActionTests(TestCase):
         response = self.client.get(reverse('index'))
         items = {item['key']: item for item in response.context['items']}
 
-        self.assertContains(response, 'PC列表')
-        self.assertContains(response, '日志列表')
-        self.assertContains(response, '日志分析记录')
-        self.assertContains(response, '手动执行巡检', count=3)
+        # 卡片由 Vue 渲染，按钮文案都在 bootstrap JSON 里。
+        body = payload_text(response, 'dashboard-index-bootstrap')
+        for label in ('PC列表', '日志列表', '分析记录'):
+            self.assertIn(label, body)
+        self.assertEqual(body.count('"manual_action_label": "手动执行巡检"'), 3)
         self.assertEqual(
             items['computers']['list_url'],
             reverse('asset_list', args=['computers']),
@@ -789,11 +806,10 @@ class DeterministicDemoSeedTests(TestCase):
     def test_seeded_data_smokes_lists_details_filters_exports_and_import_ui(self):
         login_admin(self.client)
         call_command('seed_demo_data', reset=True, stdout=StringIO())
-
         homepage = self.client.get(reverse('index'))
-        self.assertContains(homepage, '巡检任务栏')
-        self.assertContains(homepage, '演示网络巡检')
-        self.assertContains(homepage, reverse('task_list'))
+        self.assertEqual(homepage.context['index_bootstrap']['taskbar']['section_title'], '巡检任务栏')
+        self.assertIn('演示网络巡检', str(homepage.context['index_bootstrap']['taskbar']['rows']))
+        self.assertIn(reverse('task_list'), str(homepage.context['index_bootstrap']['taskbar']['rows']))
         for kind, model, lookup, identity, detail_value in (
             ('people', People, {'employee_id': 'DEMO-P002'}, '演示-李然', 'DEMO-P002'),
             ('computers', Computer, {'computer_name': 'DEMO-PC-DEV-02'}, 'DEMO-PC-DEV-02', '02-00-00-00-01-02'),
@@ -807,7 +823,7 @@ class DeterministicDemoSeedTests(TestCase):
                 detail_url = reverse('asset_detail', args=[kind, asset.pk])
                 # 列表改成 Vue 岛之后，行内容与动作链接都在 bootstrap JSON 里；
                 # 直接 grep HTML 只会看到 \u 转义后的字节。
-                table = payload_text(listing, 'asset-workspace-bootstrap')
+                table = _workspace_text(listing, kind)
                 self.assertIn(identity, table)
                 self.assertIn(detail_url, table)
                 detail = self.client.get(detail_url)
@@ -816,15 +832,15 @@ class DeterministicDemoSeedTests(TestCase):
                 self.assertIn(identity, body)
                 self.assertIn(detail_value, body)
                 if kind == 'computers':
-                    self.assertIn(
+                    # 弹窗里不再有跳转按钮，这条链接随「查看日志分析记录」一起移除。
+                    self.assertNotIn(
                         f'{reverse("asset_list", args=["computers"])}'
                         f'?object=analyses&target={asset.pk}', body,
                     )
                 elif kind in {'networks', 'servers', 'weakcurrent'}:
-                    # json_script 用 ensure_ascii，& 在页面里是 \u0026，所以分段断言。
+                    # 弹窗里的「查看巡检记录」跳转按钮已移除，链接不该再出现。
                     body_text = detail.content.decode()
-                    self.assertIn(f'{reverse("asset_list", args=[kind])}?object=records', body_text)
-                    self.assertIn(f'target={asset.pk}', body_text)
+                    self.assertNotIn(f'{reverse("asset_list", args=[kind])}?object=records', body_text)
                 if kind == 'computers':
                     self.assertNotContains(listing, 'id="importModal"')
                 else:
@@ -839,12 +855,15 @@ class DeterministicDemoSeedTests(TestCase):
                 record = model.objects.get(summary=summary)
                 detail_url = reverse('record_detail', args=[kind, record.pk])
                 listing = self.client.get(reverse('asset_list', args=[kind]) + '?object=records')
+                # 巡检记录面板同样在 bootstrap 里：中文以原样进 JSON 文本，
+                # 用 HTML 断言只会撞上 \u 转义。
+                records_text = _workspace_text(listing, kind)
                 if kind in {'networks', 'servers'}:
                     # These records predate the newest seeded task for the project.
-                    self.assertNotContains(listing, summary)
+                    self.assertNotIn(summary, records_text)
                 else:
-                    self.assertContains(listing, summary)
-                    self.assertContains(listing, detail_url)
+                    self.assertIn(summary, records_text)
+                    self.assertIn(detail_url, records_text)
                 detail = self.client.get(detail_url)
                 # 巡检记录详情仍是独立页，不走资产工作区。
                 body = payload_text(detail, 'detail-bootstrap')
@@ -860,7 +879,14 @@ class DeterministicDemoSeedTests(TestCase):
         )
         # The project landing page shows task statistics; standalone historical
         # analyses remain reachable in the global records list and detail page.
-        self.assertContains(analysis_list, '最新任务统计')
+        # 标题「最新任务统计」由组件渲染，服务端只出 analyses 这一块数据：
+        # 任务栏 + 六格统计 + 问题类型明细入口。
+        analyses_panel = bootstrap(
+            analysis_list, 'pc-workspace-bootstrap',
+        )['analyses']
+        for field in ('tasks', 'stats', 'task', 'problemUrl', 'isLatest'):
+            self.assertIn(field, analyses_panel)
+        self.assertIn('total', analyses_panel['stats'])
         historical_list = self.client.get(reverse('inspection_records'),
                                           {'filter_asset': 'DEMO-PC-DEV-02'})
         self.assertContains(historical_list, 'DEMO-PC-DEV-02')

@@ -87,18 +87,48 @@ def device_overview(kind, model):
             'total': Count('pk'),
             'active': Count('pk', filter=Q(is_enabled=True)),
             'variants': Count('server_type', distinct=True),
+            'models': Count('model', filter=~Q(model=''), distinct=True),
         }
     else:
         aggregates = {
             'total': Count('pk'),
             'active': Count('pk', filter=Q(is_enabled=True)),
             'variants': Count('vendor', filter=~Q(vendor=''), distinct=True),
+            'models': Count('model', filter=~Q(model=''), distinct=True),
         }
     metrics = model.objects.aggregate(**aggregates)
     metrics.setdefault('variants', 0)
+    metrics.setdefault('models', 0)
+    metrics['disabled'] = max(0, metrics['total'] - metrics['active'])
     metrics['variant_label'] = '采集方式' if kind == 'servers' else '厂商'
     metrics['active_rate'] = (
         round(metrics['active'] * 100 / metrics['total'], 1)
         if metrics['total'] else 0.0
     )
     return metrics
+
+
+def record_block_lines(kind):
+    """巡检记录方块的统计行：任务总数、成功数、涉及设备数。
+
+    三个设备页共用；PC 页有自己的分析统计，不走这里。
+    """
+    from django.db.models import Count, Q
+
+    from net.inspections.task_summary import project_task_queryset
+    from net.models import TaskRun
+
+    stats = project_task_queryset(kind).aggregate(
+        tasks=Count('pk'),
+        done=Count('pk', filter=Q(status=TaskRun.Status.SUCCESS)),
+    )
+    tasks = stats['tasks'] or 0
+    done = stats['done'] or 0
+    rate = round(done * 100 / tasks, 1) if tasks else 0.0
+    return [
+        [{'text': '任务 '}, {'text': str(tasks), 'tone': 'success'},
+         {'text': ' 个 · 成功 '},
+         {'text': str(done), 'tone': 'success' if done else ''}, {'text': ' 个'}],
+        [{'text': '成功率 %s%%' % rate}],
+        [{'text': '每次采集执行一次，保留结果与耗时'}],
+    ]

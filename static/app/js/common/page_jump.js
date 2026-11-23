@@ -1,4 +1,5 @@
 // 页码输入框：回车或失焦跳到对应页，其他查询参数沿用 data-page-jump 里的串。
+// 有表格工作区时只换表格内容，地址栏不动。
 (function () {
     function go(input) {
         const base = input.dataset.pageJump || '';
@@ -9,7 +10,19 @@
         input.value = page;
         const params = new URLSearchParams(base);
         params.set('page', String(page));
-        window.location.search = params.toString();
+        const href = '?' + params.toString();
+        const controller = window.AppTableWorkspace;
+        if (typeof controller?.refreshTableWorkspaces === 'function') {
+            let storage = null;
+            try {
+                storage = window.localStorage;
+            } catch (_error) {
+                storage = null;
+            }
+            controller.refreshTableWorkspaces(document, href, storage, window);
+            return;
+        }
+        window.location.assign(href);
     }
 
     document.addEventListener('keydown', function (event) {

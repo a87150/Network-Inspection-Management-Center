@@ -1,3 +1,5 @@
+import copy
+
 from django.core.exceptions import ValidationError
 from django.http import Http404
 from django.shortcuts import get_object_or_404
@@ -88,6 +90,11 @@ def _table_source(request, table_key, scope):
                 scope, target=request.GET.get('target', '').strip(), task=task,
             )
         return _inspection_records()
+    if table_key == 'access_records':
+        if scope:
+            raise Http404('该表不支持分组导出')
+        from net.models import AccessRecord
+        return AccessRecord.objects.all()
     if table_key == 'error_records' and not scope:
         return _error_records()
     if table_key == 'task_targets' and scope:
@@ -102,12 +109,63 @@ def _table_source(request, table_key, scope):
     raise Http404('未知的数据表')
 
 
+# 域对象三张表在页面里用页签前缀（accounts_filter_x）互不打架，导出端点没有页签
+# 概念，所以把带前缀的参数补一份无前缀别名，筛选才会真的跟着导出走。
+EXPORT_PARAMETER_PREFIXES = {
+    'domain_accounts': 'accounts',
+    'domain_computers': 'computers',
+    'domain_groups': 'groups',
+}
+
+
+def _with_unprefixed_parameters(request, table_key):
+    prefix = EXPORT_PARAMETER_PREFIXES.get(table_key)
+    if not prefix:
+        return request
+    data = request.GET.copy()
+    for key in list(data):
+        if key.startswith(f'{prefix}_'):
+            data.setdefault(key[len(prefix) + 1:], data[key])
+    if data == request.GET:
+        return request
+    alias = copy.copy(request)
+    alias.GET = data
+    return alias
+
+
+def _selected_only(request, source):
+    """导出所选：前端把勾选的主键逗号拼在 target_ids 里，只导这些行。"""
+    raw = (request.GET.get('target_ids') or '').strip()
+    if not raw:
+        return source
+    wanted = {value.strip() for value in raw.split(',') if value.strip()}
+    if not wanted:
+        return source
+    if hasattr(source, 'filter'):
+        model = getattr(source, 'model', None)
+        if model is None:
+            return source
+        try:
+            keys = [model._meta.pk.to_python(value) for value in wanted]
+        except (ValidationError, ValueError):
+            return source.none()
+        return source.filter(pk__in=keys)
+    return [row for row in source if str(_row_pk(row)) in wanted]
+
+
+def _row_pk(row):
+    if isinstance(row, dict):
+        return row.get('id') or row.get('pk') or ''
+    return getattr(row, 'pk', '')
+
+
 def table_export(request, table_key, scope=''):
     try:
         definition = get_table_definition(table_key)
     except KeyError as exc:
         raise Http404('未知的数据表') from exc
-    source = _table_source(request, table_key, scope)
+    request = _with_unprefixed_parameters(request, table_key)
+    source = _selected_only(request, _table_source(request, table_key, scope))
     if table_key == 'computer_inspections':
         definition = project_record_definition('computers')
     elif table_key == 'inspection_records' and scope in RECORD_PAGES:

@@ -1,3 +1,34 @@
+## 2.00（2026-11-23）
+
+### 修复
+- 生产库补上遗漏的三个迁移（0073 outcome_key / 0074 device_type 中文 / 0075 access_report_config）。
+  之前 `net_accessreportconfig` 表不存在，弱电工作区与报表配置保存直接 500。
+- 网络模板解析在 Windows 上必然超时：spawn 子进程重建解释器要 200-600ms，
+  而默认预算只有 250ms。平台是 Windows 时给足 2 秒上限，解析仍在隔离进程里跑。
+- `device_workspace.mjs` 写了两个 `computed` 键，后者覆盖前者，
+  `logsView` / `accessView` 全部丢失，弱电「门禁记录」页签读 `accessView.*` 抛 TypeError。
+- `assets/views.py` 的 `cached['latest'] = cached if latest else None` 把指标字典写回自己，
+  `request._project_task_metrics` 成自环，PC 分析记录方块的「最新任务」分支形同虚设。
+- `/api/v1/access-report/` 匿名可取门禁报表（平台名、通过/拒绝数、按天通行量）。补 `@login_required`。
+- `dashboard_tasks` 不在 `READER_VIEWS`，只读账号在设备页点任务栏翻页 403。已入白名单。
+- 设备问题明细的「等级」筛选恒空：行里存中文标签，choices 是英文枚举，比对不上。改存枚举值。
+- 统计面板的「其他」类点开必空：面板按兜底归到「其他」，明细侧查分组表拿不到。改为反向排除。
+- `stats.profile_label` 未脱敏：只读账号能读到巡检配置名。按 `is_admin` 清空。
+- `server/` 的 `pane in ('logs','access')` 从弱电抄来，服务器页没有 access 块，`?pane=access` 回空 payload。
+- 问题明细 bootstrap 的 `endpoint` 手工拼 category，含 `&`/`#` 时断裂。改 `quote()`。
+
+### 变更
+- PC 首页方块顺序改为 PC 资产 / 分析记录 / 日志。
+- PC 与三个设备页的六格统计改为并排小卡片（`col-6 col-xl-2` + `card`）。
+- 设备页长条可点开问题明细，走独立路由 `inspection_problem_list`，
+  与 PC 共用 `_problem_rows_response`，翻页/排序/筛选/导出都回到自己的地址。
+- 设备检查项按大类归并出面板（网络 24 项 → 6 类，服务器 9 → 4，弱电 6 → 5），
+  记录表列与问题明细仍用细项名。
+- 设备任务栏默认选中最新任务；只有选中的不是最新那条才显示「当前选择任务统计」。
+
+### 清理
+- 删 `apply_queryset_table` / `_legacy_definition`（全项目零调用）、`_queryset_values`（已被 bulk 版取代）。
+
 # 更新记录
 
 [返回项目首页](../README.md)

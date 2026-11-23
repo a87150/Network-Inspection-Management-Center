@@ -78,11 +78,13 @@ class NewFeatureSurfaceDesignTests(TestCase):
         )
 
         self.assertContains(response, 'configuration-backup-workspace')
-        self.assertContains(response, 'configuration-backup-summary')
-        self.assertContains(response, 'alert alert-warning')
-        self.assertContains(response, 'table-scroll-shell')
-        self.assertContains(response, 'table-scroll-hint')
-        self.assertContains(response, 'table data-table')
+        # 页面级类名留在挂载点上，表格骨架已经随整页搬进组件源码。
+        component = (
+            Path(settings.BASE_DIR) / 'static/app/vue/pages/configuration_backups.mjs'
+        ).read_text(encoding='utf-8')
+        for marker in ('configuration-backup-summary', 'table-scroll-shell',
+                       'table-scroll-hint', 'data-table'):
+            self.assertIn(marker, component)
 
     def test_access_record_sync_uses_compact_single_source_picker(self):
         response = self.client.get(reverse('access_record_list'))

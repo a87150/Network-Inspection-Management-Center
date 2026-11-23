@@ -1,46 +1,12 @@
 {% extends 'common/base.html' %}
+{% load static %}
 {% block title %}配置备份历史{% endblock %}
 {% block content %}
-<div class="configuration-backup-workspace">
-<header class="page-heading">
-    <div class="page-heading__copy">
-        <p class="page-heading__eyebrow">设备配置</p>
-        <h1 class="page-heading__title">配置备份历史</h1>
-        <p class="page-heading__description">{{ asset }} · 保留最近 10 个成功日版本，第 11 份保存时删除最早一份</p>
-    </div>
-    <div class="page-heading__actions"><a class="btn btn-outline-secondary" href="{% url 'asset_detail' item_key asset.pk %}">返回设备详情</a></div>
-</header>
-<div class="alert alert-warning">配置原文不含脱敏，可能包含账号、密码等敏感凭据，只允许管理员下载；本页仅展示版本元数据，不预览原文，也不提供恢复或上传操作。{% if item_key == 'weakcurrent' %} 弱电设备目前只覆盖 Network 配置节的部分 API，既有部分配置快照不代表已生成整机备份。{% else %} 每日巡检自动备份一次当前运行配置，不含证书、私钥或固件，不是整机镜像。{% endif %}</div>
-
-<section class="card surface-card table-scroll-shell configuration-backup-table">
-    <div class="card-header surface-card__header configuration-backup-header">
-        <h2 class="h5 mb-0">已保存版本</h2>
-        {% if backups %}<ul class="configuration-backup-summary" aria-label="版本摘要">
-            <li><span>版本</span><strong>{{ summary.count }}</strong></li>
-            <li><span>合计</span><strong>{{ summary.total_bytes|filesizeformat }}</strong></li>
-            <li><span>累计变更</span><strong class="configuration-backup-summary__add">+{{ summary.added }}</strong><strong class="configuration-backup-summary__remove">-{{ summary.removed }}</strong></li>
-            <li><span>最近采集</span><strong>{{ summary.latest_at|date:'Y-m-d H:i' }}</strong></li>
-        </ul>{% endif %}
-    </div>
-    {% if backups %}
-    <p class="table-scroll-hint">可横向滚动查看文件、校验值和来源任务</p>
-    <div class="table-responsive" role="region" aria-label="配置备份版本表" tabindex="0">
-        <table class="table data-table table-hover align-middle mb-0">
-            <caption class="visually-hidden">配置备份版本、采集时间、范围、大小、校验值及来源任务</caption>
-            <thead><tr><th scope="col">采集时间</th><th scope="col">文件</th><th scope="col">厂商 / 范围</th><th scope="col">大小</th><th scope="col">较上一版</th><th scope="col">SHA-256</th><th scope="col">来源任务</th><th scope="col" class="table-actions-column table-actions-cell">操作</th></tr></thead>
-            <tbody>{% for backup in backups %}<tr>
-                <td><span class="configuration-backup-date">{{ backup.backup_date|date:'Y-m-d' }}</span><br><span class="text-secondary">{{ backup.captured_at|date:'H:i:s T' }}</span></td>
-                <td class="text-break">{{ backup.filename }}<br><span class="text-secondary">{{ backup.media_type }}</span></td>
-                <td>{{ backup.vendor|default:'未记录' }}<br><span class="text-secondary">{{ backup.scope|default:'未记录' }}</span></td>
-                <td>{{ backup.byte_size|filesizeformat }}<br><span class="text-secondary">{{ backup.byte_size }} 字节</span></td>
-                <td class="configuration-backup-change">{% if backup.change_added_value %}<span class="change-chip change-chip--add">+{{ backup.change_added_value }}</span>{% endif %}{% if backup.change_removed_value %}<span class="change-chip change-chip--remove">-{{ backup.change_removed_value }}</span>{% endif %}{% if backup.change_label == '无变化' %}<span class="change-chip change-chip--same">无变化</span>{% elif not backup.change_label %}<span class="text-secondary">首个版本</span>{% endif %}</td>
-                <td class="configuration-backup-hash"><code title="{{ backup.sha256 }}">{{ backup.sha256 }}</code></td>
-                <td>{% if backup.task_target_id %}<a href="{% url 'task_detail' backup.task_target.task_id %}">查看来源任务</a>{% else %}<span class="text-secondary">无关联任务</span>{% endif %}</td>
-                <td class="text-end table-actions-cell"><div class="d-inline-flex gap-2 table-row-actions"><a class="btn btn-sm btn-outline-primary" href="{% url 'configuration_backup_download' item_key asset.pk backup.pk %}">下载原文</a><a class="btn btn-sm btn-outline-secondary" href="{% url 'configuration_backup_diff' item_key asset.pk backup.pk %}">与上一版对比</a></div></td>
-            </tr>{% endfor %}</tbody>
-        </table>
-    </div>
-    {% else %}<div class="card-body"><div class="empty-state"><strong>暂无可用配置备份</strong><span>仅成功采集并保存的版本会显示在此；既有脱敏快照或部分配置节不一定形成完整备份。</span></div></div>{% endif %}
-</section>
+<div class="configuration-backup-workspace" data-vue-page="configuration-backups" data-vue-bootstrap="configuration-backups-bootstrap">
+    <noscript><p class="alert alert-warning mb-0">配置备份历史需要启用 JavaScript。</p></noscript>
 </div>
+{{ history_bootstrap }}
+{% endblock %}
+{% block page_scripts %}
+<script type="module" src="{% static 'app/vue/boot.mjs' %}"></script>
 {% endblock %}

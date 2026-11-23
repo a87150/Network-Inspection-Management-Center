@@ -1,0 +1,8 @@
+{% comment %}
+人员部门页头：导入人员 + 人员统计（统计口径在 assets.views.people_statistics，
+页面是 people/statistics.html，不在这里另算一份）。
+{% endcomment %}
+{% if can_administer %}
+{% if import_enabled %}<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#importModal">导入人员</button>{% endif %}
+<a class="btn btn-outline-secondary" href="{% url 'people_statistics' %}">人员统计</a>
+{% endif %}

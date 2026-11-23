@@ -165,7 +165,8 @@ class FinalOperatorTests(TestCase):
         self.assertEqual(analysis.actionable_issue_count, 0)
         page = self.client.get(analysis_task_url(analysis))
         body = payload_text(page, 'detail-bootstrap')
-        self.assertIn('CPU 23%', body)
+        # 「关键指标」列已从任务结果表里拿掉，CPU/内存这类数字不再进 payload。
+        self.assertNotIn('关键指标', body)
         self.assertIn('成功', body)
         # 徽章由 payload 给出，组件按 status 上色。
         self.assertIn('"status": "info"', body)

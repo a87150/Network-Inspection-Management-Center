@@ -1,0 +1,12 @@
+{% comment %}
+旧 /assets/<kind>/ 兜底列表页的页头按钮。工作区页面有各自的 _actions_*.html，
+这里按 kind 派生，供还没搬进工作区的 kind 使用。
+{% endcomment %}
+{% if can_administer %}
+{% if device_form %}<a class="btn btn-outline-primary" href="{% url 'collection_templates' item_key %}" data-modal-load="collectionTemplateModal">配置模板</a>{% endif %}
+{% if task_project_kind %}<button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#profileConfigModal">{{ task_config_label }}</button><button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#alertPolicyModal">告警配置</button>{% endif %}
+{% if item_key == 'servers' %}<a class="btn btn-primary" href="{% url 'windows_server_script_download' %}">下载 Windows 脚本</a>{% endif %}
+{% if device_form %}<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#deviceFormModal">添加设备</button>{% endif %}
+{% if import_enabled %}<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#importModal">{% if item_key == 'people' %}导入人员{% else %}导入设备{% endif %}</button>{% endif %}
+{% if task_project_kind %}<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#runTaskModal">{{ task_action_label }}</button>{% endif %}
+{% endif %}

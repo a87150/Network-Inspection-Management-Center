@@ -1,0 +1,46 @@
+{% load static %}
+<div class="modal fade" id="accessReportModal" tabindex="-1" aria-labelledby="accessReportModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" method="post" action="{% url 'access_report_config' %}">
+            {% csrf_token %}
+            <div class="modal-header">
+                <h2 class="modal-title fs-5" id="accessReportModalLabel">报表配置</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-secondary">按周期把门禁通行报表推送到告警渠道。渠道在「告警渠道」里维护，这里只选用哪一个。</p>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="access-report-enabled" name="is_enabled"{% if report_config.is_enabled %} checked{% endif %}>
+                    <label class="form-check-label" for="access-report-enabled">启用定期发送</label>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="access-report-channel">发送渠道</label>
+                    <select class="form-select" id="access-report-channel" name="channel">
+                        <option value="">不指定</option>
+                        {% for channel in report_channels %}
+                        <option value="{{ channel.pk }}"{% if report_config.channel_id == channel.pk %} selected{% endif %}>{{ channel }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="row g-3">
+                    <div class="col-6">
+                        <label class="form-label" for="access-report-interval">发送间隔（小时）</label>
+                        <input class="form-control" type="number" min="1" max="720" id="access-report-interval" name="interval_hours" value="{{ report_config.interval_hours|default:24 }}">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label" for="access-report-days">报表覆盖天数</label>
+                        <input class="form-control" type="number" min="1" max="90" id="access-report-days" name="range_days" value="{{ report_config.range_days|default:7 }}">
+                    </div>
+                </div>
+                <p class="small text-secondary mt-3 mb-0">
+                    上次发送：{% if report_config.last_sent_at %}{{ report_config.last_sent_at|date:"Y-m-d H:i" }}{% else %}尚未发送{% endif %}
+                    · <a href="{% url 'access_report_api' %}" target="_blank" rel="noopener">查看报表 JSON</a>
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="submit" class="btn btn-primary">保存</button>
+            </div>
+        </form>
+    </div>
+</div>

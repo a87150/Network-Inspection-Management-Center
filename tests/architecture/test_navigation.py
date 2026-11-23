@@ -71,7 +71,8 @@ class NavigationMenuTests(TestCase):
         nav = self._nav_html()
         expected = [
             ('人员·部门', reverse('asset_list', args=['people'])),
-            ('域控管理', reverse('domain_controller_settings') + '?object=accounts'),
+            # 域控三块列表在同一页，导航不再带 ?object= 参数。
+            ('域控管理', reverse('domain_controller_settings')),
             ('PC', reverse('asset_list', args=['computers'])),
             ('网络设备', reverse('asset_list', args=['networks'])),
             ('服务器', reverse('asset_list', args=['servers'])),

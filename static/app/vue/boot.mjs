@@ -3,7 +3,9 @@ import { createApp } from '../../vendor/vue/vue.esm-browser.prod.js';
 
 const pages = {
     'maintenance-list': () => import('./pages/maintenance_list.mjs'),
-    'ip-subnet-form': () => import('./pages/ip_subnet_form.mjs'),
+    // IP 管理整页也是一个岛，键名沿用旧值：tests/devices/test_ip_management_page.py
+    // 断言了 data-vue-page="ip-subnet-form"。
+    'ip-subnet-form': () => import('./pages/ip_management.mjs'),
     'alert-list': () => import('./pages/alert_list.mjs'),
     'alert-detail': () => import('./pages/resource_detail.mjs'),
     'asset-detail': () => import('./pages/resource_detail.mjs'),
@@ -17,7 +19,23 @@ const pages = {
     'pc-errors': () => import('./pages/resource_table.mjs'),
     'task-runs': () => import('./pages/resource_table.mjs'),
     'domain-objects': () => import('./pages/resource_table.mjs'),
+    // 六个工作区页：一份 bootstrap JSON 渲染整页，逐页迁移，旧页面阶段 5 再删。
     'asset-workspace': () => import('./pages/asset_workspace.mjs'),
+    'pc-workspace': () => import('./pages/pc_workspace.mjs'),
+    // 三个设备页共用一份组件：差异只有方块和 access 页签，都在 bootstrap 里。
+    'network-workspace': () => import('./pages/device_workspace.mjs'),
+    'server-workspace': () => import('./pages/device_workspace.mjs'),
+    'weakcurrent-workspace': () => import('./pages/device_workspace.mjs'),
+    'people-workspace': () => import('./pages/people_workspace.mjs'),
+    'people-statistics': () => import('./pages/people_statistics.mjs'),
+    'dashboard-index': () => import('./pages/dashboard_index.mjs'),
+    // 分析详情弹窗里的问题明细：整表复用 workspace-table。
+    'analysis-problems': () => import('./pages/problem_rows.mjs'),
+    // 只读页：配置差异、配置备份历史、访客汇总与访客列表。
+    'configuration-diff': () => import('./pages/configuration_diff.mjs'),
+    'configuration-backups': () => import('./pages/configuration_backups.mjs'),
+    'public-summary': () => import('./pages/public_summary.mjs'),
+    'public-list': () => import('./pages/public_list.mjs'),
 };
 
 /* scope 用来避开弹窗里的同位 id：详情片段塞进弹窗后，
@@ -33,7 +51,22 @@ export function readBootstrap(id, scope) {
     }
 }
 
+/* 页面是用整页导航切过去的，Bootstrap 的弹窗状态带不过去：
+   残留的遮罩层和 body 锁滚动会在新页面上留一层黑，进页面先清掉。 */
+function clearStaleModalState() {
+    document.querySelectorAll('.modal-backdrop').forEach((node) => node.remove());
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+    document.querySelectorAll('.modal.show').forEach((node) => {
+        node.classList.remove('show');
+        node.style.removeProperty('display');
+        node.setAttribute('aria-hidden', 'true');
+    });
+}
+
 export async function mountPages(root = document) {
+    if (root === document) clearStaleModalState();
     const hosts = Array.from(root.querySelectorAll('[data-vue-page]'));
     for (const host of hosts) {
         if (host.__vue_app__) continue;
@@ -48,6 +81,8 @@ export async function mountPages(root = document) {
         app.config.errorHandler = (error) => console.error(error);
         app.mount(host);
     }
+    // 表格是组件渲染出来的，勾选框在挂载后才存在；让页面上那些按 DOM 抓元素的脚本重绑。
+    document.dispatchEvent(new CustomEvent('app:modal-updated'));
 }
 
 if (typeof document !== 'undefined') {

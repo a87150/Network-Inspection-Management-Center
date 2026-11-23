@@ -99,14 +99,12 @@ class HomeTaskbarTests(TestCase):
 
         response = self.client.get(reverse('index'))
 
-        self.assertContains(response, '巡检任务栏')
-        self.assertEqual(len(response.context['task_page'].object_list), 10)
-        self.assertContains(response, '?task_page=2')
-        self.assertContains(
-            response,
-            '<span class="page-link text-white">1 / 2</span>',
-            html=True,
-        )
+        # 任务栏是岛渲染的，翻页走 tasks.json，这里看 bootstrap。
+        bar = response.context['index_bootstrap']['taskbar']
+        self.assertEqual(bar['section_title'], '巡检任务栏')
+        self.assertEqual(len(bar['rows']), 10)
+        self.assertEqual((bar['page'], bar['pages']), (1, 2))
+        self.assertEqual(bar['endpoint'], reverse('dashboard_tasks'))
 
     def test_task_page_two_preserves_unrelated_query_parameters(self):
         """Characterize task pagination as independent from other dashboard queries."""
@@ -117,18 +115,10 @@ class HomeTaskbarTests(TestCase):
             'filter': 'active',
             'q': 'switch',
         })
-        parser = TaskbarTableParser()
-        parser.feed(response.content.decode(response.charset))
-        previous_link = next(
-            link for link in parser.links
-            if parse_qs(urlsplit(link).query).get('task_page') == ['1']
-        )
-
-        self.assertEqual(parse_qs(urlsplit(previous_link).query), {
-            'task_page': ['1'],
-            'filter': ['active'],
-            'q': ['switch'],
-        })
+        bar = response.context['index_bootstrap']['taskbar']
+        self.assertEqual(bar['page'], 2)
+        # 翻页只换任务栏，地址栏不再出现 task_page。
+        self.assertNotContains(response, '?task_page=')
 
     def test_people_and_domain_tasks_are_excluded(self):
         """Showing directory operations here would mix non-asset work into inspection follow-up."""
@@ -236,7 +226,8 @@ class HomeTaskbarTests(TestCase):
         )
 
         response = self.client.get(reverse('index'))
-        self.assertContains(response, summary['integrity_warning'])
+        rows = response.context['index_bootstrap']['taskbar']['rows']
+        self.assertIn(summary['integrity_warning'], [row['integrity_warning'] for row in rows])
 
     def test_task_summary_conserves_surplus_materialized_targets(self):
         """Legacy surplus rows must increase the displayed total and raise a warning."""
@@ -279,7 +270,8 @@ class HomeTaskbarTests(TestCase):
         )
 
         response = self.client.get(reverse('index'))
-        self.assertContains(response, summary['integrity_warning'])
+        rows = response.context['index_bootstrap']['taskbar']['rows']
+        self.assertIn(summary['integrity_warning'], [row['integrity_warning'] for row in rows])
 
     def test_home_taskbar_shows_created_and_finished_times(self):
         """A single time column cannot distinguish task creation from completion."""
@@ -306,16 +298,13 @@ class HomeTaskbarTests(TestCase):
         )
 
         response = self.client.get(reverse('index'))
-        parser = TaskbarTableParser()
-        parser.feed(response.content.decode(response.charset))
-        created_column = parser.headers.index('创建时间')
-        finished_column = parser.headers.index('完成时间')
+        rows = response.context['index_bootstrap']['taskbar']['rows']
 
-        self.assertTrue(all(row[created_column] != '—' for row in parser.rows))
-        self.assertIn('—', [row[finished_column] for row in parser.rows])
+        self.assertTrue(all(row['created_at'] for row in rows))
+        self.assertIn('', [row['finished_at'] for row in rows])
         self.assertIn(
             timezone.localtime(finished_at).strftime('%Y-%m-%d %H:%M:%S'),
-            [row[finished_column] for row in parser.rows],
+            [row['finished_at'] for row in rows],
         )
         self.assertTrue(TaskRun.objects.filter(pk=unfinished.pk).exists())
 
@@ -339,18 +328,14 @@ class HomeTaskbarTests(TestCase):
             )
 
         response = self.client.get(reverse('index'))
-        parser = TaskbarTableParser()
-        parser.feed(response.content.decode(response.charset))
-        self.assertIn('已取消', parser.headers)
-        cancelled_column = parser.headers.index('已取消')
+        rows = response.context['index_bootstrap']['taskbar']['rows']
 
-        self.assertCountEqual(
-            [row[cancelled_column] for row in parser.rows],
-            ['1', '0'],
-        )
+        self.assertCountEqual([row['cancelled'] for row in rows], [1, 0])
 
     def test_home_empty_taskbar_spans_the_cancelled_column(self):
         """A stale colspan would leave the empty state misaligned with the taskbar header."""
         response = self.client.get(reverse('index'))
 
-        self.assertContains(response, '<td colspan="12">')
+        bar = response.context['index_bootstrap']['taskbar']
+        self.assertEqual(bar['rows'], [])
+        self.assertEqual(bar['empty_title'], '暂无巡检任务')

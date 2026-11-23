@@ -11,8 +11,9 @@ from pc.detail_payload import computer_log_detail_payload
 
 
 def _log_actions(log):
+    # 就地弹窗，url 留给 JS 不可用时当普通链接。
     return [{
-        'kind': 'link', 'label': '查看详情',
+        'kind': 'link', 'label': '查看详情', 'detail_modal': True,
         'url': reverse('computer_log_detail', args=[log.pk]),
     }]
 

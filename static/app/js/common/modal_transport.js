@@ -52,6 +52,19 @@
             win.AppFormAccessibility?.enhanceFormErrors(modal, doc);
             doc.dispatchEvent(new win.CustomEvent('app:modal-updated', {detail: {modal}}));
         }
+        /* 配置保存后关窗要把页面数据换掉：页内换表格并派发 app:modal-updated，
+           地址栏和页面位置都不动。 */
+        function refreshPageData(modal) {
+            let storage = null;
+            try {
+                storage = win.localStorage;
+            } catch (_) { /* Preferences are optional. */ }
+            if (doc.querySelector('[data-table-workspace]')
+                && typeof win.AppTableWorkspace?.refreshTableWorkspaces === 'function') {
+                win.AppTableWorkspace.refreshTableWorkspaces(doc, win.location.href, storage, win);
+            }
+            doc.dispatchEvent(new win.CustomEvent('app:modal-updated', {detail: {modal: null}}));
+        }
         async function updateTables(page, response, modal) {
             if (!doc.querySelector('[data-table-workspace]') || !page.querySelector('[data-table-workspace]')) return;
             const tableScope = href => {
@@ -252,7 +265,10 @@
         doc.addEventListener('hidden.bs.modal', event => {
             const state = states.get(event.target);
             if (state) state.drafts.clear(); // Credentials never enter browser storage.
-            if (state?.reloadOnClose) win.location.reload();
+            if (state?.reloadOnClose) {
+                state.reloadOnClose = false;
+                refreshPageData(event.target);
+            }
         });
         return {navigate};
     }

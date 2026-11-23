@@ -186,14 +186,6 @@ body.app-shell {
     content: "";
 }
 
-.summary-card--danger::after {
-    background: var(--color-danger);
-}
-
-.summary-card--success::after {
-    background: var(--color-success);
-}
-
 /* grid 的 1fr 把标题撑满，角标自然贴到卡片右上角。 */
 .metric-card__status-row {
     display: grid;
@@ -243,12 +235,6 @@ body.app-shell {
     position: relative;
 }
 
-.summary-card__caption {
-    margin-top: .45rem;
-    color: var(--color-text-muted);
-    font-size: var(--fs-sm);
-}
-
 .table-query-form {
     position: relative;
 }
@@ -266,7 +252,6 @@ body.app-shell {
 }
 
 .table-filter-bar .table-filter-field,
-.table-filter-bar .table-filter-field--keyword,
 .table-filter-bar .table-filter-field--editable-options {
     flex: 0 1 12rem;
     min-width: 9rem;
@@ -397,15 +382,6 @@ body.app-shell {
     background: rgba(255, 255, 255, .42);
 }
 
-.status-surface--danger {
-    border-color: rgba(188, 57, 75, .2) !important;
-    background: linear-gradient(145deg, rgba(255, 255, 255, .9), rgba(255, 241, 243, .7));
-}
-
-.status-surface--danger > .card-header {
-    background: rgba(255, 240, 242, .62);
-}
-
 .status-badge::before,
 .badge.text-bg-success::before,
 .badge.text-bg-danger::before,
@@ -461,10 +437,6 @@ body.app-shell {
 .alert-channel-modal .form-check:hover {
     border-color: rgba(49, 87, 213, .35);
     background: rgba(255, 255, 255, .72);
-}
-
-.alert-channel-modal__notice {
-    border-left: 3px solid rgba(49, 87, 213, .45) !important;
 }
 
 .alert-channel-management,
@@ -1281,37 +1253,12 @@ body.app-shell {
     border-radius: var(--radius-lg);
 }
 
-.app-content .accordion {
-    overflow: hidden;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    background: var(--color-surface);
-    box-shadow: var(--shadow-surface) !important;
-}
-
-.app-content .accordion-item {
-    border-color: var(--color-border);
-}
-
-.app-content .accordion-button {
-    color: var(--color-text);
-    font-weight: 650;
-}
-
-.app-content .accordion-button:not(.collapsed) {
-    background: #eef3ff;
-    color: var(--color-primary);
-    box-shadow: inset 0 -1px 0 var(--color-border);
-}
-
-.detail-list dt,
 .surface-card dt {
     color: var(--color-text-muted);
     font-size: var(--fs-sm);
     font-weight: 650;
 }
 
-.detail-list dd,
 .surface-card dd {
     min-width: 0;
     padding-bottom: .65rem;
@@ -1432,9 +1379,6 @@ code {
 .page-metric-card > span { font-size: var(--fs-sm); font-weight: 700; }
 .page-metric-card > strong { display: block; margin: .3rem 0; color: var(--color-text); font-size: var(--fs-lg); line-height: 1; }
 .page-metric-card > small { font-size: var(--fs-sm); }
-.page-metric-card--success > strong { color: var(--color-success); }
-.page-metric-card--warning > strong { color: var(--color-warning); }
-.page-metric-card--danger > strong { color: var(--color-danger); }
 
 @media (max-width: 1199.98px) {
     .page-metric-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -1525,6 +1469,10 @@ code {
     grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
     align-items: start;
 }
+/* 统计方块 + 结果表：方块在上，表格通栏在下。 */
+.resource-detail__grid--stacked {
+    grid-template-columns: 1fr;
+}
 .detail-text { white-space: pre-wrap; word-break: break-word; }
 
 /* 方块里的单位跟在总数后面，比数字小一档。 */
@@ -1597,4 +1545,34 @@ code {
 
 @media (prefers-reduced-motion: reduce) {
     .detail-skeleton__bar { animation: none; }
+}
+
+/* 弹窗里的翻页和每页条数挤在一行，窄的时候不换行断开。 */
+.modal .page-pagination,
+.modal [class*="pagination"] {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* 内层 .page-pagination__actions 三个控件的最小宽度合计约 376px，比 375px 视口还宽；
+   modal-content 是 overflow: hidden，多出来的「下一页」会被直接裁掉、点不到。
+   这里让按钮和页码跟着收缩，仍然塞不下时整条分页横向滚动——滚动条在 nav 上，
+   不会被裁。justify-content 用 safe center：内容超宽时退回左对齐，滚动起点不丢。 */
+.modal .page-pagination {
+  justify-content: safe center;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding-inline: .75rem;
+}
+
+.modal .page-pagination__actions {
+  min-width: 0;
+  padding-inline: .25rem;
+}
+
+.modal .page-pagination .page-pagination__button,
+.modal .page-pagination__page {
+  min-width: 0;
+  flex: 0 1 auto;
 }

@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from index.common.badges import status_badge
 from index.common.detail_payload import (
-    detail_payload, field_section, link_action, list_section,
+    code_section, detail_payload, field_section,
 )
 
 
@@ -15,32 +15,22 @@ def _stamp(value, fmt='%Y-%m-%d %H:%M:%S'):
 
 
 def computer_log_detail_payload(*, log, analyses):
-    sections = [
-        field_section('日志概览', [
-            ('PC', (log.computer.computer_name if log.computer_id else '') or '未知'),
-            ('采集时间', _stamp(log.collected_at)),
-            ('平台', log.platform or '-'),
-            ('内容哈希', log.content_hash),
-        ]),
-        list_section('分析历史', [
-            {
-                'label': _stamp(analysis.created_at),
-                'meta': analysis.summary or '暂无摘要',
-                'badge': status_badge(analysis.status, analysis.get_status_display()),
-                'url': reverse('computer_analysis_detail', args=[analysis.pk]),
-                'action': '查看详情',
-            }
-            for analysis in analyses
-        ], empty='尚未分析。完成一次日志分析后，历史记录会显示在这里。'),
-    ]
+    # 分析历史和返回列表按钮都去掉了：日志详情本身就是终点，
+    # 日志原文直接铺开，不再塞进折叠块里。
     return detail_payload(
         title='日志详情 #%s' % log.pk,
         eyebrow='PC 日志',
         description='日志内容只读；分析由手动或定时任务按每台 PC 最新日志执行。',
-        actions=[link_action('返回日志列表', reverse('asset_list', args=['computers']) + '?object=logs')],
-        sections=sections,
-        disclosure={
-            'heading': '已脱敏日志内容',
-            'text': json.dumps(log.payload, ensure_ascii=False, indent=2, sort_keys=True),
-        },
+        sections=[
+            field_section('日志概览', [
+                ('PC', (log.computer.computer_name if log.computer_id else '') or '未知'),
+                ('采集时间', _stamp(log.collected_at)),
+                ('平台', log.platform or '-'),
+                ('内容哈希', log.content_hash),
+            ]),
+            code_section(
+                '已脱敏日志内容',
+                json.dumps(log.payload, ensure_ascii=False, indent=2, sort_keys=True),
+            ),
+        ],
     )

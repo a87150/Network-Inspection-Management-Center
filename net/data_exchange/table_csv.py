@@ -65,15 +65,24 @@ def export_filtered_csv(request, definition, queryset, filename):
         request, queryset, definition, include_legacy_status=False,
     )
 
+    # 导出的列跟着页面勾选的「显示列」走；一列都没勾就退回全部列，
+    # 导出按钮上会写明这是全量导出。
+    requested = [key for key in request.GET.get('columns', '').split(',') if key]
+    if requested:
+        known = {field.key: field for field in definition.fields}
+        fields = [known[key] for key in requested if key in known] or list(definition.fields)
+    else:
+        fields = list(definition.fields)
+
     def rows():
-        yield '\ufeff'
+        yield '﻿'
         writer = csv.writer(_CsvBuffer(), lineterminator='\r\n')
-        yield writer.writerow([field.label for field in definition.fields])
+        yield writer.writerow([field.label for field in fields])
         iterator = records.iterator(chunk_size=1000) if hasattr(records, 'iterator') else iter(records)
         for record in iterator:
             yield writer.writerow([
                 _spreadsheet_safe(_display_value(record, field))
-                for field in definition.fields
+                for field in fields
             ])
 
     response = StreamingHttpResponse(rows(), content_type='text/csv; charset=utf-8')

@@ -9,10 +9,18 @@ export default {
         lines: {type: Array, default: () => []},
         entry: {type: String, default: '查看'},
         latest: {type: String, default: ''},
-        latestLabel: {type: String, default: '最新'},
+        // workspace.block() 输出的是 latest_label；v-bind 直传时下划线不会
+        // 被 camelize，两个维护一个兜底，页面不用各自改名。
+        latestLabel: {type: String, default: ''},
+        latest_label: {type: String, default: ''},
         selected: {type: Boolean, default: false},
     },
     emits: ['select'],
+    computed: {
+        latestTitle() {
+            return this.latest_label || this.latestLabel || '最新';
+        },
+    },
     template: `
     <a class="card surface-card metric-card h-100 w-100 text-start text-body border-0 text-decoration-none"
        href="#" role="tab" :aria-selected="selected ? 'true' : 'false'" @click.prevent="$emit('select')">
@@ -29,7 +37,7 @@ export default {
                 </template>
             </div>
             <div class="metric-card__entry mt-auto pt-3" style="text-align:right;width:100%"><span class="metric-card__current">当前 · </span>[[ entry ]]</div>
-            <div class="metric-card__latest" style="text-align:right;width:100%">[[ latestLabel ]] [[ latest || '暂无' ]]</div>
+            <div class="metric-card__latest" style="text-align:right;width:100%">[[ latestTitle ]] [[ latest || '暂无' ]]</div>
         </div>
     </a>`,
 };

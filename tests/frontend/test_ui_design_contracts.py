@@ -1,4 +1,7 @@
+import csv
+from io import StringIO
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from tests.frontend.template_root import TemplateRoot
 import re
@@ -8,12 +11,19 @@ from django.contrib.staticfiles import finders
 from django.test import TestCase
 from django.template.loader import render_to_string
 from django.urls import reverse
+from net.models import Domain_Account, People
 from tests.auth import login_admin
+from tests.payloads import bootstrap, payload_text, vue_component
 
 
 class SharedInterfaceContractTests(TestCase):
     def setUp(self):
         login_admin(self.client)
+
+    def vue_component(self, *relative_path):
+        """读 Vue 源码：整页搬到浏览器之后，这些契约只能在这里验。"""
+        return (Path(__file__).resolve().parents[2] / 'static' / 'app' / 'vue'
+                / Path(*relative_path)).read_text(encoding='utf-8')
 
     def test_pinned_vue_distribution_is_vendored_with_provenance(self):
         static_root = Path(__file__).resolve().parents[2] / 'static' / 'vendor' / 'vue'
@@ -34,25 +44,32 @@ class SharedInterfaceContractTests(TestCase):
             self.assertIn(expected, provenance)
 
     def test_table_query_actions_share_vertical_centering_contract(self):
-        response = self.client.get(reverse('asset_list', args=['networks']))
-        html = response.content.decode(response.charset)
+        """筛选/重置/导出三个动作按钮共用同一组垂直居中类。
+
+        工具栏搬进 Vue 组件后服务端 HTML 里没有这三个按钮；原来的 data-* 钩子
+        只喂旧的 table_workspace.js，组件自己管状态不需要它们。契约现在写在组件
+        模板上，断言语义不变：三个动作长得一样高。
+        """
+        component = self.vue_component('components', 'table_toolbar.mjs')
 
         actions = (
-            ('data-filter-submit', '筛选'),
-            ('data-query-reset', '重置查询'),
-            ('data-filtered-export', '导出筛选结果'),
+            ('筛选', r'<button[^>]*>筛选</button>'),
+            ('重置查询', r'<button[^>]*>重置查询</button>'),
+            # 没勾显示列时按钮文案会变成「导出全部列」，同一颗按钮两种文案都认。
+            ('导出筛选结果', r'<a[^>]*>(?:导出筛选结果|\[\[ exportColumnCount[^]]*\]\])</a>'),
         )
-        for marker, label in actions:
-            with self.subTest(marker=marker):
-                match = re.search(
-                    rf'<(?:button|a)[^>]*{marker}[^>]*>{label}</(?:button|a)>',
-                    html,
-                )
-                self.assertIsNotNone(match)
+        for label, pattern in actions:
+            with self.subTest(action=label):
+                match = re.search(pattern, component)
+                self.assertIsNotNone(match, label)
                 self.assertIn(
                     'd-inline-flex align-items-center justify-content-center',
                     match.group(),
                 )
+        # 页面确实把表格数据交给这份工具栏组件，没有另写一套按钮；
+        # 「加入维护窗口」这类页面专属动作走 #actions 插槽进同一个工具栏。
+        self.assertIn('<workspace-table v-bind="table">',
+                      self.vue_component('pages', 'device_workspace.mjs'))
 
     def test_table_workspace_exposes_guarded_page_action_after_export(self):
         template_root = TemplateRoot.default()
@@ -85,13 +102,19 @@ class SharedInterfaceContractTests(TestCase):
 
     def test_task_summary_blocks_use_the_glass_class(self):
         # 告警页的统计已并进顶部大方块（metric-card），不再有独立的小方块。
-        template_root = TemplateRoot.default()
-        for relative in ('inspections/task_list.html',):
-            source = (template_root / relative).read_text(encoding='utf-8')
-            blocks = re.findall(r'<article class="[^"]*page-metric-card[^"]*"', source)
-            self.assertTrue(blocks, relative + ' 没有总结方块')
-            for block in blocks:
-                self.assertIn('glass-card', block, relative + ': ' + block)
+        # 任务页的方块现在由 metric_card 组件与 task_center 的服务端方块渲染：
+        # page-metric-card 那套模板随死模板 inspections/task_list.html 一起删了。
+        self.assertIn(
+            'class="card surface-card metric-card',
+            self.vue_component('components', 'metric_card.mjs'),
+        )
+
+        source = (TemplateRoot.default() / 'inspections' / 'task_center.html').read_text(
+            encoding='utf-8')
+        blocks = re.findall(r'class="card[^"]*metric-card[^"]*"', source)
+        self.assertTrue(blocks, 'inspections/task_center.html 没有总结方块')
+        for block in blocks:
+            self.assertIn('surface-card', block, block)
 
     def test_every_referenced_css_variable_is_defined(self):
         """var(--x) 引用了没定义的变量时，整条声明失效并退回初始值。
@@ -274,16 +297,16 @@ class SharedInterfaceContractTests(TestCase):
     def test_dashboard_exposes_scan_friendly_overview_and_task_table(self):
         response = self.client.get(reverse('index'))
 
-        self.assertContains(response, 'dashboard-grid')
-        self.assertContains(response, 'metric-card__status-row')
-        self.assertContains(response, 'data-table')
-        self.assertContains(response, '人员')
-        self.assertContains(response, 'PC')
-        self.assertContains(response, '网络设备')
-        self.assertContains(response, '服务器')
-        self.assertContains(response, '弱电设备')
-        self.assertContains(response, '域控管理')
-        self.assertContains(response, '巡检任务栏')
+        # 首页卡片由 Vue 渲染：结构在组件模板，卡片名在 bootstrap JSON。
+        self.assertContains(response, 'data-vue-page="dashboard-index"')
+        component = self.vue_component('pages', 'dashboard_index.mjs')
+        for marker in ('dashboard-grid', 'metric-card__status-row'):
+            self.assertIn(marker, component)
+        body = payload_text(response, 'dashboard-index-bootstrap')
+        for name in ('人员部门', 'PC', '网络设备', '服务器', '弱电设备', '域控管理'):
+            self.assertIn(name, body)
+        self.assertEqual(response.context['index_bootstrap']['taskbar']['section_title'], '巡检任务栏')
+        self.assertContains(response, 'data-vue-page="dashboard-index"')
 
     def test_execution_and_department_surfaces_use_the_shared_glass_workspace(self):
         dashboard = self.client.get(reverse('index'))
@@ -292,10 +315,13 @@ class SharedInterfaceContractTests(TestCase):
         records = self.client.get(reverse('inspection_records'))
         analyses = self.client.get(reverse('computer_analysis_list'))
 
-        self.assertContains(dashboard, 'execution-workspace')
-        self.assertContains(dashboard, 'execution-workspace__summary')
-        self.assertContains(statistics, 'department-workspace')
-        self.assertContains(statistics, 'department-workspace__summary')
+        # 首页任务栏也换成岛了，execution-workspace 由 task_bar 组件渲染。
+        bar = dashboard.context['index_bootstrap']['taskbar']
+        self.assertTrue(bar['rows'] or bar['empty_title'])
+        self.assertIn('execution-workspace', Path('static/app/vue/components/task_bar.mjs').read_text(encoding='utf-8'))
+        statistics_component = self.vue_component('pages', 'people_statistics.mjs')
+        self.assertIn('department-workspace', statistics_component)
+        self.assertIn('department-workspace__summary', statistics_component)
         self.assertContains(task_list, 'execution-list-workspace')
         self.assertContains(records, 'execution-list-workspace')
         self.assertContains(analyses, '最新任务统计')
@@ -304,18 +330,22 @@ class SharedInterfaceContractTests(TestCase):
     def test_dashboard_cards_use_glass_surface_without_status_side_rail(self):
         response = self.client.get(reverse('index'))
 
-        self.assertContains(response, 'glass-card')
-        self.assertContains(response, 'data-dashboard-card-state')
-        self.assertNotContains(response, 'metric-card--danger')
-        self.assertNotContains(response, 'metric-card--success')
+        component = self.vue_component('pages', 'dashboard_index.mjs')
+        self.assertIn('glass-card', component)
+        self.assertIn('data-dashboard-card-state', component)
+        self.assertNotIn('metric-card--danger', component)
+        self.assertNotIn('metric-card--success', component)
 
     def test_asset_table_marks_scroll_context_and_action_column(self):
         response = self.client.get(reverse('asset_list', args=['networks']))
+        # 整页由 Vue 渲染：服务端只剩挂载点，外壳与表格结构都在组件源码里。
+        self.assertContains(response, 'data-vue-page="network-workspace"')
 
-        self.assertContains(response, 'table-scroll-shell')
-        # 表体与 caption 由组件渲染：外壳留在模板里，表格结构只能验组件源码。
-        component = (Path(__file__).resolve().parents[2]
-                     / 'static/app/vue/pages/asset_workspace.mjs').read_text(encoding='utf-8')
+        shell = self.vue_component('components', 'workspace_table.mjs')
+        self.assertIn('card surface-card table-scroll-shell', shell)
+        self.assertIn('table-scroll-hint', shell)
+
+        component = self.vue_component('components', 'data_table.mjs')
         self.assertIn('table data-table table-hover align-middle mb-0', component)
         # 筛选条件本身就在输入框里可见，再叠一行可点击的 chip 只是重复，已移除。
         self.assertNotContains(response, 'data-active-filter-list')
@@ -325,7 +355,6 @@ class SharedInterfaceContractTests(TestCase):
         # control with different results.
         self.assertNotContains(response, 'networks-keyword-filter')
         self.assertNotContains(response, 'data-filter-key="keyword"')
-        self.assertContains(response, 'table-scroll-hint')
         self.assertIn('table-actions-column', component)
         self.assertIn('table-actions-cell', component)
 
@@ -443,17 +472,14 @@ class SharedInterfaceContractTests(TestCase):
         self.assertIn('line-height: 1.2', rule.group('body'))
 
     def test_remaining_standalone_content_cards_use_the_shared_surface(self):
-        template_root = TemplateRoot.default()
-        paths = (
-            'registration/login.html',
-            'public/list.html',
-            'public/summary.html',
-        )
+        login = (TemplateRoot.default() / 'registration' / 'login.html').read_text(
+            encoding='utf-8')
+        self.assertIn('surface-card', login)
 
-        for relative_path in paths:
-            with self.subTest(template=relative_path):
-                source = (template_root / relative_path).read_text(encoding='utf-8')
-                self.assertIn('surface-card', source)
+        # 门户两页整页搬进了 Vue：卡片结构在组件里，模板只剩挂载点与 bootstrap。
+        for component in ('public_list.mjs', 'public_summary.mjs'):
+            with self.subTest(component=component):
+                self.assertIn('surface-card', self.vue_component('pages', component))
 
 
 class AdminVisualContractTests(TestCase):
@@ -672,13 +698,100 @@ class ModalVisualContractTests(TestCase):
         self.assertIn('data-confirm-message', sources + vue_sources)
         self.assertIn('appConfirmModal', (project_root / 'index/templates/common/base.html').read_text(encoding='utf-8'))
 
+def _csv_rows(response):
+    """StreamingHttpResponse 没有 .content，导出结果只能顺着流读一遍。"""
+    return list(csv.DictReader(StringIO(
+        b''.join(response.streaming_content).decode('utf-8-sig'),
+    )))
+
+
+class TablePayloadCapabilityContractTests(TestCase):
+    """后端表格能力：choice 列自带候选、域三表有真工具栏、导出认所选与页签前缀。"""
+
+    def setUp(self):
+        login_admin(self.client)
+
+    def test_inspection_record_tables_ship_choice_options_to_the_toolbar(self):
+        """巡检记录表的 choice 筛选靠 options/optionMode 才渲染成下拉。"""
+        # 三台设备页的首屏都只算台账，巡检记录要带 ?pane=logs 才取。
+        for kind in ('networks', 'servers', 'weakcurrent'):
+            with self.subTest(kind=kind):
+                url = reverse('asset_list', args=[kind])
+                table = self.client.get(url + '?pane=logs').json()['logs']
+                columns = {column['key']: column for column in table['columns']}
+                self.assertEqual(columns['result_level']['optionMode'], 'fixed')
+                self.assertEqual(
+                    [option['value'] for option in columns['result_level']['options']],
+                    ['normal', 'info', 'warning', 'critical'],
+                )
+                for column in table['columns']:
+                    self.assertIn('options', column)
+                    self.assertIn('optionMode', column)
+
+    def test_domain_settings_panels_render_server_side_toolbars_with_export(self):
+        """域控页的 resource_table 没有工具栏，服务端工具栏必须自己渲染出来。"""
+        Domain_Account.objects.create(account_name='域账户', login_name='domain.user')
+        response = self.client.get(reverse('domain_controller_settings'))
+        html = response.content.decode()
+        for object_type, table_key in (
+            ('accounts', 'domain_accounts'),
+            ('computers', 'domain_computers'),
+            ('groups', 'domain_groups'),
+        ):
+            with self.subTest(table=table_key):
+                table = bootstrap(response, f'domain-objects-{object_type}-bootstrap')
+                self.assertFalse(table['showToolbar'])
+                self.assertEqual(
+                    urlsplit(table['exportUrl']).path,
+                    reverse('table_export', args=[table_key]),
+                )
+                self.assertIn(
+                    'href="' + reverse('table_export', args=[table_key]), html,
+                )
+        self.assertEqual(html.count('data-filtered-export'), 3)
+
+    def test_domain_export_honours_the_tab_prefixed_filters(self):
+        """页签用 accounts_filter_* 互不打架，导出端点也要按同一份条件筛。"""
+        Domain_Account.objects.create(account_name='启用账号', login_name='on.user', is_active=True)
+        Domain_Account.objects.create(account_name='停用账号', login_name='off.user', is_active=False)
+        response = self.client.get(
+            reverse('table_export', args=['domain_accounts']),
+            {'accounts_filter_is_active': 'false'},
+        )
+        self.assertEqual([row['账户名称'] for row in _csv_rows(response)], ['停用账号'])
+
+    def test_export_endpoint_limits_rows_to_the_selected_ids(self):
+        """「导出所选」传 target_ids（逗号分隔主键），只导勾中的行。"""
+        kept = People.objects.create(name='选中的', employee_id='E1')
+        People.objects.create(name='没选中的', employee_id='E2')
+        response = self.client.get(
+            reverse('table_export', args=['people']), {'target_ids': str(kept.pk)},
+        )
+        self.assertEqual([row['姓名'] for row in _csv_rows(response)], ['选中的'])
+
+    def test_client_sends_the_checked_ids_as_target_ids(self):
+        component = vue_component('components/workspace_table.mjs')
+        self.assertIn(
+            "url.searchParams.set('target_ids', this.selectedIds.join(','))", component,
+        )
+
+
 class PcListActionContractTests(TestCase):
     def test_pc_list_header_offers_script_downloads_behind_the_config_guard(self):
-        """采集包入口在头部，但只有存在上传配置与默认配置档案时才出现。"""
-        template_path = TemplateRoot.default() / 'common' / 'workspace_actions.html'
+        """采集包入口在 PC 页自己的片段里，只有存在上传配置与默认配置档案时才出现。"""
+        template_path = TemplateRoot.default() / 'pc' / '_actions_pc.html'
         html = template_path.read_text(encoding='utf-8')
 
         self.assertIn("task_project_kind == 'computers'", html)
         self.assertIn('pc_upload_config and task_default_profile', html)
         self.assertIn('下载 Windows 采集包', html)
         self.assertIn('下载 macOS 采集脚本', html)
+
+    def test_shared_action_bar_no_longer_carries_page_buttons(self):
+        """拆开之后共享层只剩按钮 class 规则，页面按钮不能回流到共用模板。"""
+        html = (TemplateRoot.default() / 'common' / 'workspace_actions.html').read_text(
+            encoding='utf-8',
+        )
+        self.assertNotIn('下载 Windows 采集包', html)
+        self.assertNotIn('添加设备', html)
+        self.assertNotIn('<button', html)

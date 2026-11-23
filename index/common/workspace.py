@@ -47,15 +47,18 @@ def block(*, key, title, metric=0, unit='', lines=(), entry='查看', latest='',
     }
 
 
-def task_rows(page_obj):
-    """巡检任务栏的行。summarize_task() 的输出里带着 TaskRun 实例，这里摊平成纯 dict。"""
+def task_rows(page_obj, *, redact_profiles=False):
+    """巡检任务栏的行。summarize_task() 的输出里带着 TaskRun 实例，这里摊平成纯 dict。
+
+    redact_profiles=True 时抹掉配置名：任务是只读账号也能看的，配置名不是。
+    """
     rows = []
     for summary in page_obj.object_list:
         task = summary['task']
         rows.append({
             'id': str(task.pk),
             'type_label': summary['type_label'],
-            'profile_label': summary['profile_label'],
+            'profile_label': '' if redact_profiles else summary['profile_label'],
             'source_label': summary['source_label'],
             'status': task.status,
             'status_label': summary['status_label'],
@@ -73,9 +76,9 @@ def task_rows(page_obj):
     return rows
 
 
-def task_block(page_obj, *, section_title, empty_title):
+def task_block(page_obj, *, section_title, empty_title, redact_profiles=False):
     return {
-        'rows': task_rows(page_obj),
+        'rows': task_rows(page_obj, redact_profiles=redact_profiles),
         'count': page_obj.paginator.count,
         'page': page_obj.number,
         'pages': page_obj.paginator.num_pages,

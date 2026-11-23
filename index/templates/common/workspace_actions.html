@@ -1,23 +1,11 @@
 {% comment %}
-Shared action bar. Every flag comes from
-index.common.workspace_actions.workspace_action_context so the asset list and
-its inspection/analysis record page cannot drift apart.
+按钮样式规则的唯一出处。这里不再有按钮集合：每个页面自己的片段
+（devices/_actions_list.html、pc/_actions_pc.html、network/_actions_network.html、
+server/_actions_server.html、weakcurrent/_actions_weakcurrent.html、
+people/_actions_people.html、inspections/_actions_records.html）决定放哪些按钮。
 
-Button rule, applied everywhere this bar renders. The bar is a plain flex row, so
-"pushed right" means "ordered after the config buttons":
-  * opens a form / writes configuration -> btn-outline-primary (白底蓝字)
-  * does something (download, add, run, import) -> btn-primary (蓝底白字), after the config buttons
-  * pure navigation                    -> btn-outline-secondary, last
+bar 是普通 flex 行，所以"靠右"= "排在配置按钮之后"：
+  * 打开表单 / 写配置      -> btn btn-outline-primary（白底蓝字）
+  * 做事（下载、添加、导入、执行）-> btn btn-primary（蓝底白字），排在配置按钮之后
+  * 纯导航                -> btn btn-outline-secondary，最后
 {% endcomment %}
-{% if can_administer %}
-    {% if action_can_manage_devices %}<a class="btn btn-outline-primary" href="{% url 'collection_templates' action_kind %}" data-modal-load="collectionTemplateModal">配置模板</a>{% endif %}
-    {% if action_issue_settings %}<a class="btn btn-outline-primary" href="{% url 'issue_severity_settings' %}?project=computers" data-modal-load="issueSeverityModal">问题等级设置</a>{% endif %}
-    {% if task_project_kind %}<button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#profileConfigModal">{{ task_config_label }}</button><button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#alertPolicyModal">告警配置</button>{% endif %}
-    {% if action_script_download %}<a class="btn btn-primary" href="{% url 'windows_server_script_download' %}">下载 Windows 脚本</a>{% endif %}
-    {% comment %}采集包原先只在 PC 配置弹窗里，列表页没有入口；配置齐全时在头部直接给下载。{% endcomment %}
-    {% if task_project_kind == 'computers' and pc_upload_config and task_default_profile %}<a class="btn btn-primary" href="{% url 'pc_script_download' task_default_profile.pk 'windows' %}">下载 Windows 采集包</a><a class="btn btn-primary" href="{% url 'pc_script_download' task_default_profile.pk 'macos' %}">下载 macOS 采集脚本</a>{% endif %}
-    {% if action_can_manage_devices %}<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#addDeviceModal">添加设备</button>{% endif %}
-    {% if action_can_import %}<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#importModal">{% if action_kind == 'people' %}导入人员{% else %}导入设备{% endif %}</button>{% endif %}
-    {% if task_project_kind %}<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#runTaskModal">{{ task_action_label }}</button>{% endif %}
-{% endif %}
-{# 「返回列表」已移除：顶部导航和方块都能回到列表，页头留这个只会占位置。 #}

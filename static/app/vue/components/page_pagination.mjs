@@ -11,19 +11,29 @@ export default {
         modelValue: {type: Number, default: 1},
     },
     emits: ['go', 'update:modelValue'],
+    data() {
+        // 输入值自己拿住：父组件不回写 modelValue 时（纯展示用法）也不会丢。
+        return {typed: this.modelValue || this.page};
+    },
+    watch: {
+        page(value) { this.typed = value; },
+        modelValue(value) { this.typed = value; },
+    },
     computed: {
         jump: {
-            get() { return this.modelValue; },
-            set(value) { this.$emit('update:modelValue', value); },
+            get() { return this.typed; },
+            set(value) { this.typed = value; this.$emit('update:modelValue', value); },
         },
     },
     methods: {
         go(page) {
             if (page < 1 || page > this.pages || page === this.page) return;
+            this.typed = page;
             this.$emit('go', page);
         },
         commit() {
-            const page = Math.min(Math.max(Math.trunc(this.jump || 1), 1), this.pages || 1);
+            const page = Math.min(Math.max(Math.trunc(this.typed || 1), 1), this.pages || 1);
+            this.typed = page;
             this.$emit('update:modelValue', page);
             if (page !== this.page && page >= 1 && page <= this.pages) this.$emit('go', page);
         },

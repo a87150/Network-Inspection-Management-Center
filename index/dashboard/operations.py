@@ -1,7 +1,8 @@
 """Presentation-safe data for the network topology page."""
 
+from django.contrib.auth.decorators import login_required
 from django.db import DatabaseError
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.http import require_GET
@@ -22,23 +23,20 @@ def _safe_region(name, builder):
 
 
 def _asset_sources():
+    """拓扑要读的字段太多，白名单式 only() 维护不过来。
+
+    之前只列了 id/名称/IP，而拓扑卡片还要读 os、manufacturer、model、vendor、
+    server_type 以及 cpu_model/memory_total_gb/disk_total_gb 等指标，每读一个
+    deferred 字段就回查一次 —— 1500 台设备乘十几次就是一个量级的 SQL 放大。
+    这几个模型都没有 TextField/JSONField 大字段，所以只排掉凭据列，其余一次取回。
+    """
     return (
-        (
-            'computers',
-            Computer.objects.only('id', 'computer_name', 'ip_addresses', 'is_active'),
-        ),
-        (
-            'networks',
-            Network_Device.objects.only('id', 'device_name', 'ip'),
-        ),
-        (
-            'servers',
-            Server.objects.only('id', 'name', 'ip'),
-        ),
-        (
-            'weakcurrent',
-            WeakCurrentDevice.objects.only('id', 'device_name', 'ip'),
-        ),
+        ('computers', Computer.objects.defer('login_account')),
+        ('networks', Network_Device.objects.defer(
+            'password', 'snmp_auth_password', 'snmp_priv_password', 'api_shared_secret',
+        )),
+        ('servers', Server.objects.defer('password', 'api_token')),
+        ('weakcurrent', WeakCurrentDevice.objects.defer('api_password', 'api_token')),
     )
 
 
@@ -85,6 +83,7 @@ def _build_topology():
         weak_current=assets['weakcurrent'],
         physical=physical,
         asset_truncation=truncation,
+        with_details=False,
     )
 
 
@@ -109,3 +108,28 @@ def operations_overview(request):
 @require_GET
 def operations_overview_data(request):
     return JsonResponse(build_operations_snapshot())
+
+
+@require_GET
+def operations_node_detail(request, node_id):
+    """单个节点的详细信息，抽屉打开时才取。
+
+    拓扑首屏不再带每个节点的 details（180 个节点 67 KB），只在总览里给出
+    名称、IP、型号这些一眼要看的字段；点开抽屉再单独拿这一份。这里按 id
+    直接查那台资产，不重算整张拓扑。
+    """
+    from index.dashboard.topology_presentation import _details
+
+    kind, _, pk = str(node_id).partition(':')
+    model = {
+        'networks': Network_Device,
+        'computers': Computer,
+        'servers': Server,
+        'weakcurrent': WeakCurrentDevice,
+    }.get(kind)
+    if model is None or not pk:
+        raise Http404('节点不存在')
+    asset = model.objects.filter(pk=pk).first()
+    if asset is None:
+        raise Http404('节点不存在')
+    return JsonResponse({'details': _details(asset, kind)})

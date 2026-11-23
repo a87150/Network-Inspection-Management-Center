@@ -5,7 +5,7 @@
 <a class="btn btn-link domain-members-back" href="{% url 'domain_controller_settings' %}?object=groups">← 返回域分组列表</a>
 <div class="modal fade domain-members-modal" id="domainGroupMembersModal" data-auto-open="true" tabindex="-1" aria-labelledby="domainGroupMembersLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable modal-shell">
-        <div class="modal-content modal-surface" id="domain-members-island" data-candidate-count="{{ candidate_total }}" data-member-locked="{% if group.is_available %}false{% else %}true{% endif %}">
+        <div class="modal-content modal-surface" id="domain-members-island" data-member-page="{{ page_obj.number }}" data-candidate-count="{{ candidate_total }}" data-member-locked="{% if group.is_available %}false{% else %}true{% endif %}">
             <div class="modal-header domain-members-header">
                 <div class="domain-members-header__copy">
                     <p class="page-heading__eyebrow mb-1">域分组成员</p>
@@ -91,7 +91,7 @@
                         {% else %}
                         主组成员会显示但不可直接移除。
                         {% endif %}
-                        每批最多选择 500 个；翻页或重新查询后需重新勾选。
+                        每批最多选择 500 个；翻回本页时保留已勾成员，重新查询或切换模式后清空。
                     </p>
                 </section>
 
@@ -101,10 +101,13 @@
                     {% if member_mode == 'add' %}<input type="hidden" name="object_type" value="{{ candidate_type }}">{% endif %}
 
                     <div class="domain-members-selection">
-                        <div class="domain-members-selection__actions" role="group" aria-label="批量选择本页成员">
+                        <div class="domain-members-selection__actions" role="group" aria-label="批量选择与本页工具">
                             <button type="button" class="btn btn-outline-primary btn-sm" data-member-select="all" @click="select('all')">全选本页</button>
                             <button type="button" class="btn btn-outline-secondary btn-sm" data-member-select="invert" @click="select('invert')">反选本页</button>
                             <button type="button" class="btn btn-outline-secondary btn-sm" data-member-select="none" @click="select('none')">清空选择</button>
+                            <label class="visually-hidden" for="domain-members-page-filter">在本页成员中筛选</label>
+                            <input id="domain-members-page-filter" type="search" class="form-control form-control-sm" style="max-width: 14rem;" data-member-page-filter placeholder="在本页中筛选">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" data-member-export data-member-export-name="{{ group.group_name }}">导出本页 CSV</button>
                         </div>
                         <span class="domain-members-selection__count" data-member-selection-summary aria-live="polite">已选 0 / 可选 {{ candidate_total }}</span>
                     </div>
@@ -112,13 +115,13 @@
                     <div class="card surface-card table-scroll-shell domain-members-table-card">
                         <p class="table-scroll-hint">可横向滚动查看完整目录位置</p>
                         <div class="table-responsive" role="region" aria-label="{% if member_mode == 'add' %}可添加成员{% else %}现有成员{% endif %}列表" tabindex="0">
-                            <table class="table data-table table-hover align-middle mb-0 domain-members-table">
+                            <table class="table data-table table-hover align-middle mb-0 domain-members-table" data-table-key="domain-group-members">
                                 <thead>
                                     <tr>
-                                        <th scope="col" class="domain-members-table__select"><span class="visually-hidden">选择</span></th>
-                                        <th scope="col">类型</th>
-                                        <th scope="col">成员</th>
-                                        <th scope="col">{% if member_mode == 'add' %}目录位置{% else %}关系{% endif %}</th>
+                                        <th scope="col" class="domain-members-table__select" data-column-key="select"><span class="visually-hidden">选择</span></th>
+                                        <th scope="col" data-column-key="type" aria-sort="none"><button type="button" class="btn btn-link p-0 text-decoration-none" data-member-sort="type">类型</button></th>
+                                        <th scope="col" data-column-key="name" aria-sort="none"><button type="button" class="btn btn-link p-0 text-decoration-none" data-member-sort="name">成员</button></th>
+                                        <th scope="col" data-column-key="extra" aria-sort="none"><button type="button" class="btn btn-link p-0 text-decoration-none" data-member-sort="extra">{% if member_mode == 'add' %}目录位置{% else %}关系{% endif %}</button></th>
                                     </tr>
                                 </thead>
                                 <tbody>

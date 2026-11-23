@@ -1,4 +1,6 @@
 """Reader pages retain data but never render administrator configuration."""
+import json
+import re
 from html.parser import HTMLParser
 
 from django.contrib.auth import get_user_model
@@ -26,6 +28,17 @@ class Forms(HTMLParser):
             self.forms.append(dict(attrs))
 
 
+# 五个工作区页整页由 Vue 渲染：服务端只给挂载点和一份 bootstrap JSON，
+# 表格外壳、工具栏与行标记都在浏览器里生成。
+WORKSPACE_PAGES = {
+    'computers': 'pc-workspace',
+    'networks': 'network-workspace',
+    'servers': 'server-workspace',
+    'weakcurrent': 'weakcurrent-workspace',
+    'people': 'people-workspace',
+}
+
+
 class ReaderControlsTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -40,10 +53,22 @@ class ReaderControlsTests(TestCase):
         cls.profile = ComputerAnalysisProfile.objects.create(name='secret-profile-91da', analysis_items=['resource'])
         cls.task = TaskRun.objects.create(task_type='computer_analysis', source='manual', analysis_profile=cls.profile)
 
+    def workspace_bootstrap(self, response, page_key):
+        """读出整页 bootstrap JSON：表格数据与筛选状态都在这份 payload 里。"""
+        body = response.content.decode()
+        self.assertIn('data-vue-page="%s"' % page_key, body)
+        match = re.search(
+            r'<script id="%s-bootstrap" type="application/json">(.*?)</script>'
+            % page_key, body, re.S)
+        self.assertIsNotNone(match, page_key + ' 缺少 bootstrap json_script')
+        # json_script 会把中文转成 \uXXXX，不能拿裸字符串当断言。
+        return json.loads(match.group(1))
+
     def test_reader_lists_keep_tables_and_exports_without_operation_forms(self):
         self.client.force_login(self.reader)
-        urls = [reverse('asset_list', args=[kind]) for kind in
-                ('people', 'computers', 'networks', 'servers', 'weakcurrent')]
+        workspace_urls = {reverse('asset_list', args=[kind]): page
+                          for kind, page in WORKSPACE_PAGES.items()}
+        urls = list(workspace_urls)
         urls += [reverse('alert_list'), reverse('computer_log_list'),
                  reverse('computer_analysis_list'), reverse('domain_account_list'),
                  reverse('task_list'), reverse('operations_overview')]
@@ -56,12 +81,20 @@ class ReaderControlsTests(TestCase):
                     self.assertContains(response, reverse('task_detail', args=[self.task.pk]))
                 elif url == reverse('operations_overview'):
                     self.assertContains(response, 'id="operations-overview-app"')
+                elif url in workspace_urls:
+                    # 表格外壳与筛选表单改由 Vue 组件在浏览器里生成，服务端只剩挂载点和
+                    # 这份数据；能在这个响应上守的是「表在、列在、筛选入口在」。
+                    table = self.workspace_bootstrap(response, workspace_urls[url])['table']
+                    self.assertTrue(table['columns'], msg=url)
+                    self.assertTrue(
+                        any(column['filterable'] for column in table['columns']), msg=url)
+                    self.assertIsInstance(table['rows'], list, msg=url)
                 else:
                     self.assertContains(response, 'data-table-workspace')
                     self.assertContains(response, 'data-table-query-form')
                 for control in ('id="importModal"', 'id="profileConfigModal"',
                                 'id="runTaskModal"', 'id="alertPolicyModal"',
-                                'id="alertChannelModal"', 'id="addDeviceModal"',
+                                'id="alertChannelModal"', 'id="deviceFormModal"',
                                 'id="domainOperationModal"', 'configurations.zip',
                                 'name="password"', 'name="api_key"'):
                     self.assertNotIn(control, response.content.decode(), msg=url)
@@ -71,6 +104,10 @@ class ReaderControlsTests(TestCase):
                 self.assertContains(response, reverse('logout'))
                 self.assertNotContains(response, reverse('admin:index'))
                 self.assertNotContains(response, reverse('domain_controller_settings'))
+        # 「能看到数据」不能只靠表格存在：夹具里那台服务器必须在只读账号的首屏行里。
+        servers = self.workspace_bootstrap(
+            self.client.get(reverse('asset_list', args=['servers'])), 'server-workspace')
+        self.assertTrue(servers['table']['rows'])
         self.assertContains(self.client.get(reverse('asset_list', args=['people'])), 'Readable Person')
         self.assertContains(self.client.get(reverse('table_export', args=['people'])), 'Readable Person')
 
@@ -79,7 +116,7 @@ class ReaderControlsTests(TestCase):
             self.client.force_login(user)
             response = self.client.get(reverse('asset_list', args=['servers']))
             for control in ('id="importModal"', 'id="profileConfigModal"',
-                            'id="runTaskModal"', 'id="addDeviceModal"'):
+                            'id="runTaskModal"', 'id="deviceFormModal"'):
                 self.assertContains(response, control)
 
     def test_reader_context_builders_do_not_load_configuration(self):

@@ -113,6 +113,23 @@
         return String(source?.dataset?.filterParameters || '').split(/\s+/).filter(Boolean);
     }
 
+    // 页内导航统一出口：有表格工作区就 fetch 换内容，地址栏保持不动。
+    // 拿不到 fetch/DOMParser 时返回 false，由调用方决定是否退回整页导航。
+    function partialNavigate(elements, href, location) {
+        const documentRoot = elements?.documentRoot || null;
+        const browserWindow = elements?.browserWindow || null;
+        if (!documentRoot || typeof browserWindow?.fetch !== 'function'
+            || typeof browserWindow?.DOMParser !== 'function') return false;
+        let target;
+        try {
+            target = new URL(href, location?.href || browserWindow.location?.href).toString();
+        } catch (_error) {
+            return false;
+        }
+        refreshTableWorkspaces(documentRoot, target, elements.storage, browserWindow);
+        return true;
+    }
+
     function clearActiveFilterSource(elements, source, location) {
         if (!source || source.dataset.filterActive === undefined) return false;
         const controls = Array.from(source.querySelectorAll?.('[name]') || []);
@@ -132,11 +149,12 @@
             exportUrl.searchParams.delete('page');
             link.href = exportUrl.toString();
         });
-        if (!location?.href || typeof location.replace !== 'function') return true;
+        if (!location?.href) return true;
         const pageUrl = new URL(location.href);
         parameters.forEach((parameter) => pageUrl.searchParams.delete(parameter));
         pageUrl.searchParams.delete('page');
-        location.replace(pageUrl.toString());
+        if (partialNavigate(elements, pageUrl.toString(), location)) return true;
+        if (typeof location.replace === 'function') location.replace(pageUrl.toString());
         return true;
     }
 
@@ -176,15 +194,14 @@
         }
     }
 
-    // 换每页条数时把地址换成干净的一串：只带真正有值的参数。
-    // 走表单提交会把表单里十几个没填的筛选框一起序列化成 xxx=，地址栏就没法看了。
+    // 换每页条数时只带真正有值的参数去请求，空筛选框不进 URL。
     function cleanSearch(url) {
         const kept = Array.from(url.searchParams.entries()).filter(([, value]) => String(value).trim() !== '');
         return new URLSearchParams(kept).toString();
     }
 
-    function replacePageSizeQuery(location, pageSize, value) {
-        if (!location?.href || typeof location.replace !== 'function' || !pageSize) return;
+    function replacePageSizeQuery(location, pageSize, value, elements) {
+        if (!location?.href || !pageSize) return;
         const parameter = pageSize.name || 'page_size';
         const url = new URL(location.href);
         const pageParameter = parameter === 'page_size'
@@ -193,12 +210,9 @@
         url.searchParams.set(parameter, String(value));
         url.searchParams.delete(pageParameter);
         const search = cleanSearch(url);
-        location.replace(location.pathname + (search ? '?' + search : ''));
-    }
-
-    function submitPageSize() {
-        // 交给 replacePageSizeQuery 走整页跳转，不再用表单提交。
-        return false;
+        const href = url.pathname + (search ? '?' + search : '');
+        if (partialNavigate(elements, href, location)) return;
+        if (typeof location.replace === 'function') location.replace(href);
     }
 
     function initializeWorkspace(workspace, storage, location = null) {
@@ -206,6 +220,10 @@
         if (!tableKey) return;
 
         const elements = {
+            workspace,
+            documentRoot: workspace.ownerDocument || null,
+            browserWindow: workspace.ownerDocument?.defaultView || null,
+            storage,
             columnToggles: Array.from(workspace.querySelectorAll('[data-column-toggle]')),
             columnCells: Array.from(workspace.querySelectorAll('th[data-column-key], td[data-column-key]')),
             filterToggles: Array.from(workspace.querySelectorAll('[data-filter-toggle]')),
@@ -245,6 +263,8 @@
                 : [defaults.pageSize],
         };
         const current = currentPreferences(elements, defaults);
+        // 服务端这一版渲染用的每页条数；和偏好不一致才需要补一次页内刷新。
+        const servedPageSize = elements.pageSize ? Number(elements.pageSize.value) : 0;
         const key = storageKey(tableKey);
         const storedPreferences = readPreferences(storage, key, defaults, available);
         const preferences = keepActiveFiltersVisible(
@@ -275,8 +295,8 @@
                 browserWindow,
             );
         });
-        if (storedPreferences) {
-            replacePageSizeQuery(location, elements.pageSize, preferences.pageSize);
+        if (storedPreferences && servedPageSize !== Number(preferences.pageSize)) {
+            replacePageSizeQuery(location, elements.pageSize, preferences.pageSize, elements);
         }
 
         const save = () => writePreferences(storage, key, currentPreferences(elements, defaults));
@@ -307,15 +327,13 @@
         });
         elements.pageSize?.addEventListener('change', () => {
             save();
-            if (!submitPageSize(elements.pageSize)) {
-                replacePageSizeQuery(location, elements.pageSize, elements.pageSize.value);
-            }
+            replacePageSizeQuery(location, elements.pageSize, elements.pageSize.value, elements);
         });
         elements.reset?.addEventListener('click', () => {
             removePreferences(storage, key);
             applyPreferences(elements, defaults);
             if (elements.pageSize && defaults.pageSize) {
-                replacePageSizeQuery(location, elements.pageSize, defaults.pageSize);
+                replacePageSizeQuery(location, elements.pageSize, defaults.pageSize, elements);
             } else if (elements.pageSize?.form) {
                 elements.pageSize.form.requestSubmit();
             }
@@ -335,6 +353,14 @@
             .map(replacement => replacement.querySelector('[data-result-summary]')?.textContent?.trim())
             .find(Boolean);
         liveRegion.textContent = summary ? `列表已更新。${summary}` : '列表已更新。';
+    }
+
+    /** 片段替换后把里面的 Vue 岛重新挂上（boot.mjs 只在首次加载时挂过一次）。 */
+    function remountIslands(root) {
+        if (!root || !root.querySelector || !root.querySelector('[data-vue-page]')) return;
+        import('/static/app/vue/boot.mjs')
+            .then((boot) => boot.mountPages?.(root))
+            .catch(() => {});
     }
 
     async function refreshTableWorkspaces(documentRoot, href, storage, browserWindow, options = {}) {
@@ -358,10 +384,7 @@
                 if (!replacement) throw new Error(`Missing table workspace: ${workspace.dataset.tableKey}`);
                 return {workspace, replacement};
             });
-            const finalUrl = response.url || href;
-            if (options.updateHistory !== false) {
-                browserWindow.history.pushState({}, '', finalUrl);
-            }
+            // 排序、筛选、翻页只换表格内容，地址栏保持外部进来时的样子。
             pairs.forEach(({workspace, replacement}) => {
                 workspace.replaceWith(replacement);
                 initializeWorkspace(replacement, storage, browserWindow.location);
@@ -387,7 +410,7 @@
         const supported = typeof browserWindow?.fetch === 'function'
             && typeof browserWindow?.DOMParser === 'function';
         const handleClick = async (event) => {
-            const link = event.target?.closest?.('.table-sort-link, [data-query-reset]');
+            const link = event.target?.closest?.('.table-sort-link, [data-query-reset], a.page-pagination__button');
             if (!supported || !link || event.defaultPrevented || event.button !== 0
                 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey
                 || link.target || link.hasAttribute?.('download')) return;

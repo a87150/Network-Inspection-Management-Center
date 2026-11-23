@@ -32,9 +32,7 @@
             return;
         }
         highlight(view);
-        const resolved = new URL(url, window.location.href);
-        if (push) window.history.pushState({ view }, '', resolved.toString());
-        else window.history.replaceState({ view }, '', resolved.toString());
+        // 设备页签是页内切换，不写地址栏；外部深链仍按 URL 进来。
         document.dispatchEvent(new CustomEvent('app:pane-loaded'));
     }
 
