@@ -531,11 +531,20 @@ body:has(.operations-overview) .app-footer {
 }
 
 .topology-ip-result {
-    margin: 0 0 .9rem;
+    /* 画布和左上角标题区都在抢占同一块视觉区域，卡片脱离文档流固定右上，
+       永远不会被它们盖住，也不推挤拓扑。 */
+    position: fixed;
+    top: 5.2rem;
+    right: 1rem;
+    z-index: 40;
+    width: min(30rem, calc(100vw - 2rem));
+    max-height: 60vh;
+    overflow: auto;
     padding: .85rem 1rem;
     border: 1px solid var(--overview-cyan);
     border-radius: .6rem;
     background: var(--overview-bg);
+    box-shadow: 0 .6rem 1.8rem rgba(0, 0, 0, .45);
     color: var(--overview-text);
 }
 .topology-ip-result__head {
@@ -599,3 +608,8 @@ body:has(.operations-overview) .app-footer {
     overflow: hidden; text-overflow: ellipsis;
 }
 .topology-device-card__ip { margin-top: .1rem; }
+
+
+/* 左上角标题卡是装饰，别挡住首排节点的「详情」按钮。 */
+.operations-overview__heading,
+.operations-overview__brand { pointer-events: none; }
