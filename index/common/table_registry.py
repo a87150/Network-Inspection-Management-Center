@@ -340,6 +340,16 @@ TABLE_DEFINITIONS = {
                 filterable=False, sortable=False,
             ),
             _field('created_at', '创建时间', 'datetime', default_filter=False),
+            # 跑完之后直接看出规模、结果和耗材，不用逐条点进详情。
+            _field('total_targets', '目标数', default_filter=False, filterable=False),
+            _field('successful_targets', '成功数', default_filter=False, filterable=False),
+            _field('failed_targets', '失败数', default_filter=False, filterable=False),
+            _field(
+                'duration', '耗时', 'text', default_filter=False,
+                filterable=False, sortable=False,
+            ),
+            _field('worker_id', '执行节点', default_filter=False, option_mode='none'),
+            _field('error_summary', '错误摘要', default_filter=False, sortable=False),
         ), 'created_at', 'desc', ('task_type', 'source', 'status'), 20,
     ),
     'task_targets': TableDefinition(

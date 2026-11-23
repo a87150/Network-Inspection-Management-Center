@@ -500,10 +500,15 @@ body:has(.operations-overview) .app-footer {
     }
 }
 
-.topology-toolbar__link, .topology-toolbar__act {
-    display: inline-flex; align-items: center; padding: .3rem .7rem; border-radius: 6px;
+/* 台账入口和工具栏里的按钮同款：同一行里不该有两种尺寸。 */
+.topology-toolbar__link,
+.topology-toolbar__act,
+.topology-toolbar__controls .topology-toolbar__act {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 44px; padding: .45rem .9rem; border-radius: 6px;
     border: 1px solid var(--overview-border); color: var(--overview-text);
-    font-size: .82rem; text-decoration: none; white-space: nowrap;
+    background: transparent; font: inherit; font-size: .9rem;
+    text-decoration: none; white-space: nowrap; cursor: pointer;
 }
 .topology-toolbar__link:hover,
 .topology-toolbar__act:hover { border-color: var(--overview-cyan); color: var(--overview-cyan); }
@@ -516,4 +521,65 @@ body:has(.operations-overview) .app-footer {
 .topology-edge-label__vlan {
     fill: var(--overview-cyan); font-size: 10px;
     paint-order: stroke; stroke: var(--overview-bg); stroke-width: 3px;
+}
+
+.topology-ip-result {
+    margin: 0 0 .9rem;
+    padding: .85rem 1rem;
+    border: 1px solid var(--overview-cyan);
+    border-radius: .6rem;
+    background: var(--overview-bg);
+    color: var(--overview-text);
+}
+.topology-ip-result__head {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    flex-wrap: wrap;
+}
+.topology-ip-result__ip { color: var(--overview-cyan); font-variant-numeric: tabular-nums; }
+.topology-ip-result__status { color: var(--overview-text); font-size: .85em; }
+.topology-ip-result__close {
+    margin-left: auto;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+}
+.topology-ip-result__detail,
+.topology-ip-result__pos {
+    margin: .45rem 0 0;
+    font-size: .88em;
+    color: var(--overview-text);
+}
+.topology-ip-result__links {
+    width: 100%;
+    margin-top: .6rem;
+    border-collapse: collapse;
+    font-size: .88em;
+}
+.topology-ip-result__links th,
+.topology-ip-result__links td {
+    padding: .3rem .5rem;
+    border-bottom: 1px solid var(--overview-border);
+    text-align: left;
+}
+
+.topology-ip-ledger {
+    margin: 0 0 .9rem;
+    border: 1px solid var(--overview-border);
+    border-radius: .6rem;
+    background: var(--overview-bg);
+    overflow: hidden;
+}
+.topology-ip-ledger__bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: .5rem .9rem; border-bottom: 1px solid var(--overview-border);
+    color: var(--overview-text);
+}
+.topology-ip-ledger__frame {
+    display: block; width: 100%; height: 70vh; border: 0;
+    background: var(--overview-bg);
 }

@@ -80,7 +80,7 @@ class NavigationMenuTests(TestCase):
             ('任务·异常', reverse('task_list')),
             ('告警·维护', reverse('alert_list')),
             ('网络拓扑', reverse('operations_overview')),
-            ('IP 管理', reverse('ip_management')),
+            # IP 台账已并入网络拓扑页的抽屉，主导航不再单列。
         ]
         positions = []
         for label, href in expected:

@@ -596,6 +596,14 @@ def _task_center_context(request):
     }
 
 
+def _error_metrics():
+    """异常卡片的计数。两个视图共用页头，所以不能只在异常视图里算。"""
+    from .records import _error_records
+
+    # 行集合是 UNION，遍历会带上各分支的排序；计数走 count() 最省。
+    return {'total': _error_records().count(), 'pending': 0}
+
+
 def _error_center_context(request):
     """异常中心的 context：和任务中心同页，各占一个视图。"""
     from .records import ERROR_RECORD_BADGES, _error_records, _records_bootstrap
@@ -607,12 +615,7 @@ def _error_center_context(request):
     page_obj = Paginator(records, table_state['page_size']).get_page(
         request.GET.get('page'),
     )
-    # _error_records() 返回的是拼接出来的行集合，不能直接 aggregate。
-    rows = list(records)
-    metrics = {
-        'total': len(rows),
-        'pending': sum(1 for row in rows if not getattr(row, 'resolved', True)),
-    }
+    metrics = _error_metrics()
     return {
         'page_obj': page_obj,
         'table_definition': table_definition,
@@ -633,6 +636,8 @@ def task_list(request):
     view = 'errors' if request.GET.get('object') == 'errors' else 'tasks'
     context = ( _error_center_context(request) if view == 'errors'
                else _task_center_context(request) )
+    # 页头两个卡片始终并排显示，任务视图也要有异常计数。
+    context.setdefault('error_metrics', _error_metrics())
     context['view'] = view
     if request.GET.get('fragment') == 'pane':
         return render(request, 'inspections/_task_center_pane.html', context)

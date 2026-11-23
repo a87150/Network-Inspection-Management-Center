@@ -545,6 +545,18 @@ class TaskRun(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    @property
+    def duration(self):
+        """列表要显示耗时；没开始或没结束就给空，交给表格显示占位符。"""
+        if not self.started_at or not self.finished_at:
+            return ''
+        seconds = int((self.finished_at - self.started_at).total_seconds())
+        if seconds < 60:
+            return f'{seconds} 秒'
+        if seconds < 3600:
+            return f'{seconds // 60} 分 {seconds % 60} 秒'
+        return f'{seconds // 3600} 时 {(seconds % 3600) // 60} 分'
+
     class Meta:
         constraints = [
             models.CheckConstraint(

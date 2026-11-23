@@ -42,6 +42,8 @@ if (mountElement && bootstrapElement) {
         // 按 IP 定位：输入的查询串和命中的节点 id，模板据此高亮。
         ipQuery: '',
         searchHitId: '',
+        ipResult: null,
+        ipLedgerOpen: false,
         // 悬停的边：和选中一样露出端口/VLAN 标签，移开就收。
         hoveredEdgeId: '',
       };
@@ -142,10 +144,13 @@ if (mountElement && bootstrapElement) {
           || nodes.find((node) => String(node.label || '').toLowerCase().includes(query));
         if (!hit) {
           this.searchHitId = '';
+          this.ipResult = null;
           this.liveStatus = '没有匹配「' + query + '」的设备';
           return;
         }
         this.searchHitId = hit.id;
+        // 命中结果常驻在工具栏下方，方便核对位置与接口，而不是只闪一下状态栏。
+        this.ipResult = this.describeNode(hit);
         // 命中的节点居中：视口 translate 是把内容点搬到屏幕中心的反向量。
         const scale = this.viewport?.scale || 1;
         this.viewport = {
@@ -155,6 +160,51 @@ if (mountElement && bootstrapElement) {
         };
         this.controller?.updateUiState({ viewport: this.viewport });
         this.liveStatus = '已定位 ' + (hit.label || hit.ip);
+      },
+      /* 命中节点的可读摘要：位置、类型、状态，以及它连出去的物理口和 VLAN。 */
+      describeNode(node) {
+        // source/target 一个是数字一个是字符串时严格比较永远不成立，统一成字符串。
+        const key = String(node.id);
+        const edges = (this.topology?.edges || []).filter(
+          (edge) => String(edge.source) === key || String(edge.target) === key,
+        );
+        const links = edges.slice(0, 6).map((edge) => {
+          const outgoing = String(edge.source) === key;
+          const port = outgoing ? edge.localInterfaceLabel : edge.remoteInterfaceLabel;
+          const peer = outgoing
+            ? (this.topology.nodes.find((n) => n.id === edge.target) || {})
+            : (this.topology.nodes.find((n) => n.id === edge.source) || {});
+          const vlan = (edge.vlanIds || []).join('/');
+          return {
+            peer: peer.label || peer.ip || '未知设备',
+            port: port || '—',
+            vlan: vlan || '—',
+          };
+        });
+        return {
+          label: node.label || node.ip || '',
+          ip: node.ip || '',
+          detail: node.detail || node.subtitle || '',
+          status: this.ipStatusText(node.status),
+          x: Math.round(node.x || 0),
+          y: Math.round(node.y || 0),
+          links,
+        };
+      },
+      ipStatusText(status) {
+        return {
+          ok: '正常', warning: '告警', critical: '严重', down: '不可达',
+          unknown: '状态未知',
+        }[status] || (status || '状态未知');
+      },
+      /* 台账是拓扑页的抽屉，不再跳去独立页面。 */
+      toggleIpLedger() {
+        this.ipLedgerOpen = !this.ipLedgerOpen;
+      },
+      clearIpResult() {
+        this.ipResult = null;
+        this.searchHitId = '';
+        this.ipQuery = '';
       },
       zoomBy(delta) {
         const scale = Math.min(2.2, Math.max(0.6, this.viewport.scale + delta));

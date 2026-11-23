@@ -125,10 +125,29 @@ def record_block_lines(kind):
     tasks = stats['tasks'] or 0
     done = stats['done'] or 0
     rate = round(done * 100 / tasks, 1) if tasks else 0.0
+    # 设备侧的现状：和 PC 方块一样的口径，正常/异常按最新快照的严重级别分。
+    from inspections.result_query import infrastructure_queryset
+    from inspections.records import RECORD_PAGES
+
+    page = RECORD_PAGES.get(kind)
+    devices = normal = abnormal = 0
+    if page:
+        device_stats = infrastructure_queryset(kind, page).aggregate(
+            devices=Count('pk'),
+            abnormal=Count(
+                'pk', filter=Q(report_severity__in=('warning', 'critical')),
+            ),
+        )
+        devices = device_stats['devices'] or 0
+        abnormal = device_stats['abnormal'] or 0
+        normal = devices - abnormal
+    device_rate = round(abnormal * 100 / devices, 1) if devices else 0.0
     return [
         [{'text': '任务 '}, {'text': str(tasks), 'tone': 'success'},
          {'text': ' 个 · 成功 '},
          {'text': str(done), 'tone': 'success' if done else ''}, {'text': ' 个'}],
-        [{'text': '成功率 %s%%' % rate}],
-        [{'text': '每次采集执行一次，保留结果与耗时'}],
+        [{'text': '正常 '}, {'text': str(normal), 'tone': 'success'},
+         {'text': ' 台 · 异常 '},
+         {'text': str(abnormal), 'tone': 'danger' if abnormal else ''}, {'text': ' 台'}],
+        [{'text': '整体异常率 %s%% · 成功率 %s%%' % (device_rate, rate)}],
     ]
