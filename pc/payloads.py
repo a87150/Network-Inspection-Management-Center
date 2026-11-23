@@ -91,6 +91,8 @@ def _assets_table(request, admin):
         'label': 'PC',
         'regionLabel': 'PC 数据表',
         'csrf': get_token(request),
+        # 每张表都能勾选：全选、反选、导出所选是通用能力，不跟批量任务绑定。
+        'selectAttr': 'data-device-selection-target',
         # exportUrl 由 asset_table_payload 按当前筛选拼好，这里不要再覆盖。
     })
     return payload

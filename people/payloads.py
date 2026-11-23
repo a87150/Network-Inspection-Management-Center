@@ -94,11 +94,15 @@ def people_bootstrap(request):
     return workspace.bootstrap(
         page=page,
         blocks=[_people_block(), _department_block()],
-        table=asset_table_payload(
-            request, kind='people', admin=admin, endpoint=rows_url,
-            detail_base=detail_base, empty_title=EMPTY_TITLE,
-            empty_message=EMPTY_MESSAGE,
-        ),
+        table={
+            **asset_table_payload(
+                request, kind='people', admin=admin, endpoint=rows_url,
+                detail_base=detail_base, empty_title=EMPTY_TITLE,
+                empty_message=EMPTY_MESSAGE,
+            ),
+            # 每张表都能勾选：全选、反选、导出所选是通用能力。
+            'selectAttr': 'data-device-selection-target',
+        },
         urls={
             'rows': rows_url,
             'detail': detail_base,

@@ -44,7 +44,7 @@ def alert_section(level, text):
 
 
 def table_section(heading, columns, rows, empty="", note="", pagination=None,
-                  workspace="", filters=None):
+                  workspace="", filters=None, export_url=""):
     """columns: [label | {label, sort_url?, aria_sort?}]; a cell is a string or
     {text?, badge?, url?, label?, note?}. Cells stay strings when that is all the
     template showed."""
@@ -63,6 +63,8 @@ def table_section(heading, columns, rows, empty="", note="", pagination=None,
         "workspace": workspace,
         # 弹窗里的筛选栏：kind 决定控件形状，value 是当前值。
         "filters": list(filters or []),
+        # 有导出地址就在筛选栏右侧露出「导出筛选结果」，导的是整个结果集。
+        "export": export_url,
     }
 
 

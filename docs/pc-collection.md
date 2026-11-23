@@ -65,3 +65,29 @@ PC 日志以 UTF-8 JSON 直传 POST /api/pc/logs/。这是仅写入的 Bearer To
 日志 daily_latest 每台 PC 每日志日期仅保留最新版本，往日保留；all 保留所有版本。分析的 analysis_retention 独立按分析日期管理 daily_latest 或 all。日志清理不删除分析结果；详情按需用 log_id 读原始日志，已清理时页面说明不可用。已被排队或运行任务选中的日志延后至任务结束清理，分析 all 的结果不随日志删除。
 
 PCUploadConfig 只有一份，含 endpoint_url、is_enabled、log_retention。首次保存生成令牌，以 PC_LOG_SOURCE_ENCRYPTION_KEY 加密且不回显；重置后重新下载部署包。普通用户不能配置、下载、执行或读取令牌。规则在入队时冻结。真实迁移与终端 API 连通性仍需部署验收。
+
+## 采集产物不随仓库分发
+
+`agents/pc/windows/` 下的 `PCCollectorHost.exe`、`PawnIO_setup.exe` 与传感器 DLL
+是编译产物，不进 Git（会随每次重编译膨胀，且二进制无法 diff）。仓库里只保留
+`*.cs`、`sensors.json`、licenses 与说明。
+
+部署后补齐产物：
+
+```bash
+manage.py fetch_pc_collector --check   # 只校验，缺什么报什么
+manage.py fetch_pc_collector           # 按 SHA256 下载并校验
+```
+
+产物目录由 `settings.PC_COLLECTOR_BASE_URL` 指定（也接受 `--base-url`）。
+校验基准是 `net/scripts/executable.py` 的 `PREBUILT_HOST_SHA256` 与
+`agents/pc/windows/sensors.json` 的 `driver.sha256` / `files` 表，任一不符即拒收，
+不会留下半截文件。
+
+**web 请求路径只读本地文件，不会下载**：`net/scripts/sensors.py` 与
+`executable.py` 都只做 `read_bytes()` + 校验。下载只发生在部署期这条命令里。
+
+缺少产物时「下载 PC 采集器」会报
+`预构建采集宿主缺失，请先执行 manage.py fetch_pc_collector 拉取发布产物`，
+不再是空白 500。对应测试用 `skipUnless(PREBUILT_HOST.is_file())`，干净克隆跳过。
+

@@ -1,4 +1,22 @@
-## 2.00 补丁（2026-11-24）
+## 2.02（2026-11-24）
+
+### 修复
+- 工作区表格缺勾选列：`workspace_table` 的 `selectAttr` 默认值就是
+  `data-device-selection-target`，但 `assets/views.py` 用空字符串覆盖了它，
+  PC 与人员页因此没有选择框、也没有全选/反选。改为始终传默认值，只让
+  `formId` 跟随 `task_allow_target_selection`；`pc/payloads.py` 与
+  `people/payloads.py` 补传 `selectAttr`。
+- 详情弹窗的表格没有导出入口：`table_section` 新增 `export_url`，
+  任务结果记录用 `result_context` 已有的 `table_export_path` 加当前筛选拼地址，
+  `resource_detail.mjs` 在筛选栏右侧露出「导出筛选结果」。
+
+### 核查未改动
+- 域控页方块切换实测正常：三个面板都在 DOM 里，`panel_switch.js` 只切显隐、
+  不改写地址栏，切换后目标面板 20 行数据完整。
+- 域控页的动作下拉本来就按当前对象类型区分：账户有新增用户与重置，
+  计算机有移动 OU 与启用停用，分组有安全组与通讯组，不存在动作错配。
+
+## 2.01（2026-11-24）
 
 ### 修复
 - 干净克隆里「下载 PC 采集器」会 500：发布产物不进仓库后，`agents/pc/windows`

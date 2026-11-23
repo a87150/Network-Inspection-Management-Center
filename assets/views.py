@@ -270,7 +270,9 @@ def _asset_list_context(request, kind, *, integration_context=None, creation_for
             'regionLabel': page.title + '数据表',
             'emptyTitle': '暂无 PC 数据' if kind == 'computers' else '暂无资产数据',
             'emptyMessage': EMPTY_MESSAGES.get(kind, '可点击右上角导入添加资产。'),
-            'selectAttr': 'data-device-selection-target' if selectable else '',
+            # 每张表都能勾选（含 PC / 人员）：全选、反选、导出所选是通用能力，
+            # 只有「把这些目标提交成任务」才依赖 selectable。
+            'selectAttr': 'data-device-selection-target',
             'formId': 'manualTaskForm' if selectable else '',
             'csrf': get_token(request),
             'selectedId': (selected_id if selected_id is not None

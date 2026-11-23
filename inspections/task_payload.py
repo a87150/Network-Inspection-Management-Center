@@ -52,6 +52,15 @@ def _page_links(page_obj, request, key='page'):
     return links
 
 
+def _result_export_href(request, result_context):
+    """导出的是整个结果集：带上当前筛选，去掉页码。"""
+    path = result_context.get('table_export_path')
+    if not path:
+        return ''
+    query = result_context.get('pagination_query') or ''
+    return path + ('?' + query if query else '')
+
+
 def _filter_controls(definition, request):
     """弹窗表格上方的筛选控件；kind 决定前端画什么，值从当前查询串回填。"""
     controls = []

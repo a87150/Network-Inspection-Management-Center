@@ -173,6 +173,8 @@ export default {
                             </div>
                             <div class="table-filter-actions">
                                 <button class="btn btn-primary text-nowrap d-inline-flex align-items-center justify-content-center" type="submit">筛选</button>
+                                <a v-if="section.export" class="btn btn-outline-success text-nowrap d-inline-flex align-items-center justify-content-center"
+                                   :href="section.export">导出筛选结果</a>
                                 <button class="btn btn-outline-secondary text-nowrap d-inline-flex align-items-center justify-content-center" type="button" @click="reloadWith('')">重置查询</button>
                             </div>
                         </div>
