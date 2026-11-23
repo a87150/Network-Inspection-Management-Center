@@ -566,7 +566,6 @@ def project_records_payload(kind, request):
 
 def computer_logs_payload(request, tables=True):
     """PC 日志文件清单，参数前缀 logs_，和资产表的参数空间分开。"""
-    from net.models.records import ComputerLogFile
 
     definition = get_table_definition('computer_logs')
     logs, state = apply_table_filters(

@@ -4,7 +4,7 @@ from decimal import Decimal, InvalidOperation
 from urllib.parse import urlencode
 
 from django.core.exceptions import FieldError, ValidationError
-from django.db.models import F, Q
+from django.db.models import F
 from django.db.models.query import QuerySet
 from django.utils.dateparse import parse_date
 from django.utils import timezone

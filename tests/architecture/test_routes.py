@@ -5,7 +5,7 @@ from html.parser import HTMLParser
 from django.test import TestCase
 from django.urls import reverse
 from tests.auth import login_admin, login_reader
-from tests.payloads import bootstrap, payload_text, workspace_detail_text, workspace_text
+from tests.payloads import bootstrap, payload_text, workspace_detail_text
 from tests.devices.pc.helpers import analysis_task_url
 from django.utils import timezone
 

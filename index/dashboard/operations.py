@@ -1,6 +1,5 @@
 """Presentation-safe data for the network topology page."""
 
-from django.contrib.auth.decorators import login_required
 from django.db import DatabaseError
 from django.http import Http404, JsonResponse
 from django.shortcuts import render

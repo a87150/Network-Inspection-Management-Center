@@ -3,7 +3,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from index.common.detail_payload import (
-    detail_payload, field_section, link_action, text_section,
+    detail_payload, field_section, text_section,
 )
 
 

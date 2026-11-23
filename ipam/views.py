@@ -5,7 +5,6 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.html import json_script
 from django.views.decorators.csrf import get_token
 from django.views.decorators.http import require_GET
 

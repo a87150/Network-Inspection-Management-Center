@@ -1,10 +1,8 @@
 """Detail payload for the PC log page."""
 import json
 
-from django.urls import reverse
 from django.utils import timezone
 
-from index.common.badges import status_badge
 from index.common.detail_payload import (
     code_section, detail_payload, field_section,
 )

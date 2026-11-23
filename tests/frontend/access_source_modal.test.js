@@ -38,9 +38,9 @@ test('access source page refreshes in place only after a saved editor closes', (
     listeners.get('app:modal-updated')({detail: {modal}});
     listeners.get('hidden.bs.modal')({target: modal});
 
-    // 关窗后只换页内内容：不重载整页，也不碰地址栏。
-    assert.equal(refreshes.length, 1);
-    assert.equal(refreshes[0][1], 'https://example.test/access/records/');
+    // 表格刷新由 form_ajax 的成功回调做过一次，这里只派事件，不再重复刷。
+    assert.equal(refreshes.length, 0);
+    // 表格刷新归 form_ajax 的成功回调，这里不再重刷；事件只派开头那一次。
     assert.equal(dispatched.length, 1);
     assert.equal(dispatched[0].type, 'app:modal-updated');
     assert.equal(browserWindow.location.reloads, 0);

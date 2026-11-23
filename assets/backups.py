@@ -9,7 +9,6 @@ from django.shortcuts import get_object_or_404, render
 from django.template.defaultfilters import filesizeformat
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.html import json_script
 from django.utils.http import content_disposition_header
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET

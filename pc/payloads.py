@@ -14,7 +14,7 @@ from index.common.table_query import PAGE_SIZES
 from inspections.analysis_summary import latest_analysis_statistics
 from inspections.records import computer_logs_payload, computer_workspace_payloads
 from net.inspections.task_summary import (
-    build_project_task_metrics, project_task_queryset, project_workspace_context,
+    project_workspace_context,
 )
 from net.models import Computer
 

@@ -6,7 +6,7 @@ from index.common.badges import severity_badge, status_badge
 from index.common.table_payload import row_payloads
 from index.common.detail_payload import (
     alert_section, detail_payload, field_section, form_action, form_section,
-    link_action, list_section, metric_section, table_section,
+    list_section, metric_section, table_section,
 )
 
 

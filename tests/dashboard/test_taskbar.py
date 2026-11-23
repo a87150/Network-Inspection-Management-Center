@@ -1,5 +1,4 @@
 from html.parser import HTMLParser
-from urllib.parse import parse_qs, urlsplit
 
 from django.test import TestCase
 from django.urls import reverse

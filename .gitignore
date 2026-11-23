@@ -9,7 +9,6 @@ staticfiles/
 demo-runtime/
 .task6-artifacts/
 .worktrees/
-runtime/software-policies/
 
 # Local credentials, databases, generated client packages and internal work notes.
 .env.*
@@ -21,6 +20,10 @@ runtime/software-policies/
 *.key
 *.pfx
 *.p12
+# PC 采集包编译产物：走 Release 附件，不进仓库
+agents/pc/windows/**/*.exe
+agents/pc/windows/**/*.dll
+agents/pc/windows/**/*.zip
 PCCollector.exe
 PC-Windows-Collector*.zip
 docs/reviews/
@@ -28,7 +31,6 @@ docs/superpowers/
 .superpowers/
 
 # Production installer logs, locks and generated static files.
-runtime/deployment/
 
 # Local PC API verification and generated runtime files.
 runtime/

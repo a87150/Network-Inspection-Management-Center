@@ -10,7 +10,6 @@ from django.db.models import Count, Q
 from django.http import Http404, JsonResponse
 from django.template.response import TemplateResponse
 from django.urls import reverse
-from django.utils.html import json_script
 
 from net.models import Computer, Network_Device, People, WeakCurrentDevice, Server
 from index.common.json_script import localized_json_script
