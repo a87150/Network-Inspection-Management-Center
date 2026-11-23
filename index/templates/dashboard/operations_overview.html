@@ -46,6 +46,11 @@
             <header class="topology-toolbar">
                 <div><p>ENTERPRISE NETWORK MAP</p><h2 id="topology-workspace-title">企业网络主干与下联终端</h2></div>
                 <div class="topology-toolbar__controls" aria-label="拓扑缩放控制">
+                    <label class="visually-hidden" for="topology-ip-search">按 IP 定位设备</label>
+                    <input id="topology-ip-search" class="topology-ip-search" type="search"
+                           v-model.trim="ipQuery" @keydown.enter.prevent="locateByIp" @search="locateByIp"
+                           placeholder="搜 IP 定位，如 10.4.0.105" autocomplete="off">
+                    <button type="button" @click="locateByIp">定位</button>
                     <label class="visually-hidden" for="topology-link-filter">链路筛选</label>
                     <select id="topology-link-filter" v-model="filter" @change="setFilter" aria-label="筛选物理链路">
                         <option value="all">全部链路</option>
@@ -94,7 +99,7 @@
                               tabindex="0" role="button" :aria-label="edgeAriaLabel(edge)" @click="selectEdge(edge)" @keydown.enter.prevent="selectEdge(edge)" @keydown.space.prevent="selectEdge(edge)" />
                         <g v-for="node in topology.nodes" :key="node.id" data-topology-device-card
                            class="topology-node topology-device-card"
-                           :class="[`is-${node.kind}`, `is-${node.role || 'unknown'}`, `is-${node.status || 'unknown'}`, { 'is-expanded': expandedNodeIds.has(node.id) }]"
+                           :class="[`is-${node.kind}`, `is-${node.role || 'unknown'}`, `is-${node.status || 'unknown'}`, { 'is-expanded': expandedNodeIds.has(node.id), 'is-search-hit': node.id === searchHitId }]"
                            :transform="`translate(${node.x} ${node.y})`"
                            role="group"
                            :aria-label="`${node.label}，${roleLabel(node)}${node.childCount ? `，${node.childCount} 个下联终端` : ''}`">

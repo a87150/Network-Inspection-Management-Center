@@ -39,6 +39,9 @@ if (mountElement && bootstrapElement) {
         requestAbortController: null,
         panStart: null,
       panMoved: false,
+        // 按 IP 定位：输入的查询串和命中的节点 id，模板据此高亮。
+        ipQuery: '',
+        searchHitId: '',
       };
     },
     computed: {
@@ -126,6 +129,30 @@ if (mountElement && bootstrapElement) {
         const width = shell?.clientWidth || window.innerWidth;
         this.topologyWidth = Math.max(320, Math.min(1400, width));
         this.topologyHeight = window.innerWidth < 768 ? 1100 : 720;
+      },
+      /* 按 IP 定位：命中就把视口平移过去并高亮，没命中只提示，不动视口。 */
+      locateByIp() {
+        const query = String(this.ipQuery || '').trim().toLowerCase();
+        if (!query) return;
+        const nodes = this.topology?.nodes || [];
+        const hit = nodes.find((node) => String(node.ip || '').toLowerCase() === query)
+          || nodes.find((node) => String(node.ip || '').toLowerCase().includes(query))
+          || nodes.find((node) => String(node.label || '').toLowerCase().includes(query));
+        if (!hit) {
+          this.searchHitId = '';
+          this.liveStatus = '没有匹配「' + query + '」的设备';
+          return;
+        }
+        this.searchHitId = hit.id;
+        // 命中的节点居中：视口 translate 是把内容点搬到屏幕中心的反向量。
+        const scale = this.viewport?.scale || 1;
+        this.viewport = {
+          scale,
+          x: Number((this.topologyWidth / 2 - hit.x * scale).toFixed(1)),
+          y: Number((this.topologyHeight / 2 - hit.y * scale).toFixed(1)),
+        };
+        this.controller?.updateUiState({ viewport: this.viewport });
+        this.liveStatus = '已定位 ' + (hit.label || hit.ip);
       },
       zoomBy(delta) {
         const scale = Math.min(2.2, Math.max(0.6, this.viewport.scale + delta));

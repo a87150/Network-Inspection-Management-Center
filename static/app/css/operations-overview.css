@@ -77,6 +77,18 @@
 
 .operations-overview__control-rail { margin-bottom: 1rem; padding: .5rem; border-radius: .9rem; }
 .operations-overview__refresh-controls,
+/* 按 IP 定位的输入框：宽度跟着工具栏走，不抢缩放按钮的位置。 */
+.topology-ip-search {
+    width: 15rem; min-width: 8rem; padding: .3rem .55rem;
+    border: 1px solid var(--overview-border); border-radius: 6px;
+    background: rgba(8, 24, 36, .72); color: inherit; font-size: .82rem;
+}
+.topology-ip-search:focus-visible { outline: 2px solid var(--overview-cyan); outline-offset: 1px; }
+/* 命中节点：描边加粗并放大一点，缩放到 0.6 也能认出来。 */
+.topology-device-card.is-search-hit .topology-device-card__surface {
+    stroke: var(--overview-cyan); stroke-width: 3;
+    filter: drop-shadow(0 0 8px rgba(78, 161, 255, .85));
+}
 .topology-toolbar__controls { display: flex; align-items: center; gap: .45rem; }
 .operations-overview__scope { color: var(--overview-muted); font-size: var(--fs-sm); }
 .topology-toolbar__controls select {
