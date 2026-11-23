@@ -51,7 +51,8 @@
                            v-model.trim="ipQuery" @keydown.enter.prevent="locateByIp" @search="locateByIp"
                            placeholder="搜 IP 定位，如 10.4.0.105" autocomplete="off">
                     <button type="button" @click="locateByIp">IP 查询</button>
-                    <button type="button" class="topology-toolbar__act" @click="toggleIpLedger">IP 台账</button>
+                    <a class="topology-toolbar__act" href="{% url 'ip_management' %}"
+                       target="_blank" rel="noopener">IP 台账</a>
                     <label class="visually-hidden" for="topology-link-filter">链路筛选</label>
                     <select id="topology-link-filter" v-model="filter" @change="setFilter" aria-label="筛选物理链路">
                         <option value="all">全部链路</option>
@@ -66,14 +67,6 @@
 
                 </div>
             </header>
-            <!-- IP 台账：原来的独立页整体搬进拓扑页，用抽屉展开，不再跳走。 -->
-            <div v-if="ipLedgerOpen" class="topology-ip-ledger" role="dialog" aria-label="IP 台账">
-                <div class="topology-ip-ledger__bar">
-                    <strong>IP 台账</strong>
-                    <button type="button" class="topology-ip-result__close" @click="toggleIpLedger" aria-label="关闭 IP 台账">×</button>
-                </div>
-                <iframe class="topology-ip-ledger__frame" src="{% url 'ip_management' %}?embed=1" title="IP 台账"></iframe>
-            </div>
             <!-- IP 查询结果：把命中设备的类型、位置、接口和 VLAN 摊开，光靠高亮看不全。 -->
             <section v-if="ipResult" class="topology-ip-result" aria-live="polite">
                 <div class="topology-ip-result__head">
@@ -83,7 +76,7 @@
                     <button type="button" class="topology-ip-result__close" @click="clearIpResult" aria-label="关闭查询结果">×</button>
                 </div>
                 <p v-if="ipResult.detail" class="topology-ip-result__detail">[[ ipResult.detail ]]</p>
-                <p class="topology-ip-result__pos">图上位置：[[ ipResult.x ]], [[ ipResult.y ]]</p>
+                <p v-if="!ipResult.fromLedger" class="topology-ip-result__pos">图上位置：[[ ipResult.x ]], [[ ipResult.y ]]</p>
                 <table v-if="ipResult.links.length" class="topology-ip-result__links">
                     <thead><tr><th scope="col">对端设备</th><th scope="col">本端接口</th><th scope="col">VLAN</th></tr></thead>
                     <tbody>
@@ -150,7 +143,7 @@
                             </g>
                             <text class="topology-device-card__role" :x="-(cardWidth(node) / 2) + 42" y="-15">[[ roleLabel(node) ]]</text>
                             <text class="topology-device-card__name" :x="-(cardWidth(node) / 2) + 42" y="2">[[ node.label ]]</text>
-                            <text class="topology-device-card__meta" :x="-(cardWidth(node) / 2) + 42" :y="node.kind === 'backbone' ? 16 : 12">[[ truncate(node.ip || node.subtitle || '未配置 IP', 18) ]]</text>
+                            <text class="topology-device-card__meta" :x="-(cardWidth(node) / 2) + 42" :y="node.kind === 'backbone' ? 19 : 16">[[ truncate(node.ip || node.subtitle || '未配置 IP', 18) ]]</text>
                             <text v-if="node.kind === 'backbone'" class="topology-device-card__status" :x="(cardWidth(node) / 2) - 12" y="-20" text-anchor="end">[[ nodeStatusLabel(node.status) ]]</text>
                             <g v-if="node.childCount" class="topology-device-card__toggle" data-toggle-terminals
                                :class="{ 'is-expanded': expandedNodeIds.has(node.id) }"

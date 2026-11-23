@@ -110,6 +110,41 @@ def operations_overview_data(request):
 
 
 @require_GET
+def operations_ip_lookup(request):
+    """按 IP 搜资产：拓扑只画主干和部分终端，没画出来的也要能查到。
+
+    台账（ARP/MAC）来自巡检观察，没采到时是空的；这里直接查资产表本身，
+    拓扑画不画都能定位到设备。"""
+    from django.db.models import Q
+    from net.models import Computer, Network_Device, Server, WeakCurrentDevice
+
+    query = (request.GET.get('q') or '').strip()
+    if not query:
+        return JsonResponse({'query': '', 'results': []})
+    rows = []
+    sources = (
+        (Computer, 'PC', ('computer_name',), 'ip_addresses'),
+        (Network_Device, '网络设备', ('device_name',), 'ip'),
+        (Server, '服务器', ('name',), 'ip'),
+        (WeakCurrentDevice, '弱电设备', ('device_name',), 'ip'),
+    )
+    for model, label, name_fields, ip_field in sources:
+        condition = Q(**{f'{ip_field}__icontains': query})
+        for field in name_fields:
+            condition |= Q(**{f'{field}__icontains': query})
+        for obj in model.objects.filter(condition)[:10]:
+            rows.append({
+                'kind': label,
+                'name': next(
+                    (getattr(obj, f) for f in name_fields if getattr(obj, f, '')),
+                    str(obj.pk),
+                ),
+                'ip': getattr(obj, ip_field, '') or '',
+                'pk': obj.pk,
+            })
+    return JsonResponse({'query': query, 'results': rows})
+
+@require_GET
 def operations_node_detail(request, node_id):
     """单个节点的详细信息，抽屉打开时才取。
 

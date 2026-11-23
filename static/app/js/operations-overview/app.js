@@ -43,7 +43,6 @@ if (mountElement && bootstrapElement) {
         ipQuery: '',
         searchHitId: '',
         ipResult: null,
-        ipLedgerOpen: false,
         // 悬停的边：和选中一样露出端口/VLAN 标签，移开就收。
         hoveredEdgeId: '',
       };
@@ -143,9 +142,9 @@ if (mountElement && bootstrapElement) {
           || nodes.find((node) => String(node.ip || '').toLowerCase().includes(query))
           || nodes.find((node) => String(node.label || '').toLowerCase().includes(query));
         if (!hit) {
+          // 图上只画主干和部分终端；没画出来的设备去台账里查，别直接说"没有"。
           this.searchHitId = '';
-          this.ipResult = null;
-          this.liveStatus = '没有匹配「' + query + '」的设备';
+          this.locateByLedger(query);
           return;
         }
         this.searchHitId = hit.id;
@@ -160,6 +159,41 @@ if (mountElement && bootstrapElement) {
         };
         this.controller?.updateUiState({ viewport: this.viewport });
         this.liveStatus = '已定位 ' + (hit.label || hit.ip);
+      },
+      /* 图上找不到时回台账查：ARP/MAC 记录能回答"这个 IP 是谁、在哪台设备下"。 */
+      async locateByLedger(query) {
+        this.liveStatus = '图上来绘制，正在查台账…';
+        try {
+          const response = await fetch(
+            '/operations/ip-lookup/?q=' + encodeURIComponent(query),
+            { headers: { 'X-Requested-With': 'XMLHttpRequest' } },
+          );
+          if (!response.ok) throw new Error(String(response.status));
+          const data = await response.json();
+          const rows = data.results || [];
+          if (!rows.length) {
+            this.ipResult = null;
+            this.liveStatus = '图上和资产里都没有「' + query + '」';
+            return;
+          }
+          this.ipResult = {
+            label: rows[0].name,
+            ip: rows[0].ip || query,
+            status: rows[0].kind + ' · 未绘制在图上',
+            detail: '图上只画主干与部分终端，这台设备在资产台账里。',
+            x: 0, y: 0,
+            links: rows.map((row) => ({
+              peer: row.kind + ' ' + row.name,
+              port: row.ip || '—',
+              vlan: '—',
+            })),
+            fromLedger: true,
+          };
+          this.liveStatus = '已在资产中找到 ' + query;
+        } catch (error) {
+          this.ipResult = null;
+          this.liveStatus = '台账查询失败，请稍后重试';
+        }
       },
       /* 命中节点的可读摘要：位置、类型、状态，以及它连出去的物理口和 VLAN。 */
       describeNode(node) {
@@ -197,10 +231,7 @@ if (mountElement && bootstrapElement) {
           unknown: '状态未知',
         }[status] || (status || '状态未知');
       },
-      /* 台账是拓扑页的抽屉，不再跳去独立页面。 */
-      toggleIpLedger() {
-        this.ipLedgerOpen = !this.ipLedgerOpen;
-      },
+      /* 台账是拓扑页的抽屉。用 fetch 拿片段而不是 iframe：嵌入页的脚本、
       clearIpResult() {
         this.ipResult = null;
         this.searchHitId = '';

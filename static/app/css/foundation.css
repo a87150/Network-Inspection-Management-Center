@@ -1113,3 +1113,10 @@ body.table-resizing {
   cursor: col-resize;
   user-select: none;
 }
+
+/* 被拓扑抽屉 iframe 引用的页面：只留内容，不要再来一套导航。 */
+body.is-embed .app-nav,
+body.is-embed .navbar,
+body.is-embed .app-footer,
+body.is-embed .page-heading__actions { display: none !important; }
+body.is-embed { padding-top: 0 !important; }

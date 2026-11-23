@@ -29,6 +29,7 @@ from pc.bulk_analysis import computer_logs_analyze_bulk
 from pc.software_policy import pc_software_policy_template_download
 
 urlpatterns = [
+    path('operations/ip-lookup/', views.operations_ip_lookup, name='operations_ip_lookup'),
     path('operations/overview/', views.operations_overview, name='operations_overview'),
     path('operations/overview/data/', views.operations_overview_data, name='operations_overview_data'),
     path('operations/overview/node/<str:node_id>/', views.operations_node_detail, name='operations_overview_node'),

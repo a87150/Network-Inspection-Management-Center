@@ -46,7 +46,7 @@ network/      网络设备参数示例
 inspections/  后台任务与巡检结果
 alerts/       告警维护 + 维护窗口
 topology/     网络拓扑
-ipam/         IP 管理
+ipam/         IP 台账（不再占主导航，作为网络拓扑页的抽屉加载）
 assets/       四类资产共享的列表/详情/创建/配置备份（原 index/devices）
 index/        外壳与共享层：common、api、dashboard、templatetags、公共视图
 ```
@@ -106,3 +106,23 @@ B1 已完成：一个通用组件 + `RecordTableViewSet` 子类吃掉了 9 个�
 - 迁移期间同一个功能可能同时存在表单 POST 与 REST 两条写路径（例如维护窗口建删）。两条路径共用 `create_windows` 这类 service 函数，不会各写一份校验；全部迁完后删掉表单路径。
 - 注水 JSON 让首屏和数据来源是两份表达（模板注水 / REST 列表），但都由同一个 payload 函数产生，字段不会漂移。
 - 暂不做前端路由（`vue-router`）。页面之间的跳转仍是整页导航；只有页内交互走 REST。理由：95 条页面路由里多数依赖服务端权限与上下文，改成前端路由会把权限判断搬到客户端，得不偿失。
+
+## IP 台账的入口
+
+台账不再占主导航，入口在拓扑页工具栏，点击在新标签打开 `/network/ip/`。
+页面仍支持 `?embed=1`：`base.html` 在 `request.GET.embed` 为真时给 `<body>`
+加 `is-embed`，`foundation.css` 用它隐藏站内导航与页脚——给以后真要嵌进抽屉
+留的开关，当前没有调用方。
+
+## IP 查询的两级来源
+
+先在图上的节点里找（IP、名称），没命中再打 `/operations/ip-lookup/?q=`，
+那里直接查四张资产表。图上只画主干和部分终端，未绘制不等于不存在；
+ARP 台账来自巡检被动观察，没采到时是空的，不能当唯一依据。
+
+## 表格的全选与勾选
+
+`resource_table.mjs` 是域对象、PC 日志、任务、告警等页共用的表格组件。
+`selectAttr` 有值时渲染行首勾选框、表头三态全选框（全选/部分/清空）和
+「全选 / 反选」按钮；`selectAttr` 为空则整列不出现。服务端 HTML 里查不到
+这些按钮——它们在浏览器里由 Vue 渲染，验证要走 DOM 而不是响应正文。

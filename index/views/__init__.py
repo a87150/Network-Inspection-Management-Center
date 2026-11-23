@@ -14,6 +14,7 @@ from assets.views import (
 from index.dashboard.views import index
 from net.dashboard.assets import with_latest_status
 from index.dashboard.operations import (
+    operations_ip_lookup,
     operations_node_detail,
     operations_overview,
     operations_overview_data,

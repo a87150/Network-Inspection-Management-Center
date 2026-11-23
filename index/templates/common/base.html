@@ -22,7 +22,8 @@
 <script defer src="{% static 'app/js/common/tabs.js' %}?v=169"></script>
 <script defer src="{% static 'app/js/common/table_resize.js' %}?v=1"></script>
 </head>
-<body class="app-shell">
+{% comment %}抽屉里加载的页面用 ?embed=1 去掉站内导航，避免同一套菜单套两层。{% endcomment %}
+<body class="app-shell{% if request.GET.embed %} is-embed{% endif %}">
     <a class="skip-link" href="#main-content">跳至主要内容</a>
     <div class="visually-hidden" id="app-live-region" role="status" aria-live="polite" aria-atomic="true"></div>
     <nav class="navbar navbar-expand-lg navbar-dark app-navbar app-header" aria-label="主导航">
