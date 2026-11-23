@@ -30,8 +30,7 @@ docs/reviews/
 docs/superpowers/
 .superpowers/
 
-# Production installer logs, locks and generated static files.
-
+# 采集包编译产物走 Release 附件，不进仓库；缺文件用 manage.py fetch_pc_collector 补齐。
 # Local PC API verification and generated runtime files.
 runtime/
 TEST-PC/

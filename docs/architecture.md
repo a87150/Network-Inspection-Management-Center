@@ -100,10 +100,16 @@ flowchart TD
 
 ## 页面与静态资源
 
+> 前端自 1.6x 起已 Vue 化，本文件只保留后端视角。前端三层分工（外壳 / REST
+> 资源 / Vue 页面）与权限约定见 [architecture-rest-vue.md](architecture-rest-vue.md)，
+> 改动前端前先读它，不要把这里当唯一依据。
+> Vue 化施工期的逐页方案已归档到 [archive/workspace-redesign.md](archive/workspace-redesign.md)，
+> 只在追查当年决策时看。
+
 `index/` 按 `dashboard`、`people`、`domain`、`devices`、`inspections`、
 `alerts` 和 `common` 分类。模板使用相同目录名。业务静态资源位于
-`static/app/`，Bootstrap 位于 `static/vendor/bootstrap/`；`staticfiles/`
-是 `collectstatic` 生成目录，不应手工编辑或提交。
+`static/app/` —— 其中 `static/app/vue/` 是 `.mjs` 组件与页面（无打包器，
+浏览器直接 ESM 加载），`static/app/js/` 是尚未迁完的手写脚本。
 
 ## 采集端、部署和测试
 

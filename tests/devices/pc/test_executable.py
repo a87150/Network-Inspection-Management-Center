@@ -3,11 +3,17 @@ from pathlib import Path
 import subprocess
 import tempfile
 import hashlib
+import unittest
 from unittest import TestCase
 from tests.powershell import requires_powershell
 from net.scripts.sensors import sensor_bundle
-from net.scripts.executable import package_collector
+from net.scripts.executable import PREBUILT_HOST, package_collector
 
+
+# 发布产物不进仓库：干净克隆里没有二进制，这些用例跳过而不是判失败。
+requires_prebuilt_host = unittest.skipUnless(
+    PREBUILT_HOST.is_file(), '缺少发布产物：先执行 manage.py fetch_pc_collector',
+)
 
 class CollectorPackageTests(TestCase):
     def test_prebuilt_host_carries_verified_script_and_library_without_compiling(self):
@@ -34,6 +40,7 @@ class ExecutableTests(TestCase):
                 self.skipTest('Windows security blocked the generated test executable (WinError 225); protection was left enabled')
             raise
 
+    @requires_prebuilt_host
     def test_real_host_preserves_preview_args_and_child_failure_without_collection(self):
         source = """[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 if (-not (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'LibreHardwareMonitorLib.dll'))) { throw 'DLL missing' }
@@ -55,6 +62,7 @@ if ($args -contains '-PackageSelfTest') { @{self_test='ok';runtime=$PSVersionTab
             self.assertEqual(json.loads(result.stdout), {'self_test':'ok', 'runtime':'Desktop'})
             self.assertEqual(list(Path(directory).iterdir()), [path])
 
+    @requires_prebuilt_host
     def test_generated_collector_self_test_has_no_powershell_encoding_error(self):
         from types import SimpleNamespace
         from net.scripts.generator import generate_pc_script
@@ -73,6 +81,7 @@ if ($args -contains '-PackageSelfTest') { @{self_test='ok';runtime=$PSVersionTab
             self.assertEqual(json.loads(result.stdout)['status'], 'ok')
 
 
+    @requires_prebuilt_host
     def test_host_rejects_dependency_path_traversal(self):
         import io
         import zipfile

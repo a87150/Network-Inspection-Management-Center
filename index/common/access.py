@@ -9,6 +9,9 @@ from django.utils.deprecation import MiddlewareMixin
 
 # 资产台账（PC / 网络设备 / 服务器 / 弱电设备 / 人员部门）统一要求登录：
 # 匿名只发登录页，不再给脱敏列表。
+# item_list 是例外，且是有意的公开入口：它按 public_views.PUBLIC_INVENTORIES
+# 的字段白名单投影（people 只出 name/department/is_active，不含工号、邮箱、电话），
+# 不是 asset_list 的匿名别名；契约由 tests/system/test_public_privacy.py 守护。
 PUBLIC_VIEWS = frozenset({'index', 'people_statistics', 'item_list'})
 READER_VIEWS = PUBLIC_VIEWS | frozenset({
     'asset_list', 'asset_detail', 'asset_detail_json', 'pc_task_page', 'pc_task_stats',

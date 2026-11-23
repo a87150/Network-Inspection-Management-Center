@@ -20,6 +20,9 @@ from net.infrastructure.environment import load_environment
 load_environment()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
+# 采集包发布产物目录（不进仓库，部署期由 fetch_pc_collector 拉取）。
+PC_COLLECTOR_BASE_URL = os.environ.get('PC_COLLECTOR_BASE_URL', '')
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 # Stable service encryption keys; the Web and Worker must share each value.
 DOMAIN_OPERATION_ENCRYPTION_KEY = os.getenv('DOMAIN_OPERATION_ENCRYPTION_KEY', '')

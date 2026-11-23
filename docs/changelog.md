@@ -1,3 +1,21 @@
+## 2.00 补丁（2026-11-24）
+
+### 修复
+- 干净克隆里「下载 PC 采集器」会 500：发布产物不进仓库后，`agents/pc/windows`
+  只剩文本文件，`prebuilt_host()` 读不到 `PCCollectorHost.exe` 就抛错。
+  新增 `manage.py fetch_pc_collector`，按固定 SHA256 拉取宿主、PawnIO 驱动与传感器
+  DLL，支持 `--check` 只校验；web 请求路径仍然只读本地文件，下载只在部署期发生。
+  `settings.PC_COLLECTOR_BASE_URL` 配置产物目录。
+- `tests/devices/pc/test_executable.py` 三个用例改为 `skipUnless(PREBUILT_HOST.is_file())`，
+  干净环境跳过而不是判失败。
+
+### 文档
+- `access.py` 补注 `item_list` 为何仍在公开面：它按 `PUBLIC_INVENTORIES`
+  字段白名单投影，不是 `asset_list` 的匿名别名。
+- `architecture.md` 的「页面与静态资源」补前端指引；Vue 化施工方案移入
+  `docs/archive/workspace-redesign.md`，主文档只指向 `architecture-rest-vue.md`。
+- `.gitignore` 里指向已删规则的孤儿注释换成采集产物说明。
+
 ## 2.00（2026-11-23）
 
 ### 修复
