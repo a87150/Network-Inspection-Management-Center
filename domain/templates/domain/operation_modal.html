@@ -1,23 +1,6 @@
 {% if can_administer %}
 {% load static %}
 {% if can_administer and can_manage_domain %}
-<section class="card surface-card mb-3" data-domain-operation-controls>
-    <div class="card-body d-flex flex-column flex-lg-row gap-3 align-items-lg-end justify-content-between">
-        <div>
-            <h2 class="h5 mb-1">批量目录操作</h2>
-            <p class="text-secondary mb-0">先勾选目标，再选择动作；提交前会显示目标数量和关键参数。</p>
-        </div>
-        <div class="d-flex flex-column flex-sm-row gap-2 align-items-sm-end">
-            <div>
-                <label class="form-label small mb-1" for="domain-operation-action">动作</label>
-                <select class="form-select" id="domain-operation-action" data-domain-operation-action>
-                    {% for action_value, action_label in domain_operation_actions %}<option value="{{ action_value }}">{{ action_label }}</option>{% endfor %}
-                </select>
-            </div>
-            {% if can_administer %}<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#domainOperationModal">确认操作</button>{% endif %}
-        </div>
-    </div>
-</section>
 
 <div class="modal fade domain-operation-modal" id="domainOperationModal" data-auto-open="{% if request.GET.domain_modal == 'operation' %}true{% else %}false{% endif %}" tabindex="-1" aria-labelledby="domainOperationModalLabel" aria-describedby="domainOperationModalDescription" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable modal-shell"><div class="modal-content modal-surface">

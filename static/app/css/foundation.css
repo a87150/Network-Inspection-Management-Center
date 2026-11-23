@@ -477,6 +477,9 @@ a.metric-card:hover {
     gap: .45rem;
 }
 
+/* 导出始终排在筛选栏最右：它在 DOM 里跟着模板走，这里只定最终顺序。 */
+.table-filter-actions > a.btn-outline-success { order: 99; }
+
 .table-more-filters,
 .table-config {
     margin-top: .6rem;
