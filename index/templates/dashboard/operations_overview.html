@@ -52,8 +52,7 @@
                                v-model.trim="ipQuery" @keydown.enter.prevent="locateByIp" @search="locateByIp"
                                placeholder="搜 IP 定位，如 10.4.0.105" autocomplete="off">
                         <button type="button" data-toolbar-act="ip-lookup">IP 查询</button>
-                        <button type="button" class="topology-toolbar__act"
-                                data-bs-toggle="modal" data-bs-target="#ipLedgerModal">IP 台账</button>
+                        <button type="button" class="topology-toolbar__act" data-toolbar-act="ip-ledger">IP 台账</button>
                     </div>
                     <div class="topology-toolbar__group topology-toolbar__group--map">
                         <label class="visually-hidden" for="topology-link-filter">链路筛选</label>
@@ -190,24 +189,43 @@
                 </ul>
             </details>
         </section>
+<div class="topo-ledger" v-if="ledgerOpen" role="dialog" aria-modal="true" aria-labelledby="topo-ledger-title">
+    <div class="topo-ledger__backdrop" @click="closeLedger"></div>
+    <div class="topo-ledger__panel">
+        <header class="topo-ledger__head">
+            <h2 id="topo-ledger-title">IP 台账</h2>
+            <div class="topo-ledger__counts">
+                <span v-for="count in ledger.counts" :key="count.label">
+                    [[ count.label ]] <b>[[ count.value ]]</b>
+                </span>
+            </div>
+            <button type="button" class="topo-ledger__close" @click="closeLedger" aria-label="关闭">×</button>
+        </header>
+        <p v-if="ledgerLoading" class="topo-ledger__state">正在读取台账…</p>
+        <p v-else-if="ledgerError" class="topo-ledger__state topo-ledger__state--error">[[ ledgerError ]]</p>
+        <div v-else-if="!ledger.rows.length" class="topo-ledger__state">
+            <strong>[[ ledger.empty_title ]]</strong>
+            <span>登记网段后，巡检观察到的 IP 会自动与台账比对。</span>
+        </div>
+        <div v-else class="topo-ledger__scroll">
+            <table class="topo-ledger__table">
+                <thead>
+                    <tr><th v-for="column in ledger.columns" :key="column.key">[[ column.label ]]</th></tr>
+                </thead>
+                <tbody>
+                    <tr v-for="(row, index) in ledger.rows" :key="'ledger-' + index">
+                        <td v-for="column in ledger.columns" :key="column.key">[[ row[column.key] ]]</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
     </div>
     <noscript><div class="alert alert-warning mt-3" role="alert">网络拓扑需要启用 JavaScript；其他运维页面仍可正常使用。</div></noscript>
 </section>
 
-<div class="modal fade" id="ipLedgerModal" tabindex="-1" aria-labelledby="ipLedgerModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="modal-title fs-5" id="ipLedgerModalLabel">IP 台账</h2>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
-            </div>
-            <div class="modal-body p-0">
-                <iframe class="ip-ledger-frame" src="{% url 'ip_management' %}?embed=1"
-                        title="IP 台账" loading="lazy"></iframe>
-            </div>
-        </div>
-    </div>
-</div>
+
 {% endblock %}
 
 {% block page_scripts %}

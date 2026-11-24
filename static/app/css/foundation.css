@@ -1191,8 +1191,10 @@ body.is-embed .panel-heading {
 body.is-embed .text-body-secondary,
 body.is-embed .fw-semibold,
 body.is-embed strong { color: #e8f6ff !important; }
-/* 嵌入时只留台账本体：巡检口径说明是站内页的上下文，弹窗里用不上。 */
-body.is-embed .ip-lookup-hint { display: none !important; }
+/* 嵌入时只留台账本体：ARP/MAC 查询区是站内页的独立功能，弹窗里用不上。 */
+body.is-embed .ip-lookup-hint,
+body.is-embed .ip-lookup,
+body.is-embed [class*="lookup"]:not(.ip-lookup-hint) { display: none !important; }
 body.is-embed .ip-lookup-hint,
 body.is-embed .ip-workspace .form-text,
 body.is-embed .ip-workspace small { color: #8fa9bd !important; }

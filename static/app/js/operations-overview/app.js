@@ -29,6 +29,10 @@ if (mountElement && bootstrapElement) {
         selectedEdgeId: '',
         expandedNodeIds: new Set(),
         drawerNodeId: '',
+        ledgerOpen: false,
+        ledgerLoading: false,
+        ledgerError: '',
+        ledger: { columns: [], rows: [], counts: [], empty_title: '', empty_message: '' },
         // 节点详情点开抽屉时才取，首屏 snapshot 不带。
         nodeDetails: {},
         nodeDetailsBusy: false,
@@ -133,8 +137,10 @@ if (mountElement && bootstrapElement) {
         this.topologyHeight = window.innerWidth < 768 ? 1100 : 720;
       },
       /* 按 IP 定位：命中就把视口平移过去并高亮，没命中只提示，不动视口。 */
-      locateByIp() {
-        const query = String(this.ipQuery || '').trim().toLowerCase();
+      async locateByIp() {
+        // v-model 在这页没同步，直接以输入框的当前值为准。
+        const field = document.getElementById('topology-ip-search');
+        const query = String((field && field.value) || this.ipQuery || '').trim().toLowerCase();
         if (!query) return;
         const nodes = this.topology?.nodes || [];
         const hit = nodes.find((node) => String(node.ip || '').toLowerCase() === query)
@@ -143,7 +149,7 @@ if (mountElement && bootstrapElement) {
         if (!hit) {
           // 图上只画主干和部分终端；没画出来的设备去台账里查，别直接说"没有"。
           this.searchHitId = '';
-          this.locateByLedger(query);
+          await this.locateByLedger(query);
           return;
         }
         this.searchHitId = hit.id;
@@ -176,7 +182,7 @@ if (mountElement && bootstrapElement) {
           }
           this.liveStatus = '已在资产中找到 ' + query + '，台账里是完整信息';
           // 图上没画，就把台账弹出来：接口、VLAN、归属设备都在那一页。
-          this.openIpLedgerModal(query);
+          this.openIpLedgerModal();
         } catch (error) {
           this.liveStatus = '台账查询失败，请稍后重试';
         }
@@ -417,6 +423,30 @@ if (mountElement && bootstrapElement) {
       handleVisibility() {
         this.controller?.handleVisibilityChange();
       },
+    async openIpLedgerModal() {
+      this.ledgerOpen = true;
+      if (this.ledger.rows.length || this.ledgerLoading) return;
+      await this.loadLedger();
+    },
+    async loadLedger() {
+      this.ledgerLoading = true;
+      this.ledgerError = '';
+      try {
+        const response = await fetch('/network/ip/?fragment=ledger', {
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        if (!response.ok) throw new Error('台账读取失败（HTTP ' + response.status + '）');
+        const payload = await response.json();
+        this.ledger = { ...this.ledger, ...(payload.ledger || {}) };
+      } catch (error) {
+        this.ledgerError = error.message || '台账读取失败';
+      } finally {
+        this.ledgerLoading = false;
+      }
+    },
+    closeLedger() {
+      this.ledgerOpen = false;
+    },
     },
     mounted() {
       this.controller = createRefreshController({
@@ -449,15 +479,6 @@ if (mountElement && bootstrapElement) {
       this.ambientEffects = createAmbientEffects(document.querySelector('[data-overview-ambient]'));
       // 这页的模板事件在本环境下没有生效，工具栏按钮改用原生监听兜底；
       // Vue 那层若恢复，两套监听都在，动作是同一份幂等逻辑。
-    },
-    openIpLedgerModal(query) {
-      const frame = document.querySelector('.ip-ledger-frame');
-      if (frame && query) {
-        frame.src = '/network/ip/?embed=1&q=' + encodeURIComponent(query);
-      }
-      const element = document.getElementById('ipLedgerModal');
-      if (!element || !window.bootstrap) return;
-      window.bootstrap.Modal.getOrCreateInstance(element).show();
     },
     beforeUnmount() {
       this.requestAbortController?.abort();

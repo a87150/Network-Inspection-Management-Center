@@ -1,3 +1,20 @@
+## 2.18（2026-11-24）
+
+### 变更
+- IP 台账弹窗重写：不再用 iframe 嵌旧页面，改成拓扑页自己的 Vue 组件，
+  数据走 `/network/ip/?fragment=ledger`。外观完全沿用拓扑页的深色变量，
+  不再需要 `is-embed` 那一层覆盖去对抗 bootstrap 的浅色皮肤。
+- 弹窗结构：标题 + 四项计数 + 关闭，表格滚动区，空状态一行说明。
+
+### 修复
+- IP 搜索读不到输入框：`v-model` 在这页没同步，`locateByIp` 改为直接从
+  `#topology-ip-search` 读值。
+- `locateByIp` 没等 `locateByLedger`，图上没有的设备查完台账后状态被覆盖。
+- `openIpLedgerModal` / `loadLedger` / `closeLedger` 被插在 `methods` 闭合行
+  之后，实例上取不到；移回 `methods` 内部。
+- 弹窗块原先写在 `#operations-overview-app` 外面，Vue 不编译，`[[ ]]` 原样
+  输出；移到挂载点内。
+
 ## 2.17（2026-11-24）
 
 ### 变更
