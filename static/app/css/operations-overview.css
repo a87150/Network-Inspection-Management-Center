@@ -549,4 +549,29 @@ body:has(.operations-overview) .app-footer {
     background: var(--overview-panel, transparent);
 }
 .topology-toolbar__group--ip { border-color: rgba(111, 229, 255, .38); }
-.ip-ledger-frame { display: block; width: 100%; height: 70vh; border: 0; background: #fff; }
+.ip-ledger-frame { display: block; width: 100%; height: 70vh; border: 0; background: #0a1420; }
+
+/* 台账弹窗：外壳与内嵌页统一成拓扑页的深色玻璃观感。 */
+/* 只给内容层上色；modal-dialog 铺满视口，给它上色会把整页压暗。 */
+#ipLedgerModal .modal-content,
+#ipLedgerModal .modal-body {
+    background: #0a1420 !important;
+}
+#ipLedgerModal .modal-content {
+    border: 1px solid rgba(111, 229, 255, .22);
+    border-radius: .65rem;
+    overflow: hidden;
+    color: #e8f6ff;
+}
+#ipLedgerModal .modal-header {
+    background: rgba(12, 26, 40, .95);
+    border-bottom: 1px solid rgba(111, 229, 255, .18);
+    color: #e8f6ff;
+}
+#ipLedgerModal .modal-title { color: #e8f6ff; font-weight: 600; }
+#ipLedgerModal .btn-close { filter: invert(1) grayscale(1) brightness(1.6); }
+#ipLedgerModal .modal-body {
+    background: #0a1420;
+    scrollbar-width: none;
+}
+#ipLedgerModal .modal-body::-webkit-scrollbar { width: 0; height: 0; }
