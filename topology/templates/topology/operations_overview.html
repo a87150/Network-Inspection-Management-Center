@@ -203,11 +203,18 @@
             <button type="button" class="topo-ledger__close" @click="closeLedger" aria-label="关闭">×</button>
         </header>
         <form v-if="subnetFormOpen" class="topo-ledger__form" @submit.prevent="submitSubnet">
-            <label>网段<input v-model="subnetForm.cidr" placeholder="CIDR，形如 前缀长度/24" required></label>
-            <label>用途<input v-model="subnetForm.purpose" placeholder="选填，如办公、服务器"></label>
-            <label>VLAN<input v-model="subnetForm.vlan" placeholder="选填，如 100"></label>
-            <label>网关<input v-model="subnetForm.gateway" placeholder="选填，本网段的网关地址"></label>
-            <label>DHCP 地址池<input v-model="subnetForm.pool" placeholder="选填，起止地址"></label>
+            {% csrf_token %}
+            <label>网段<input v-model="subnetForm.cidr" placeholder="地址/前缀长度" required></label>
+            <label>用途
+                <select v-model="subnetForm.purpose" required>
+                    <option v-for="item in subnetPurposes" :key="item.value" :value="item.value">[[ item.label ]]</option>
+                </select>
+            </label>
+            <label>VLAN<input v-model="subnetForm.vlan" placeholder="VLAN 标识" required></label>
+            <label>网关<input v-model="subnetForm.gateway" placeholder="选填，本网段网关地址"></label>
+            <label>DHCP 池起始<input v-model="subnetForm.poolStart" placeholder="选填"></label>
+            <label>DHCP 池结束<input v-model="subnetForm.poolEnd" placeholder="选填"></label>
+            <label>备注<input v-model="subnetForm.note" placeholder="选填，登记用途说明"></label>
             <div class="topo-ledger__form-actions">
                 <button type="submit" class="topo-ledger__act" :disabled="subnetBusy">[[ subnetBusy ? '保存中…' : '保存' ]]</button>
                 <span v-if="subnetError" class="topo-ledger__form-error">[[ subnetError ]]</span>

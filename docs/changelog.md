@@ -1,133 +1,51 @@
-## 2.23（2026-11-24）
-
-### 变更
-- 拓扑页拆成独立 app：`index/dashboard/operations.py` → `topology/operations.py`、
-  `topology_presentation.py` → `topology/presentation.py`、
-  `ipam.py` → `topology/ipam.py`，两个模板移到 `topology/templates/topology/`。
-  `index/dashboard/` 只剩首页的 `views.py`。
-- IP 查询改成一律开侧边栏：图上画了的直接命中节点，图上没画的用
-  `kind:pk` 走同一个抽屉（`/operations/overview/node/<kind:pk>/`），
-  不再弹结果卡片。接口补 `kindKey` 字段供前端拼 id。
-- 「增加 IP 段」不再跳页面，改成台账弹窗内的表单，提交到
-  `/api/v1/ip-subnets/`，成功后原地刷新台账。
-
-### 修正
-- 搜索框与表单占位符去掉具体地址示例，改成描述性文字。
-
-## 2.22（2026-11-24）
-
-### 变更
-- `ipam/` 并入拓扑页所在的模块：`ipam/views.py` → `index/dashboard/ipam.py`，
-  `ipam/templates/ipam/ip_management.html` → `index/templates/dashboard/ip_management.html`，
-  `ipam/` 目录删除，`INSTALLED_APPS` 去掉 `'ipam'`。
-  `ipam` app 从来没有模型，只有 130 行视图和一个 463 字节模板壳；
-  核心逻辑一直在 `net/devices/network/ipam.py` 的 `plan_report`。
-- 路由与测试的模板根同步：`index/urls.py`、`tests/frontend/template_root.py`。
-
-### 核实记录
-- `topology/` **没有被合并**。它是一个独立 app（`verbose_name` 是「网络拓扑」），
-  但承担的是拓扑数据的 REST：`/operations/topology/`、`/batches/`、
-  `/interfaces/`、`/links/`、`/evidence/<pk>/`，前端模板与 JS 对它们 0 次请求。
-- 拓扑页本身（HTML 与 `/operations/overview/data/`）在
-  `index/dashboard/operations.py`，它 import `net.topology.read_model`
-  与 `index.dashboard.topology_presentation`，不 import `topology` app。
-
-## 2.21（2026-11-24）
-
-### 变更
-- 合并 `network/payloads.py` 与 `server/payloads.py` 的重复装配逻辑到
-  `index/common/device_payload.py`，参数化为
-  `build(request, *, kind, title, model, empty_title, only)`。
-  两份各 210 行的实现缩成各 13 行薄壳，删除重复约 200 行。
-  差异实际只有 6 处：模型类、`KIND`/`TITLE`、导出端点的 kind 段、
-  `project_task_queryset` 的 kind、`device_overview` 的模型参数、空态标题。
-
-### 教训
-- 上一轮同一改动跑出 210 个 error，根因是改了三处函数签名
-  （`_records_table`、`_taskbar_block`、`_records_endpoint`）却没有同步
-  所有调用点。这次先跑 `tests.devices.network` 拿到
-  `_taskbar_block() missing 1 required positional argument`，
-  一次定位。以后改签名必须同一批改完全部调用点。
-
-## 2.20（2026-11-24）
-
-### 删除
-- 11 个零引用定义：`kind_target_type`、`_computer_analyses`、`NOTICE`、
-  `SEVERITY_LABELS`、`evaluate_computer`、`extract_network_info`、
-  `threshold_snapshot`、`FOOTER_SIZE`、`PAYLOAD_HEADER_SIZE`、`NeighborCandidate`。
-- `foundation.css` 里 `is-embed` 整块 89 行，以及 `base.html` 的
-  `{% if request.GET.embed %}` 分支。台账弹窗改成拓扑页原生组件后，
-  全仓已无任何地方生成 `?embed=1`，这一层只服务已删除的 iframe。
-
-### 说明
-- 三个 `payloads.py` 的合并尝试失败：把 `network` 的装配逻辑参数化到
-  共享模块后全量跑出 210 个 error，已回滚，`network`/`server`/`weakcurrent`
-  三份实现保持原样。重复量实测为两两最高 168 行、三文件共同 150 行，
-  下次动它需要先补齐针对 `build()` 各参数组合的测试。
-
-## 2.19（2026-11-24）
-
-### 修复
-- 「导出配置」永久禁用：`table_workspace.js` 查的是 `[data-configuration-target]`，
-  而勾选框实际属性是 `data-device-selection-target`（所有 payload 都产这个名），
-  查询恒为空，链接一直是 `请先选择设备`。
-- 维护窗口保存后列表不刷新：`{{ bootstrap|json_script }}` 写在
-  `[data-table-workspace]` 容器外，局部刷新只替换容器，读回的是上一份 JSON。
-  移进容器内。
-- 域控页保存「未登录天数」后数字与着色不更新：模板的账户/计算机 stale 计数
-  缺 `data-domain-stale` 属性，`statistics.js` 取不到节点。
-- 任务页签切换后表格行为不重绑：`task_center_tabs.js` 引用并不存在的全局
-  `AppTableTools` / `AppModalWorkflows`，改为真实的
-  `AppTableWorkspace` / `AppModalFeedback` / `AppModalTransport`。
-- 表格排序/筛选/翻页后只剩表头没有行：`refreshTableWorkspaces` 替换片段后
-  没有重挂 Vue 岛，补 `window.mountPages(replacement)`。
-
-### 删除
-- 五个零引用模板：`common/table_sort_headers.html`、`common/table_caption.html`、
-  `common/text_disclosure.html`、`devices/view_tabs.html`、`pc/analysis_pane.html`。
-
-### 变更
-- IP 查询回到「查设备」：图上没有的设备显示查询结果表（类型/名称/IP），
-  不再拿台账弹窗顶替。
-- 台账弹窗补上「增加 IP 段」入口。
-
-## 2.18（2026-11-24）
-
-### 变更
-- IP 台账弹窗重写：不再用 iframe 嵌旧页面，改成拓扑页自己的 Vue 组件，
-  数据走 `/network/ip/?fragment=ledger`。外观完全沿用拓扑页的深色变量，
-  不再需要 `is-embed` 那一层覆盖去对抗 bootstrap 的浅色皮肤。
-- 弹窗结构：标题 + 四项计数 + 关闭，表格滚动区，空状态一行说明。
-
-### 修复
-- IP 搜索读不到输入框：`v-model` 在这页没同步，`locateByIp` 改为直接从
-  `#topology-ip-search` 读值。
-- `locateByIp` 没等 `locateByLedger`，图上没有的设备查完台账后状态被覆盖。
-- `openIpLedgerModal` / `loadLedger` / `closeLedger` 被插在 `methods` 闭合行
-  之后，实例上取不到；移回 `methods` 内部。
-- 弹窗块原先写在 `#operations-overview-app` 外面，Vue 不编译，`[[ ]]` 原样
-  输出；移到挂载点内。
-
-## 2.17（2026-11-24）
-
-### 变更
-- 顶部导航的当前页标记改成极轻的一层底色（`rgba(255,255,255,.07)`），
-  去掉边框和底部粗线。原来那套蓝框 + 蓝底 + 上边线在深色导航里过于抢眼。
-- 占比条统一细化：高度 16px → 4px，轨道 `rgba(15,40,60,.07)`，
-  条形 `rgba(22,104,220,.45)`，圆角 2px。原先 Bootstrap 默认的亮蓝粗条
-  在淡色卡片里过于突兀。
-
 ## 2.16（2026-11-24）
 
-### 变更
-- IP 台账弹窗精简为只留台账本体：隐去「网络取证 / IP 管理」标题区、
-  副标题和 ARP 巡检口径说明；「增加 IP 段」按钮保留。
-- 弹窗与内嵌页统一成拓扑页的深色观感：外壳、表头、输入框、按钮、
-  空状态文字全部改用深色配色，滚动条不再露出浅色轨道。
+这一轮是拓扑页的一次连续改造，按改动性质归为一条，不再拆成多个版本号。
 
-### 修复
-- 上一版 `is-embed` 把 `.page-heading__actions` 一起隐藏了，导致
-  「增加 IP 段」按钮消失；该规则只作用于导航和页脚。
+### 拓扑页
+- 工具栏按钮全部失效：`app.js` 里一处未闭合的 `/*` 把后续代码吞掉了，
+  放大、缩小、适应屏幕、重置全部无响应。模块级事件委托改为在 `mount` 之后
+  用 `document` 监听，`zoom` / `fit` / `reset` / `ip-lookup` / `ip-ledger` 统一分发。
+- IP 查询一律开侧边栏：图上画了的直接命中节点并居中；图上没画的用
+  `kind:pk` 走同一个抽屉（`/operations/overview/node/<kind:pk>/`）。
+  接口补 `kindKey` 字段供前端拼 id，不再退化成弹结果卡片。
+  此前 `v-model` 在这页没同步，`this.ipQuery` 恒为空，`locateByIp` 首行就返回；
+  改为直接读 `#topology-ip-search` 的值，并让 `locateByIp` 等异步台账查询。
+- IP 台账改成弹窗，用拓扑页自己的 Vue 组件渲染，不嵌 iframe；
+  外观沿用拓扑页的深色变量。
+- 「增加 IP 段」在弹窗内完成：表单字段对齐 `IpSubnet` 模型
+  （`cidr` / `purpose` 五枚举 / `vlan` / `gateway` / `pool_start` / `pool_end` / `note`），
+  POST 到 `/api/v1/ip-subnets/`，成功后原地刷新台账。
+- 顶部导航当前页标记改成极轻的一层底色，去掉边框和下划线。
+- 占比条从 16px 亮蓝改为 4px 低对比。
+
+### 拓扑页独立成 app
+- `index/dashboard/operations.py` → `topology/operations.py`
+- `index/dashboard/topology_presentation.py` → `topology/presentation.py`
+- `index/dashboard/ipam.py` → `topology/ipam.py`
+- 两个模板移到 `topology/templates/topology/`
+- `ipam/` 这个 app 删除（从来没有模型，只有 130 行视图和 463 字节模板壳），
+  `INSTALLED_APPS` 去掉 `'ipam'`
+- `index/dashboard/` 只剩首页的 `views.py`
+
+### 功能失效修复
+- 「导出配置」永远禁用：`table_workspace.js` 查 `[data-configuration-target]`，
+  实际属性是 `data-device-selection-target`。
+- 维护窗口保存后列表不刷新：`json_script` 写在 `[data-table-workspace]` 容器外。
+- 域控页保存天数后计数不更新：模板缺 `data-domain-stale` 属性。
+- 任务页签切换后表格行为不重绑：引用了不存在的 `AppTableTools` / `AppModalWorkflows`。
+- 表格排序翻页后只剩表头：替换片段后没重挂 Vue 岛。
+
+### 合并与删除
+- `network/payloads.py` 与 `server/payloads.py` 的装配逻辑合并到
+  `index/common/device_payload.py`，两份各 210 行缩成 15 行薄壳。
+- 删除 11 个零引用定义、5 个零引用模板、`is-embed` 整块 89 行 CSS。
+- `workspace_actions.html`、`card.html` 因有测试断言依赖，未删。
+
+### 遗留
+- `weakcurrent/payloads.py` 的控制流结构（`only` 支持字符串、三张表、
+  快捷返回）与另两份不同，保留独立实现，重复约 150 行记为已知债。
+- `topology/views.py` 的 5 个 REST 端点前端 0 次请求，未删。
 
 ## 2.15（2026-11-24）
 

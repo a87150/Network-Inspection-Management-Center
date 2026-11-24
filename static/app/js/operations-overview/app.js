@@ -38,7 +38,14 @@ if (mountElement && bootstrapElement) {
         subnetFormOpen: false,
         subnetBusy: false,
         subnetError: '',
-        subnetForm: { cidr: '', purpose: '', vlan: '', gateway: '', pool: '' },
+        subnetForm: { cidr: '', purpose: 'office', vlan: '', gateway: '', poolStart: '', poolEnd: '', note: '' },
+        subnetPurposes: [
+          { value: 'office', label: '办公' },
+          { value: 'management', label: '管理' },
+          { value: 'server', label: '服务器' },
+          { value: 'wireless', label: '无线' },
+          { value: 'other', label: '其他' },
+        ],
         ledgerLoading: false,
         ledgerError: '',
         ledger: { columns: [], rows: [], counts: [], empty_title: '', empty_message: '' },
@@ -492,13 +499,21 @@ if (mountElement && bootstrapElement) {
             'X-CSRFToken': this.csrfToken,
             'X-Requested-With': 'XMLHttpRequest',
           },
-          body: JSON.stringify(this.subnetForm),
+          body: JSON.stringify({
+            cidr: this.subnetForm.cidr.trim(),
+            purpose: this.subnetForm.purpose,
+            vlan: this.subnetForm.vlan.trim(),
+            gateway: this.subnetForm.gateway.trim(),
+            pool_start: this.subnetForm.poolStart.trim(),
+            pool_end: this.subnetForm.poolEnd.trim(),
+            note: this.subnetForm.note.trim(),
+          }),
         });
         if (!response.ok) {
           const detail = await response.json().catch(function () { return {}; });
           throw new Error(detail.detail || ('保存失败（HTTP ' + response.status + '）'));
         }
-        this.subnetForm = { cidr: '', purpose: '', vlan: '', gateway: '', pool: '' };
+        this.subnetForm = { cidr: '', purpose: 'office', vlan: '', gateway: '', poolStart: '', poolEnd: '', note: '' };
         this.subnetFormOpen = false;
         this.ledger = { ...this.ledger, rows: [] };
         await this.loadLedger();
@@ -541,8 +556,10 @@ if (mountElement && bootstrapElement) {
       window.addEventListener('resize', this.updateDimensions, { passive: true });
       this.updateDimensions();
       this.ambientEffects = createAmbientEffects(document.querySelector('[data-overview-ambient]'));
-      const token = document.querySelector('[name=csrfmiddlewaretoken]') || document.querySelector('meta[name=csrf-token]');
-      this.csrfToken = token ? (token.value || token.content) : '';
+      const field = document.querySelector('[name=csrfmiddlewaretoken]');
+      const meta = document.querySelector('meta[name=csrf-token]');
+      const cookie = document.cookie.split('; ').find((part) => part.startsWith('csrftoken='));
+      this.csrfToken = (field && field.value) || (meta && meta.content) || (cookie ? cookie.split('=')[1] : '');
       // 这页的模板事件在本环境下没有生效，工具栏按钮改用原生监听兜底；
       // Vue 那层若恢复，两套监听都在，动作是同一份幂等逻辑。
     },
