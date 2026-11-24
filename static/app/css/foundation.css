@@ -1204,8 +1204,19 @@ body.is-embed .table > :not(caption) > * > * {
 
 /* 当前所在页：底色压深一档 + 高亮字色，比只加下划线更好认。 */
 .app-navbar .nav-link.is-current {
-    color: var(--color-primary);
-    background: rgba(111, 229, 255, .12);
-    border-radius: .4rem;
-    box-shadow: inset 0 -2px 0 var(--color-primary);
+    color: #fff;
+    background: rgba(255, 255, 255, .07);
+    border-radius: .35rem;
+}
+
+/* 占比条：细、低对比，只做量级提示，不抢文字。 */
+.progress {
+    height: 4px;
+    background: rgba(15, 40, 60, .07);
+    border-radius: 2px;
+    overflow: hidden;
+}
+.progress-bar {
+    background: rgba(22, 104, 220, .45);
+    border-radius: 2px;
 }
