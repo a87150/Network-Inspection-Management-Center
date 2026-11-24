@@ -35,14 +35,14 @@
             <div class="collapse navbar-collapse" id="mainNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item"><a class="nav-link" href="{% url 'asset_list' 'people' %}">人员·部门</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{% if can_administer %}{% url 'domain_controller_settings' %}{% else %}{% url 'domain_account_list' %}{% endif %}">域控管理</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{% url 'asset_list' 'computers' %}">PC</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{% url 'asset_list' 'networks' %}">网络设备</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{% url 'asset_list' 'servers' %}">服务器</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{% url 'asset_list' 'weakcurrent' %}">弱电设备</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{% url 'task_list' %}">任务·异常</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{% url 'alert_list' %}">告警·维护</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{% url 'operations_overview' %}">网络拓扑</a></li>
+                    <li class="nav-item"><a class="nav-link{% if '/domain/' in request.path or '/settings/domain-controller' in request.path %} is-current{% endif %}" href="{% if can_administer %}{% url 'domain_controller_settings' %}{% else %}{% url 'domain_account_list' %}{% endif %}">域控管理</a></li>
+                    <li class="nav-item"><a class="nav-link{% if '/assets/computers' in request.path %} is-current{% endif %}" href="{% url 'asset_list' 'computers' %}">PC</a></li>
+                    <li class="nav-item"><a class="nav-link{% if '/assets/networks' in request.path %} is-current{% endif %}" href="{% url 'asset_list' 'networks' %}">网络设备</a></li>
+                    <li class="nav-item"><a class="nav-link{% if '/assets/servers' in request.path %} is-current{% endif %}" href="{% url 'asset_list' 'servers' %}">服务器</a></li>
+                    <li class="nav-item"><a class="nav-link{% if '/assets/weakcurrent' in request.path %} is-current{% endif %}" href="{% url 'asset_list' 'weakcurrent' %}">弱电设备</a></li>
+                    <li class="nav-item"><a class="nav-link{% if '/tasks/' in request.path %} is-current{% endif %}" href="{% url 'task_list' %}">任务·异常</a></li>
+                    <li class="nav-item"><a class="nav-link{% if '/alerts/' in request.path %} is-current{% endif %}" href="{% url 'alert_list' %}">告警·维护</a></li>
+                    <li class="nav-item"><a class="nav-link{% if '/operations/overview' in request.path or '/network/ip' in request.path %} is-current{% endif %}" href="{% url 'operations_overview' %}">网络拓扑</a></li>
                 </ul>
                 {% if can_administer %}<a class="navbar-text app-navbar__context" href="{% url 'admin:index' %}"><span class="status-dot status-dot--success" aria-hidden="true"></span>运维管理台</a>{% endif %}
                 {% if user.is_authenticated %}

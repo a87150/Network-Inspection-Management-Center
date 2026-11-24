@@ -12,7 +12,7 @@ if (mountElement && bootstrapElement) {
   const initialSnapshot = JSON.parse(bootstrapElement.textContent);
   const endpoint = mountElement.dataset.snapshotUrl;
 
-  createApp({
+  const application = createApp({
     delimiters: ['[[', ']]'],
     data() {
       return {
@@ -148,8 +148,9 @@ if (mountElement && bootstrapElement) {
           return;
         }
         this.searchHitId = hit.id;
-        // 命中结果常驻在工具栏下方，方便核对位置与接口，而不是只闪一下状态栏。
+        // 直接开完整侧边栏：接口、VLAN、对端都在里面，比一张小卡片信息全。
         this.ipResult = this.describeNode(hit);
+        this.openDrawer(hit);
         // 命中的节点居中：视口 translate 是把内容点搬到屏幕中心的反向量。
         const scale = this.viewport?.scale || 1;
         this.viewport = {
@@ -189,7 +190,9 @@ if (mountElement && bootstrapElement) {
             })),
             fromLedger: true,
           };
-          this.liveStatus = '已在资产中找到 ' + query;
+          this.liveStatus = '已在资产中找到 ' + query + '，台账里是完整信息';
+          // 图上没画，就把台账弹出来：接口、VLAN、归属设备都在那一页。
+          this.openIpLedgerModal(query);
         } catch (error) {
           this.ipResult = null;
           this.liveStatus = '台账查询失败，请稍后重试';
@@ -231,7 +234,6 @@ if (mountElement && bootstrapElement) {
           unknown: '状态未知',
         }[status] || (status || '状态未知');
       },
-      /* 台账是拓扑页的抽屉。用 fetch 拿片段而不是 iframe：嵌入页的脚本、
       clearIpResult() {
         this.ipResult = null;
         this.searchHitId = '';
@@ -502,6 +504,39 @@ if (mountElement && bootstrapElement) {
       window.addEventListener('resize', this.updateDimensions, { passive: true });
       this.updateDimensions();
       this.ambientEffects = createAmbientEffects(document.querySelector('[data-overview-ambient]'));
+      // 这页的模板事件在本环境下没有生效，工具栏按钮改用原生监听兜底；
+      // Vue 那层若恢复，两套监听都在，动作是同一份幂等逻辑。
+    },
+    bindToolbarFallback() {
+      if (this.toolbarDelegate) return;
+      // 模板事件在这页没生效，改用 document 级委托：只要按钮在 DOM 里就一定点得到。
+      const handlers = {
+        'zoom-in': () => this.zoomBy(0.15),
+        'zoom-out': () => this.zoomBy(-0.15),
+        fit: () => this.fitViewport(),
+        reset: () => this.resetViewport(),
+        'ip-lookup': () => this.locateByIp(),
+        'ip-ledger': () => this.openIpLedgerModal(),
+      };
+      this.toolbarDelegate = (event) => {
+        const button = event.target.closest && event.target.closest('[data-toolbar-act]');
+        if (!button) return;
+        const name = button.getAttribute('data-toolbar-act');
+        const handler = handlers[name];
+        if (!handler) return;
+        event.preventDefault();
+        handler();
+      };
+      document.addEventListener('click', this.toolbarDelegate);
+    },
+    openIpLedgerModal(query) {
+      const frame = document.querySelector('.ip-ledger-frame');
+      if (frame && query) {
+        frame.src = '/network/ip/?embed=1&q=' + encodeURIComponent(query);
+      }
+      const element = document.getElementById('ipLedgerModal');
+      if (!element || !window.bootstrap) return;
+      window.bootstrap.Modal.getOrCreateInstance(element).show();
     },
     beforeUnmount() {
       this.requestAbortController?.abort();
@@ -509,7 +544,33 @@ if (mountElement && bootstrapElement) {
       this.unsubscribe?.();
       this.ambientEffects?.destroy();
       document.removeEventListener('visibilitychange', this.handleVisibility);
+      if (this.toolbarDelegate) document.removeEventListener('click', this.toolbarDelegate);
       window.removeEventListener('resize', this.updateDimensions);
     },
-  }).mount(mountElement);
+  });
+  const mounted = application.mount(mountElement);
+  // mount 的返回值在不同构建里可能是组件代理、也可能是根实例，统一取两处。
+  const app = mounted && typeof mounted.zoomBy === 'function'
+    ? mounted
+    : (application._instance && application._instance.proxy) || mounted || application;
+  window.__topologyApp = app;
+
+  // 这页的模板事件在本环境没绑上，工具栏改用 document 级委托。
+  // 放在 mount 之后用返回的实例，不依赖 mounted 是否跑到。
+  const toolbarHandlers = {
+    'zoom-in': () => app.zoomBy(0.15),
+    'zoom-out': () => app.zoomBy(-0.15),
+    fit: () => app.fitViewport(),
+    reset: () => app.resetViewport(),
+    'ip-lookup': () => app.locateByIp(),
+    'ip-ledger': () => app.openIpLedgerModal(),
+  };
+  document.addEventListener('click', (event) => {
+    const button = event.target.closest && event.target.closest('[data-toolbar-act]');
+    if (!button) return;
+    const handler = toolbarHandlers[button.getAttribute('data-toolbar-act')];
+    if (!handler) return;
+    event.preventDefault();
+    handler();
+  });
 }

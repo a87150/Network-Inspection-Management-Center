@@ -616,3 +616,13 @@ body:has(.operations-overview) .app-footer {
 /* 左上角标题卡是装饰，别挡住首排节点的「详情」按钮。 */
 .operations-overview__heading,
 .operations-overview__brand { pointer-events: none; }
+
+/* IP 定位与拓扑控制分成两块，中间留白隔开，不再一条长龙。 */
+.topology-toolbar__group {
+    display: flex; align-items: center; gap: .4rem; flex-wrap: wrap;
+    padding: .35rem .5rem; border-radius: .55rem;
+    border: 1px solid var(--overview-border);
+    background: var(--overview-panel, transparent);
+}
+.topology-toolbar__group--ip { border-color: rgba(111, 229, 255, .38); }
+.ip-ledger-frame { display: block; width: 100%; height: 70vh; border: 0; background: #fff; }

@@ -45,26 +45,29 @@
         <section id="overview-topology-panel" class="operations-overview__panel topology-workspace glass-panel" aria-labelledby="topology-workspace-title">
             <header class="topology-toolbar">
                 <div><p>ENTERPRISE NETWORK MAP</p><h2 id="topology-workspace-title">企业网络主干与下联终端</h2></div>
-                <div class="topology-toolbar__controls" aria-label="拓扑缩放控制">
-                    <label class="visually-hidden" for="topology-ip-search">按 IP 定位设备</label>
-                    <input id="topology-ip-search" class="topology-ip-search" type="search"
-                           v-model.trim="ipQuery" @keydown.enter.prevent="locateByIp" @search="locateByIp"
-                           placeholder="搜 IP 定位，如 10.4.0.105" autocomplete="off">
-                    <button type="button" @click="locateByIp">IP 查询</button>
-                    <a class="topology-toolbar__act" href="{% url 'ip_management' %}"
-                       target="_blank" rel="noopener">IP 台账</a>
-                    <label class="visually-hidden" for="topology-link-filter">链路筛选</label>
-                    <select id="topology-link-filter" v-model="filter" @change="setFilter" aria-label="筛选物理链路">
-                        <option value="all">全部链路</option>
-                        <option value="current">当前链路</option>
-                        <option value="stale">陈旧链路</option>
-                        <option value="unresolved">未解析邻居</option>
-                    </select>
-                    <button type="button" @click="zoomBy(0.15)" aria-label="放大拓扑">＋</button>
-                    <button type="button" @click="zoomBy(-0.15)" aria-label="缩小拓扑">－</button>
-                    <button type="button" @click="fitViewport">适应屏幕</button>
-                    <button type="button" @click="resetViewport">重置</button>
-
+                <div class="topology-toolbar__controls" aria-label="拓扑控制">
+                    <div class="topology-toolbar__group topology-toolbar__group--ip">
+                        <label class="visually-hidden" for="topology-ip-search">按 IP 定位设备</label>
+                        <input id="topology-ip-search" class="topology-ip-search" type="search"
+                               v-model.trim="ipQuery" @keydown.enter.prevent="locateByIp" @search="locateByIp"
+                               placeholder="搜 IP 定位，如 10.4.0.105" autocomplete="off">
+                        <button type="button" data-toolbar-act="ip-lookup">IP 查询</button>
+                        <button type="button" class="topology-toolbar__act" data-toolbar-act="ip-ledger"
+                                data-bs-toggle="modal" data-bs-target="#ipLedgerModal">IP 台账</button>
+                    </div>
+                    <div class="topology-toolbar__group topology-toolbar__group--map">
+                        <label class="visually-hidden" for="topology-link-filter">链路筛选</label>
+                        <select id="topology-link-filter" v-model="filter" @change="setFilter" aria-label="筛选物理链路">
+                            <option value="all">全部链路</option>
+                            <option value="current">当前链路</option>
+                            <option value="stale">陈旧链路</option>
+                            <option value="unresolved">未解析邻居</option>
+                        </select>
+                        <button type="button" data-toolbar-act="zoom-in" aria-label="放大拓扑">＋</button>
+                        <button type="button" data-toolbar-act="zoom-out" aria-label="缩小拓扑">－</button>
+                        <button type="button" data-toolbar-act="fit">适应屏幕</button>
+                        <button type="button" data-toolbar-act="reset">重置</button>
+                    </div>
                 </div>
             </header>
             <!-- IP 查询结果：把命中设备的类型、位置、接口和 VLAN 摊开，光靠高亮看不全。 -->
@@ -210,6 +213,21 @@
     </div>
     <noscript><div class="alert alert-warning mt-3" role="alert">网络拓扑需要启用 JavaScript；其他运维页面仍可正常使用。</div></noscript>
 </section>
+
+<div class="modal fade" id="ipLedgerModal" tabindex="-1" aria-labelledby="ipLedgerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5" id="ipLedgerModalLabel">IP 台账</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body p-0">
+                <iframe class="ip-ledger-frame" src="{% url 'ip_management' %}?embed=1"
+                        title="IP 台账" loading="lazy"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block page_scripts %}
