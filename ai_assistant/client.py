@@ -7,7 +7,7 @@ import json
 import urllib.error
 import urllib.request
 
-from django.conf import settings
+from .config import ai_config
 
 
 class AiNotConfigured(RuntimeError):
@@ -19,7 +19,7 @@ class AiUpstreamError(RuntimeError):
 
 
 def _post(path, payload):
-    cfg = settings.AI_CONFIG
+    cfg = ai_config()
     if not cfg["BASE_URL"] or not cfg["API_KEY"]:
         raise AiNotConfigured("AI 服务未配置")
     request = urllib.request.Request(
@@ -49,7 +49,7 @@ def embed(texts):
     if not texts:
         return []
     data = _post("/embeddings", {
-        "model": settings.AI_CONFIG["EMBED_MODEL"],
+        "model": ai_config()["EMBED_MODEL"],
         "input": list(texts),
     })
     try:
@@ -63,7 +63,7 @@ def embed(texts):
 def chat(messages):
     """发一组消息，返回回答文本。"""
     data = _post("/chat/completions", {
-        "model": settings.AI_CONFIG["CHAT_MODEL"],
+        "model": ai_config()["CHAT_MODEL"],
         "messages": messages,
         "temperature": 0.2,
     })

@@ -1,3 +1,20 @@
+## 2.18（2026-11-24）
+
+### AI 助手改为普通页面 + 页面内配置
+- 页面从拓扑页的深色壳换成普通页面风格：`header.page-heading` + `card surface-card`，
+  配色取 `tokens.css` 的 `--color-*`，不再用 `--overview-*`。
+- 删掉「AI 服务尚未配置，请联系管理员」那条提示。能进这页的本来就有权限配。
+- 右上角两个按钮：
+  - **配置 API**：Base URL / API Key / 对话模型 / 向量模型 / 检索方式 / 两个阈值。
+    存进新表 `AiSetting`，**立即生效不用重启**；API Key 走项目的 Fernet 加密，
+    只回「有没有」，不回明文。
+  - **添加知识库条目**：单条（标题/分类/内容）+ 表格导入（Excel 复制或 CSV，
+    首行表头自动跳过，重复标题跳过并列出原因）。
+- 新接口：`/api/ai/settings/`、`/api/ai/settings/save/`、
+  `/api/ai/knowledge/`、`add/`、`import/`、`delete/`。写操作仅管理员。
+- `ai_config()` 合并 settings 与数据库：页面上填的覆盖环境变量，
+  留空的回落环境变量，所以两种配置方式能共存。
+
 ## 2.17（2026-11-24）
 
 ### 新增 AI 助手

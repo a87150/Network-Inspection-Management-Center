@@ -1,42 +1,22 @@
-/* AI 助手页：只补聊天面板，配色一律取 operations-overview.css 的 --overview-*，
-   不另立主题。按钮、输入焦点、disabled 态沿用 .operations-overview 既有规则。 */
+/* AI 助手页：普通浅色页面。颜色只取 tokens.css 的通用变量（--color-*），
+   不引深色壳那套变量，页面也不再加载拓扑样式表。 */
+
 .ai-chat {
-    padding: clamp(1rem, 2.8vw, 2rem);
-    /* 拓扑页的壳是 100dvh 固定高 + padding 0，靠绝对定位把 header 浮在画布上。
-       AI 页是普通文档流，这两条必须还原，否则 header 会压在正文上成一块黑底。 */
-    height: auto;
-    min-height: calc(100vh - 10rem);
-    overflow: visible;
+    display: grid;
+    gap: 1rem;
 }
 
-/* topology 的 header 是盖在画布上的浮层：absolute + 深色渐变 + 最大宽 30rem。
-   这里改回正常流，去掉浮层背景，否则它会覆盖下面的提示条和面板。 */
-.ai-chat .operations-overview__header {
-    position: static;
-    max-width: none;
-    margin: 0 0 1rem;
-    padding: 0;
-    border: 0;
-    background: none;
-    backdrop-filter: none;
-    pointer-events: auto;
+/* 提示条自己带 margin 会和面板的 gap 叠加，这里统一清零。 */
+.ai-chat__flash,
+.ai-chat__error {
+    margin: 0;
 }
 
-.ai-chat__notice {
-    margin: 0 0 1rem;
-    padding: .7rem .9rem;
-    border: 1px solid rgba(255, 198, 109, .36);
-    border-radius: .8rem;
-    background: rgba(104, 66, 18, .32);
-    color: #ffe5b9;
-}
-
-.ai-chat__panel {
+.ai-chat__panel-body {
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    padding: clamp(.9rem, 1.6vw, 1.25rem);
-    border-radius: 1rem;
+    padding: clamp(1rem, 1.8vw, 1.35rem);
 }
 
 .ai-chat__panel-head {
@@ -49,7 +29,7 @@
 
 .ai-chat__panel-title {
     margin: 0;
-    color: #fff;
+    color: var(--color-text);
     font-size: var(--fs-lg);
     font-weight: 700;
     letter-spacing: -.015em;
@@ -57,7 +37,7 @@
 
 .ai-chat__panel-hint {
     margin: .25rem 0 0;
-    color: var(--overview-muted);
+    color: var(--color-text-muted);
     font-size: var(--fs-sm);
 }
 
@@ -69,53 +49,56 @@
 
 .ai-chat__reset-hint {
     margin: 0;
-    color: var(--overview-amber);
+    color: var(--color-warning);
     font-size: var(--fs-sm);
     font-weight: 650;
 }
 
-/* 消息区自己滚动，页面不跟着长。 */
+/* 消息区自己滚动，页面不跟着长；底色比卡片沉一档，白气泡才浮得起来。 */
 .ai-chat__thread {
     display: grid;
     align-content: start;
     gap: .7rem;
-    min-height: clamp(15rem, 44vh, 30rem);
+    min-height: clamp(14rem, 40vh, 26rem);
     max-height: 58vh;
-    padding: .15rem .35rem .15rem .15rem;
+    padding: .5rem;
     overflow-y: auto;
     overscroll-behavior: contain;
-    scrollbar-color: rgba(85, 222, 246, .35) transparent;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-canvas);
 }
 
 .ai-chat__thread:focus-visible {
-    outline: 2px solid var(--overview-cyan);
+    outline: 3px solid var(--color-focus-ring);
     outline-offset: 2px;
 }
 
 .ai-chat__empty {
     margin: 0;
     padding: 2.5rem 1rem;
-    border: 1px dashed var(--overview-border);
-    border-radius: .9rem;
-    color: var(--overview-muted);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text-muted);
     text-align: center;
 }
 
+/* 气泡：用户靠右、浅蓝底；助手靠左、白底。 */
 .ai-chat__bubble {
     max-width: min(46rem, 92%);
     padding: .7rem .9rem;
-    border: 1px solid var(--overview-border);
-    border-radius: .9rem;
-    background: linear-gradient(145deg, rgba(16, 39, 58, .86), rgba(10, 24, 38, .9));
-    color: var(--overview-text);
-    box-shadow: 0 14px 30px -26px rgba(0, 0, 0, .9);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text);
+    box-shadow: 0 8px 22px -20px rgba(24, 38, 68, .55);
 }
 
-/* 用户靠右、偏青；助手靠左、留深底。 */
 .ai-chat__bubble--user {
     justify-self: end;
-    border-color: rgba(85, 222, 246, .4);
-    background: linear-gradient(145deg, rgba(22, 72, 92, .9), rgba(12, 44, 58, .92));
+    border-color: rgba(49, 87, 213, .28);
+    background: rgba(49, 87, 213, .07);
 }
 
 .ai-chat__bubble--assistant {
@@ -124,9 +107,8 @@
 
 /* 被拦截/拒答的消息换弱底色，一眼和正常回答分开。 */
 .ai-chat__bubble.is-blocked {
-    border-color: rgba(255, 198, 109, .42);
-    background: linear-gradient(145deg, rgba(58, 44, 20, .72), rgba(34, 26, 14, .78));
-    color: #ffe5b9;
+    border-color: rgba(183, 106, 0, .34);
+    background: rgba(183, 106, 0, .08);
 }
 
 .ai-chat__role {
@@ -134,26 +116,25 @@
     align-items: center;
     gap: .45rem;
     margin: 0 0 .35rem;
-    color: var(--overview-cyan);
+    color: var(--color-primary);
     font-size: var(--fs-sm);
     font-weight: 700;
     letter-spacing: .06em;
 }
 
-.ai-chat__bubble--user .ai-chat__role {
-    justify-content: flex-end;
-    color: var(--overview-green);
+.ai-chat__bubble--assistant .ai-chat__role {
+    color: var(--color-text-muted);
 }
 
 .ai-chat__bubble.is-blocked .ai-chat__role {
-    color: var(--overview-amber);
+    color: var(--color-warning);
 }
 
 .ai-chat__flag {
     padding: 0 .45rem;
-    border: 1px solid rgba(255, 198, 109, .5);
+    border: 1px solid rgba(183, 106, 0, .4);
     border-radius: 999px;
-    color: var(--overview-amber);
+    color: var(--color-warning);
     font-size: var(--fs-sm);
     font-weight: 650;
     letter-spacing: 0;
@@ -176,10 +157,10 @@
 
 .ai-chat__source {
     padding: .1rem .55rem;
-    border: 1px solid rgba(85, 222, 246, .3);
+    border: 1px solid var(--color-border);
     border-radius: 999px;
-    background: rgba(8, 24, 36, .72);
-    color: var(--overview-cyan);
+    background: var(--color-surface);
+    color: var(--color-text-muted);
     font-size: var(--fs-sm);
 }
 
@@ -193,36 +174,15 @@
     flex: 1 1 auto;
     min-height: 3.25rem;
     max-height: 9rem;
-    padding: .6rem .75rem;
-    border: 1px solid var(--overview-border);
-    border-radius: .7rem;
-    background: rgba(8, 24, 36, .78);
-    color: var(--overview-text);
-    font: inherit;
-    line-height: 1.45;
     resize: vertical;
 }
 
-.ai-chat__input::placeholder {
-    color: var(--overview-muted);
-}
-
-.ai-chat__input:focus-visible {
-    outline: 2px solid var(--overview-cyan);
-    outline-offset: 1px;
-}
-
-.ai-chat__input:disabled {
-    opacity: .6;
-}
-
-.ai-chat__error {
-    margin: 0;
-    padding: .6rem .8rem;
-    border: 1px solid rgba(255, 120, 144, .4);
-    border-radius: .7rem;
-    background: rgba(84, 20, 30, .42);
-    color: #ffd9df;
+/* 导入跳过明细：跟着普通正文色，不用主题色。 */
+.ai-chat__skipped {
+    margin: 0 0 .75rem;
+    padding-left: 1.25rem;
+    color: var(--color-text-muted);
+    font-size: var(--fs-sm);
 }
 
 @media (max-width: 575.98px) {
@@ -238,4 +198,17 @@
     .ai-chat__thread {
         max-height: 52vh;
     }
+}
+
+/* 知识库弹窗内容比视口高：Bootstrap 的 scrollable 只让 body 滚，
+   dialog 自身仍会顶到视口上沿。这里给 dialog 一个显式上限，
+   留出上下留白，标题栏和底部按钮都还在视野里。 */
+#aiKnowledgeModal .modal-dialog {
+    max-height: calc(100vh - 3rem);
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+#aiKnowledgeModal .modal-content {
+    max-height: 100%;
 }

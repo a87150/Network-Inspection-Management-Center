@@ -421,10 +421,13 @@ index/templates/common/base.html                   导航加一项
 - `delimiters: ['[[', ']]']`，全部插值用双中括号
 - 挂载点 `<div data-vue-page="ai-chat" data-vue-bootstrap="ai-chat-bootstrap">`
 - 取 CSRF：`document.cookie` 里的 `csrftoken`，放 `X-CSRFToken` 头
-- 消息列表、输入框、发送按钮、清空按钮
+- 右上角两个按钮：「配置 API」与「添加知识库条目」，都用项目现成的
+  Bootstrap modal（`data-bs-toggle` / `data-bs-target`），不自造遮罩
 - `blocked` 的消息换一层弱底色，和普通回答区分开
 - 来源用标签列出标题
-- 配色沿用现有深色变量（`--overview-text` 等），不新造一套
+- 普通页面风格：`header.page-heading` + `card surface-card`，配色取 `tokens.css` 的
+  `--color-*`，**不要**沿用拓扑页的 `--overview-*` 深色变量。聊天页不是画布，
+  深色壳是拓扑画布的视觉语言。
 
 不用 SFC：这个项目没有打包器，`<script setup>` 直接放上去跑不起来。
 

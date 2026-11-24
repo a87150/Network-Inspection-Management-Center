@@ -4,13 +4,14 @@
 """
 import re
 
-from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET, require_POST
 
 from .client import AiNotConfigured, AiUpstreamError, chat as call_model
+from .config import ai_config, masked_summary, save_settings
+from index.common.access import admin_required, is_admin
 from .models import Conversation, Message
 
 SYSTEM = """你是天枢巡检平台的运维助手，只回答网络设备管理、巡检任务、模板规则、日志排查、故障处置相关的问题。
@@ -53,7 +54,7 @@ def precheck(text):
     """长度 + 低级注入。返回拒答文案或 None。"""
     if not text:
         return OFF_TOPIC_REPLY
-    if len(text) > settings.AI_CONFIG["MAX_QUESTION_LEN"]:
+    if len(text) > ai_config()["MAX_QUESTION_LEN"]:
         return TOO_LONG_REPLY
     for pattern in _COMPILED:
         if pattern.search(text):
@@ -65,7 +66,7 @@ def postcheck(answer):
     """空、超长兜底。不做内容审查，容易误伤运维术语。"""
     if not answer or not answer.strip():
         return EMPTY_REPLY
-    limit = settings.AI_CONFIG["MAX_ANSWER_LEN"]
+    limit = ai_config()["MAX_ANSWER_LEN"]
     if len(answer) > limit:
         return answer[:limit] + "\n\n（回答过长已截断）"
     return answer
@@ -78,7 +79,7 @@ def _conversation(user):
 
 def _history_messages(conversation):
     """[摘要 system(可选)] + 最近 N 条。"""
-    config = settings.AI_CONFIG
+    config = ai_config()
     messages = []
     if conversation.summary:
         messages.append({
@@ -93,7 +94,7 @@ def _history_messages(conversation):
 
 def _maybe_summarize(conversation):
     """总消息超过阈值就把老消息压成摘要。只在触发时多一次模型调用。"""
-    config = settings.AI_CONFIG
+    config = ai_config()
     total = conversation.messages.count()
     if total <= config["SUMMARY_TRIGGER"]:
         return
@@ -224,9 +225,132 @@ def reset(request):
 
 @login_required
 @require_GET
+def settings_view(request):
+    """读当前生效的配置（api_key 只回有没有）。"""
+    return JsonResponse(masked_summary())
+
+
+@login_required
+@require_POST
+@admin_required
+def settings_save(request):
+    """页面「配置 API」保存。写进 AiSetting，立即生效，不用重启。"""
+    import json
+
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except ValueError:
+        return JsonResponse({"error": "请求体不是合法 JSON"}, status=400)
+    save_settings(payload)
+    return JsonResponse(masked_summary())
+
+
+@login_required
+@require_GET
+def knowledge_list(request):
+    from .models import KnowledgeDoc
+
+    keyword = (request.GET.get("q") or "").strip()
+    rows = KnowledgeDoc.objects.all()
+    if keyword:
+        rows = rows.filter(title__icontains=keyword) | rows.filter(content__icontains=keyword)
+    return JsonResponse({
+        "total": KnowledgeDoc.objects.count(),
+        "embedded": KnowledgeDoc.objects.exclude(embedded_at=None).count(),
+        "rows": [
+            {"id": str(row.id), "title": row.title, "category": row.category,
+             "embedded": bool(row.embedded_at),
+             "chars": len(row.content)}
+            for row in rows[:200]
+        ],
+    })
+
+
+@login_required
+@require_POST
+@admin_required
+def knowledge_add(request):
+    """新增一条知识。先落库，向量留给 build_knowledge 补，避免请求里等模型。"""
+    import json
+
+    from .models import KnowledgeDoc
+
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except ValueError:
+        return JsonResponse({"error": "请求体不是合法 JSON"}, status=400)
+    title = (payload.get("title") or "").strip()
+    content = (payload.get("content") or "").strip()
+    if not title or not content:
+        return JsonResponse({"error": "标题和内容都要填"}, status=400)
+    row = KnowledgeDoc.objects.create(
+        title=title, content=content,
+        category=(payload.get("category") or "").strip(),
+    )
+    return JsonResponse({"ok": True, "id": str(row.id)})
+
+
+@login_required
+@require_POST
+@admin_required
+def knowledge_import(request):
+    """表格导入：前端把 CSV/TSV 解析成 [{title, content, category}] 再发过来。
+
+    解析放前端是故意的——同一份数据可以用 Excel 复制、CSV、或手粘，格式判断
+    跟着用户的原始输入走，后端只收结构化的三列。
+    """
+    import json
+
+    from .models import KnowledgeDoc
+
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except ValueError:
+        return JsonResponse({"error": "请求体不是合法 JSON"}, status=400)
+    rows = payload.get("rows") or []
+    created, skipped = 0, []
+    existing = set(KnowledgeDoc.objects.values_list("title", flat=True))
+    for index, item in enumerate(rows, 1):
+        title = str(item.get("title") or "").strip()
+        content = str(item.get("content") or "").strip()
+        if not title or not content:
+            skipped.append({"line": index, "reason": "标题或内容为空"})
+            continue
+        if title in existing:
+            skipped.append({"line": index, "reason": "标题重复：" + title})
+            continue
+        KnowledgeDoc.objects.create(
+            title=title, content=content,
+            category=str(item.get("category") or "").strip(),
+        )
+        existing.add(title)
+        created += 1
+    return JsonResponse({"ok": True, "created": created, "skipped": skipped})
+
+
+@login_required
+@require_POST
+@admin_required
+def knowledge_delete(request):
+    from .models import KnowledgeDoc
+
+    doc_id = (request.POST.get("id") or "").strip()
+    deleted, _ = KnowledgeDoc.objects.filter(pk=doc_id).delete()
+    return JsonResponse({"ok": True, "deleted": deleted})
+
+
+@login_required
+@require_GET
 def page(request):
+    summary = masked_summary()
     return render(request, "ai_assistant/chat.html", {
         "page": {"eyebrow": "智能助手", "title": "AI 助手",
                  "description": "问设备手册、巡检规则、故障处置；回答只依据知识库。"},
-        "configured": bool(settings.AI_CONFIG["BASE_URL"] and settings.AI_CONFIG["API_KEY"]),
+        # 页面不再提示「请联系管理员」：能进这页的本来就有权限配。
+        "ai_bootstrap": {
+            "page": {"eyebrow": "智能助手", "title": "AI 助手",
+                     "description": "问设备手册、巡检规则、故障处置；回答只依据知识库。"},
+            "settings": summary,
+            "is_admin": is_admin(request.user),
+        },
     })

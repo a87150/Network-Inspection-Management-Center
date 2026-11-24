@@ -1,13 +1,40 @@
-/* AI 助手：单用户单会话问答。历史、提问、清空全走 REST，无流式。 */
+/* AI 助手：单用户单会话问答 + 「配置 API」「添加知识库条目」两个 Bootstrap 弹窗。
+   历史/提问/清空/配置/知识库全走 /api/ai/ REST；X-CSRFToken 由 api.mjs 负责。 */
 import { api } from '../api.mjs';
+
+/* 配置回填：api_key 永远留空——只存密文，不回显。 */
+function settingsFields(source) {
+    const payload = source || {};
+    return {
+        base_url: payload.base_url || '',
+        api_key: '',
+        chat_model: payload.chat_model || '',
+        embed_model: payload.embed_model || '',
+        rag_backend: payload.rag_backend === 'keyword' ? 'keyword' : 'vector',
+        retrieval_max_distance: numberText(payload.retrieval_max_distance),
+        keyword_max_distance: numberText(payload.keyword_max_distance),
+    };
+}
+
+function numberText(value) {
+    return typeof value === 'number' ? String(value) : '';
+}
 
 export default {
     delimiters: ['[[', ']]'],
     props: {
-        // 默认值与 ai_assistant/urls.py 里的挂载点一致；bootstrap 只做覆盖。
+        // 由 ai_assistant/views.py 的 ai_bootstrap 注水；URL 默认值与 urls.py 一致。
+        page: {type: Object, default: () => ({})},
+        settings: {type: Object, default: () => ({})},
+        is_admin: {type: Boolean, default: false},
         chat_url: {type: String, default: '/api/ai/chat/'},
         history_url: {type: String, default: '/api/ai/history/'},
         reset_url: {type: String, default: '/api/ai/reset/'},
+        settings_url: {type: String, default: '/api/ai/settings/'},
+        settings_save_url: {type: String, default: '/api/ai/settings/save/'},
+        knowledge_url: {type: String, default: '/api/ai/knowledge/'},
+        knowledge_add_url: {type: String, default: '/api/ai/knowledge/add/'},
+        knowledge_import_url: {type: String, default: '/api/ai/knowledge/import/'},
     },
     data() {
         return {
@@ -19,6 +46,26 @@ export default {
             // 清空会删历史，点一次只是待确认，点第二次才真发请求。
             confirmReset: false,
             error: '',
+            // 弹窗关掉后仍要看到的提示。
+            pageMessage: '',
+            flashTimer: 0,
+            settingsForm: settingsFields(this.settings),
+            hasApiKey: Boolean(this.settings && this.settings.has_api_key),
+            settingsLoading: false,
+            settingsSaving: false,
+            settingsError: '',
+            knowledge: {total: 0, embedded: 0},
+            knowledgeLoading: false,
+            knowledgeError: '',
+            knowledgeForm: {title: '', category: '', content: ''},
+            adding: false,
+            addError: '',
+            addMessage: '',
+            importText: '',
+            importing: false,
+            importError: '',
+            importMessage: '',
+            importSkipped: [],
         };
     },
     computed: {
@@ -28,6 +75,11 @@ export default {
     },
     mounted() {
         this.loadHistory();
+        // 打开弹窗才拉配置与知识库现状：进页面不多打两个请求。
+        const settingsModal = this.$refs.settingsModal;
+        if (settingsModal) settingsModal.addEventListener('show.bs.modal', () => this.loadSettings());
+        const knowledgeModal = this.$refs.knowledgeModal;
+        if (knowledgeModal) knowledgeModal.addEventListener('show.bs.modal', () => this.loadKnowledge());
     },
     methods: {
         sourceLabel(source) {
@@ -35,6 +87,22 @@ export default {
                 return source.title + ' · 余弦距离 ' + source.distance.toFixed(3);
             }
             return source.title;
+        },
+        describe(failure, fallback) {
+            if (failure && failure.status === 403) return '当前账号没有这个操作权限（403）。';
+            return (failure && failure.message) || fallback;
+        },
+        flash(message) {
+            this.pageMessage = message;
+            window.clearTimeout(this.flashTimer);
+            this.flashTimer = window.setTimeout(() => {
+                this.pageMessage = '';
+            }, 6000);
+        },
+        closeModal(name) {
+            const element = this.$refs[name];
+            if (!element || !window.bootstrap) return;
+            window.bootstrap.Modal.getOrCreateInstance(element).hide();
         },
         async loadHistory() {
             this.loading = true;
@@ -99,6 +167,155 @@ export default {
                 this.focusInput();
             }
         },
+        async loadSettings() {
+            this.settingsLoading = true;
+            this.settingsError = '';
+            try {
+                const payload = await api.get(this.settings_url);
+                this.settingsForm = settingsFields(payload);
+                this.hasApiKey = Boolean(payload && payload.has_api_key);
+            } catch (failure) {
+                this.settingsError = this.describe(failure, '读取配置失败，请稍后重试。');
+            } finally {
+                this.settingsLoading = false;
+            }
+        },
+        async saveSettings() {
+            if (this.settingsSaving) return;
+            this.settingsSaving = true;
+            this.settingsError = '';
+            try {
+                const payload = await api.post(this.settings_save_url, {
+                    base_url: this.settingsForm.base_url,
+                    api_key: this.settingsForm.api_key,
+                    chat_model: this.settingsForm.chat_model,
+                    embed_model: this.settingsForm.embed_model,
+                    rag_backend: this.settingsForm.rag_backend,
+                    retrieval_max_distance: this.settingsForm.retrieval_max_distance,
+                    keyword_max_distance: this.settingsForm.keyword_max_distance,
+                });
+                this.settingsForm.api_key = '';
+                this.hasApiKey = Boolean(payload && payload.has_api_key);
+                this.closeModal('settingsModal');
+                this.flash('已保存，立即生效');
+            } catch (failure) {
+                this.settingsError = this.describe(failure, '保存失败，请稍后重试。');
+            } finally {
+                this.settingsSaving = false;
+            }
+        },
+        async loadKnowledge() {
+            this.knowledgeLoading = true;
+            this.knowledgeError = '';
+            try {
+                const payload = await api.get(this.knowledge_url);
+                this.knowledge = {
+                    total: Number(payload && payload.total) || 0,
+                    embedded: Number(payload && payload.embedded) || 0,
+                };
+            } catch (failure) {
+                this.knowledgeError = this.describe(failure, '读取知识库现状失败。');
+            } finally {
+                this.knowledgeLoading = false;
+            }
+        },
+        async addKnowledge() {
+            if (this.adding) return;
+            const title = this.knowledgeForm.title.trim();
+            const content = this.knowledgeForm.content.trim();
+            this.addError = '';
+            this.addMessage = '';
+            if (!title || !content) {
+                this.addError = '标题和内容都要填。';
+                return;
+            }
+            this.adding = true;
+            try {
+                await api.post(this.knowledge_add_url, {
+                    title,
+                    content,
+                    category: this.knowledgeForm.category.trim(),
+                });
+                this.knowledgeForm = {title: '', category: '', content: ''};
+                this.addMessage = '已添加：' + title;
+                this.loadKnowledge();
+            } catch (failure) {
+                this.addError = this.describe(failure, '保存失败，请稍后重试。');
+            } finally {
+                this.adding = false;
+            }
+        },
+        /* ponytail: 逐行解析，字段里不支持换行。Excel 多行单元格粘进来会拆成多行，
+           真需要时再上完整 CSV 状态机。 */
+        splitCells(line) {
+            const delimiter = line.includes('\t') ? '\t' : ',';
+            const cells = [];
+            let cell = '';
+            let quoted = false;
+            for (let index = 0; index < line.length; index += 1) {
+                const char = line[index];
+                if (quoted) {
+                    if (char !== '"') {
+                        cell += char;
+                    } else if (line[index + 1] === '"') {
+                        cell += '"';
+                        index += 1;
+                    } else {
+                        quoted = false;
+                    }
+                    continue;
+                }
+                if (char === '"' && !cell.trim()) {
+                    quoted = true;
+                    continue;
+                }
+                if (char === delimiter) {
+                    cells.push(cell);
+                    cell = '';
+                    continue;
+                }
+                cell += char;
+            }
+            cells.push(cell);
+            return cells;
+        },
+        parseTable(text) {
+            const lines = String(text || '')
+                .replace(/\r\n?/g, '\n')
+                .split('\n')
+                .filter((line) => line.trim());
+            const cells = lines.map((line) => this.splitCells(line));
+            // 首行是表头（title / 标题 开头）就跳过。
+            if (cells.length && /^(title|标题)/i.test((cells[0][0] || '').trim())) cells.shift();
+            return cells.map((row) => ({
+                title: (row[0] || '').trim(),
+                content: (row[1] || '').trim(),
+                category: (row[2] || '').trim(),
+            }));
+        },
+        async runImport() {
+            if (this.importing) return;
+            this.importError = '';
+            this.importMessage = '';
+            this.importSkipped = [];
+            const rows = this.parseTable(this.importText);
+            if (!rows.length) {
+                this.importError = '没解析出任何行，检查一下粘贴的内容。';
+                return;
+            }
+            this.importing = true;
+            try {
+                const payload = await api.post(this.knowledge_import_url, {rows});
+                const skipped = (payload && payload.skipped) || [];
+                this.importMessage = '新增 ' + (Number(payload && payload.created) || 0) + ' 条，跳过 ' + skipped.length + ' 条';
+                this.importSkipped = skipped;
+                this.loadKnowledge();
+            } catch (failure) {
+                this.importError = this.describe(failure, '导入失败，请稍后重试。');
+            } finally {
+                this.importing = false;
+            }
+        },
         scrollToLatest() {
             this.$nextTick(() => {
                 const thread = this.$refs.thread;
@@ -111,48 +328,202 @@ export default {
         },
     },
     template: `
-    <section class="ai-chat__panel glass-panel" aria-labelledby="ai-chat-panel-title">
-        <header class="ai-chat__panel-head">
-            <div>
-                <h2 class="ai-chat__panel-title" id="ai-chat-panel-title">知识库问答</h2>
-                <p class="ai-chat__panel-hint">只依据知识库作答；问设备手册、巡检规则、日志排查、故障处置。</p>
-            </div>
-            <div class="ai-chat__panel-actions">
-                <p v-if="confirmReset" class="ai-chat__reset-hint" role="alert">再次点击即清空，历史无法恢复。</p>
-                <button type="button" class="ai-chat__reset" :disabled="resetting || sending" @click="requestReset">
-                    [[ resetting ? '清空中…' : (confirmReset ? '确认清空' : '清空会话') ]]
-                </button>
-            </div>
-        </header>
+    <div class="ai-chat">
+        <p v-if="pageMessage" class="alert alert-success ai-chat__flash" role="status">[[ pageMessage ]]</p>
 
-        <p v-if="error" class="ai-chat__error" role="alert">[[ error ]]</p>
+        <section class="card surface-card ai-chat__panel" aria-labelledby="ai-chat-panel-title">
+            <div class="card-body ai-chat__panel-body">
+                <header class="ai-chat__panel-head">
+                    <div>
+                        <h2 class="ai-chat__panel-title" id="ai-chat-panel-title">知识库问答</h2>
+                        <p class="ai-chat__panel-hint">只依据知识库作答；问设备手册、巡检规则、日志排查、故障处置。</p>
+                    </div>
+                    <div class="ai-chat__panel-actions">
+                        <p v-if="confirmReset" class="ai-chat__reset-hint" role="alert">再次点击即清空，历史无法恢复。</p>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" :disabled="resetting || sending" @click="requestReset">
+                            [[ resetting ? '清空中…' : (confirmReset ? '确认清空' : '清空会话') ]]
+                        </button>
+                    </div>
+                </header>
 
-        <div ref="thread" class="ai-chat__thread" role="log" aria-live="polite" aria-relevant="additions"
-             aria-label="对话记录" tabindex="0">
-            <p v-if="loading" class="ai-chat__empty">正在读取历史消息…</p>
-            <p v-else-if="!messages.length" class="ai-chat__empty">还没有对话。下面输入一个运维问题开始。</p>
-            <article v-for="(message, index) in messages" :key="index" class="ai-chat__bubble"
-                     :class="[message.role === 'user' ? 'ai-chat__bubble--user' : 'ai-chat__bubble--assistant', {'is-blocked': message.blocked}]">
-                <p class="ai-chat__role">
-                    <span>[[ message.role === 'user' ? '我' : 'AI 助手' ]]</span>
-                    <span v-if="message.blocked" class="ai-chat__flag">已拦截</span>
-                </p>
-                <div class="ai-chat__content">[[ message.content ]]</div>
-                <ul v-if="message.sources && message.sources.length" class="ai-chat__sources" aria-label="参考来源">
-                    <li v-for="(source, position) in message.sources" :key="position" class="ai-chat__source"
-                        :title="sourceLabel(source)">[[ source.title ]]</li>
-                </ul>
-            </article>
+                <p v-if="error" class="alert alert-danger ai-chat__error" role="alert">[[ error ]]</p>
+
+                <div ref="thread" class="ai-chat__thread" role="log" aria-live="polite" aria-relevant="additions"
+                     aria-label="对话记录" tabindex="0">
+                    <p v-if="loading" class="ai-chat__empty">正在读取历史消息…</p>
+                    <p v-else-if="!messages.length" class="ai-chat__empty">还没有对话。下面输入一个运维问题开始。</p>
+                    <article v-for="(message, index) in messages" :key="index" class="ai-chat__bubble"
+                             :class="[message.role === 'user' ? 'ai-chat__bubble--user' : 'ai-chat__bubble--assistant', {'is-blocked': message.blocked}]">
+                        <p class="ai-chat__role">
+                            <span>[[ message.role === 'user' ? '我' : 'AI 助手' ]]</span>
+                            <span v-if="message.blocked" class="ai-chat__flag">已拦截</span>
+                        </p>
+                        <div class="ai-chat__content">[[ message.content ]]</div>
+                        <ul v-if="message.sources && message.sources.length" class="ai-chat__sources" aria-label="参考来源">
+                            <li v-for="(source, position) in message.sources" :key="position" class="ai-chat__source"
+                                :title="sourceLabel(source)">[[ source.title ]]</li>
+                        </ul>
+                    </article>
+                </div>
+
+                <form class="ai-chat__composer" @submit.prevent="send">
+                    <label class="visually-hidden" for="ai-chat-input">提问内容</label>
+                    <textarea id="ai-chat-input" ref="input" class="form-control ai-chat__input" rows="2" v-model="draft"
+                              :disabled="sending" autocomplete="off"
+                              placeholder="输入问题，Enter 发送，Shift+Enter 换行"
+                              @keydown.enter.exact.prevent="send"></textarea>
+                    <button type="submit" class="btn btn-primary" :disabled="!canSend">[[ sending ? '发送中…' : '发送' ]]</button>
+                </form>
+            </div>
+        </section>
+
+        <div v-if="is_admin" class="modal fade" id="aiSettingsModal" ref="settingsModal" tabindex="-1"
+             aria-labelledby="aiSettingsModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable modal-shell">
+                <div class="modal-content modal-surface">
+                    <div class="modal-header">
+                        <h2 class="modal-title fs-5" id="aiSettingsModalLabel">配置 API</h2>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+                    </div>
+                    <div class="modal-body modal-body--scroll">
+                        <p v-if="settingsError" class="alert alert-danger" role="alert">[[ settingsError ]]</p>
+                        <p v-if="settingsLoading" class="text-secondary" role="status">正在读取当前配置…</p>
+                        <form id="ai-settings-form" @submit.prevent="saveSettings">
+                            <div class="config-modal-grid">
+                                <section class="config-section-card" aria-label="服务端点">
+                                    <div class="config-section-heading">
+                                        <span class="config-section-index">01</span>
+                                        <div><h3>服务端点</h3><p>OpenAI 兼容接口的地址与密钥，保存后立即生效。</p></div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label" for="ai-base-url">Base URL</label>
+                                        <input class="form-control" id="ai-base-url" type="text" v-model.trim="settingsForm.base_url"
+                                               placeholder="https://api.example.com/v1" autocomplete="off">
+                                    </div>
+                                    <div class="mb-0">
+                                        <label class="form-label" for="ai-api-key">API Key</label>
+                                        <input class="form-control" id="ai-api-key" type="password" v-model="settingsForm.api_key"
+                                               placeholder="已保存，留空则不修改" autocomplete="new-password"
+                                               aria-describedby="ai-api-key-help">
+                                        <p class="form-text mb-0" id="ai-api-key-help">只存密文，不回显。<span v-if="hasApiKey">当前已保存密钥。</span></p>
+                                    </div>
+                                </section>
+                                <section class="config-section-card" aria-label="模型与检索">
+                                    <div class="config-section-heading">
+                                        <span class="config-section-index">02</span>
+                                        <div><h3>模型与检索</h3><p>问答模型、向量模型与召回阈值；阈值留空沿用环境变量。</p></div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label" for="ai-chat-model">Chat 模型</label>
+                                        <input class="form-control" id="ai-chat-model" type="text" v-model.trim="settingsForm.chat_model" autocomplete="off">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label" for="ai-embed-model">Embedding 模型</label>
+                                        <input class="form-control" id="ai-embed-model" type="text" v-model.trim="settingsForm.embed_model" autocomplete="off">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label" for="ai-rag-backend">检索方式</label>
+                                        <select class="form-select" id="ai-rag-backend" v-model="settingsForm.rag_backend">
+                                            <option value="vector">vector（向量检索）</option>
+                                            <option value="keyword">keyword（关键词检索）</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label" for="ai-vector-distance">向量阈值</label>
+                                        <input class="form-control" id="ai-vector-distance" type="number" step="0.01" min="0" max="2"
+                                               v-model="settingsForm.retrieval_max_distance">
+                                    </div>
+                                    <div class="mb-0">
+                                        <label class="form-label" for="ai-keyword-distance">关键词阈值</label>
+                                        <input class="form-control" id="ai-keyword-distance" type="number" step="0.01" min="0" max="1"
+                                               v-model="settingsForm.keyword_max_distance">
+                                    </div>
+                                </section>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer modal-footer--sticky">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
+                        <button type="submit" class="btn btn-primary" form="ai-settings-form" :disabled="settingsSaving || settingsLoading">
+                            [[ settingsSaving ? '保存中…' : '保存' ]]
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <form class="ai-chat__composer" @submit.prevent="send">
-            <label class="visually-hidden" for="ai-chat-input">提问内容</label>
-            <textarea id="ai-chat-input" ref="input" class="ai-chat__input" rows="2" v-model="draft"
-                      :disabled="sending" autocomplete="off"
-                      placeholder="输入问题，Enter 发送，Shift+Enter 换行"
-                      @keydown.enter.exact.prevent="send"></textarea>
-            <button type="submit" :disabled="!canSend">[[ sending ? '发送中…' : '发送' ]]</button>
-        </form>
-    </section>
-    `,
+        <div v-if="is_admin" class="modal fade" id="aiKnowledgeModal" ref="knowledgeModal" tabindex="-1"
+             aria-labelledby="aiKnowledgeModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable modal-shell">
+                <div class="modal-content modal-surface">
+                    <div class="modal-header">
+                        <h2 class="modal-title fs-5" id="aiKnowledgeModalLabel">添加知识库条目</h2>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+                    </div>
+                    <div class="modal-body modal-body--scroll">
+                        <p v-if="knowledgeError" class="alert alert-danger" role="alert">[[ knowledgeError ]]</p>
+                        <section class="config-section-card mb-3" aria-label="知识库现状">
+                            <div class="config-section-heading">
+                                <span class="config-section-index">00</span>
+                                <div><h3>知识库现状</h3><p>新增条目先落库，向量要跑 build_knowledge 才建。</p></div>
+                            </div>
+                            <p class="mb-0" role="status">
+                                共 <strong>[[ knowledge.total ]]</strong> 条，已建向量 <strong>[[ knowledge.embedded ]]</strong> 条。
+                                <button type="button" class="btn btn-outline-secondary btn-sm ms-2" :disabled="knowledgeLoading" @click="loadKnowledge">
+                                    [[ knowledgeLoading ? '读取中…' : '刷新' ]]
+                                </button>
+                            </p>
+                        </section>
+                        <section class="config-section-card mb-3" aria-label="单条添加">
+                            <div class="config-section-heading">
+                                <span class="config-section-index">01</span>
+                                <div><h3>单条添加</h3><p>一条手册片段或处置经验，标题写清设备与场景。</p></div>
+                            </div>
+                            <p v-if="addError" class="alert alert-danger" role="alert">[[ addError ]]</p>
+                            <p v-if="addMessage" class="alert alert-success" role="status">[[ addMessage ]]</p>
+                            <form @submit.prevent="addKnowledge">
+                                <div class="row g-3">
+                                    <div class="col-12 col-md-8">
+                                        <label class="form-label" for="ai-knowledge-title">标题</label>
+                                        <input class="form-control" id="ai-knowledge-title" type="text" v-model="knowledgeForm.title" autocomplete="off">
+                                    </div>
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label" for="ai-knowledge-category">分类</label>
+                                        <input class="form-control" id="ai-knowledge-category" type="text" v-model="knowledgeForm.category" autocomplete="off">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label" for="ai-knowledge-content">内容</label>
+                                        <textarea class="form-control" id="ai-knowledge-content" rows="4" v-model="knowledgeForm.content"></textarea>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary mt-3" :disabled="adding">[[ adding ? '保存中…' : '保存这一条' ]]</button>
+                            </form>
+                        </section>
+                        <section class="config-section-card mb-0" aria-label="表格导入">
+                            <div class="config-section-heading">
+                                <span class="config-section-index">02</span>
+                                <div><h3>表格导入</h3><p>从 Excel 直接粘贴或粘 CSV；列顺序：标题、内容、分类。</p></div>
+                            </div>
+                            <p v-if="importError" class="alert alert-danger" role="alert">[[ importError ]]</p>
+                            <p v-if="importMessage" class="alert alert-success" role="status">[[ importMessage ]]</p>
+                            <ul v-if="importSkipped.length" class="ai-chat__skipped" aria-label="跳过明细">
+                                <li v-for="(item, index) in importSkipped" :key="index">第 [[ item.line ]] 行：[[ item.reason ]]</li>
+                            </ul>
+                            <label class="form-label" for="ai-import-text">粘贴区域</label>
+                            <textarea class="form-control" id="ai-import-text" rows="6" v-model="importText"
+                                      placeholder="标题,内容,分类&#10;核心交换机离线处置,先确认上联口与电源,网络设备"></textarea>
+                            <p class="form-text">支持逗号或制表符分隔；首行是表头会自动跳过；字段里的逗号用引号包起来。</p>
+                            <button type="button" class="btn btn-primary mt-2" :disabled="importing" @click="runImport">
+                                [[ importing ? '导入中…' : '导入' ]]
+                            </button>
+                        </section>
+                    </div>
+                    <div class="modal-footer modal-footer--sticky">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+`,
 };

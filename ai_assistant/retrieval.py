@@ -9,7 +9,7 @@ Django ORM 不支持这两样，所以这里全部走原生 SQL。
 """
 import re
 
-from django.conf import settings
+from .config import ai_config
 from django.db import connection
 
 from .client import embed
@@ -34,7 +34,7 @@ def _literal(vector):
 
 def search(question, top_k=None):
     """返回按距离升序的命中，不做阈值过滤。距离越小越像。"""
-    config = settings.AI_CONFIG
+    config = ai_config()
     top_k = top_k or config["RETRIEVAL_TOP_K"]
     vectors = embed([question])
     if not vectors:
@@ -87,7 +87,7 @@ def _tokenize(text):
 
 def search_keyword(question, top_k=None):
     """不调 embedding 的关键词检索，返回结构与 search() 一致。"""
-    config = settings.AI_CONFIG
+    config = ai_config()
     top_k = top_k or config["RETRIEVAL_TOP_K"]
     tokens = _tokenize(question)
     if not tokens:
@@ -130,7 +130,7 @@ def retrieve(question, top_k=None):
 
     空列表这条路径很关键：把它交给模型，模型会硬答。
     """
-    config = settings.AI_CONFIG
+    config = ai_config()
     backend = config.get("RAG_BACKEND", "vector")
     if backend == "vector":
         limit = config["RETRIEVAL_MAX_DISTANCE"]

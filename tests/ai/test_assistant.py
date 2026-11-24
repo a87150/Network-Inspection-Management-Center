@@ -229,3 +229,125 @@ class SessionTests(TestCase):
     def test_login_required(self):
         anonymous = Client(SERVER_NAME="127.0.0.1")
         self.assertEqual(anonymous.get("/api/ai/history/").status_code, 302)
+
+
+@override_settings(AI_CONFIG=CONFIGURED)
+class SettingsApiTests(TestCase):
+    """「配置 API」弹窗背后的读写接口。"""
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser("ai-admin", "admin@example.invalid", "pw")
+        self.reader = User.objects.create_user("ai-reader", "reader@example.invalid", "pw")
+        self.client = Client(SERVER_NAME="127.0.0.1")
+
+    def test_summary_masks_api_key(self):
+        from ai_assistant.config import save_settings
+
+        save_settings({"base_url": "https://ai.invalid/v1", "api_key": "sk-secret"})
+        self.client.force_login(self.admin)
+        body = self.client.get("/api/ai/settings/").json()
+        self.assertTrue(body["has_api_key"])
+        self.assertTrue(body["configured"])
+        self.assertNotIn("sk-secret", str(body))
+
+    def test_save_takes_effect_immediately(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            "/api/ai/settings/save/",
+            data='{"base_url": "https://ai.invalid/v1", "api_key": "sk-x", "rag_backend": "keyword"}',
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        from ai_assistant.config import ai_config
+
+        config = ai_config()
+        self.assertEqual(config["BASE_URL"], "https://ai.invalid/v1")
+        self.assertEqual(config["API_KEY"], "sk-x")
+        self.assertEqual(config["RAG_BACKEND"], "keyword")
+
+    def test_blank_api_key_keeps_existing(self):
+        from ai_assistant.config import save_settings
+
+        save_settings({"base_url": "https://ai.invalid/v1", "api_key": "sk-first"})
+        self.client.force_login(self.admin)
+        self.client.post(
+            "/api/ai/settings/save/",
+            data='{"base_url": "https://ai.invalid/v2", "api_key": ""}',
+            content_type="application/json",
+        )
+        from ai_assistant.config import ai_config
+
+        self.assertEqual(ai_config()["API_KEY"], "sk-first")
+        self.assertEqual(ai_config()["BASE_URL"], "https://ai.invalid/v2")
+
+    def test_non_admin_cannot_save(self):
+        self.client.force_login(self.reader)
+        response = self.client.post(
+            "/api/ai/settings/save/",
+            data='{"base_url": "https://evil.invalid"}',
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
+
+
+@override_settings(AI_CONFIG=CONFIGURED)
+class KnowledgeApiTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser("kb-admin", "kb@example.invalid", "pw")
+        self.reader = User.objects.create_user("kb-reader", "kbr@example.invalid", "pw")
+        self.client = Client(SERVER_NAME="127.0.0.1")
+
+    def test_add_single_entry(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            "/api/ai/knowledge/add/",
+            data='{"title": "端口排查", "content": "先看对端", "category": "手册"}',
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(KnowledgeDoc.objects.count(), 1)
+
+    def test_add_rejects_empty(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            "/api/ai/knowledge/add/",
+            data='{"title": "", "content": ""}',
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_import_skips_blank_and_duplicate(self):
+        KnowledgeDoc.objects.create(title="已有", content="内容")
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            "/api/ai/knowledge/import/",
+            data=(
+                '{"rows": ['
+                '{"title": "新条目", "content": "正文"},'
+                '{"title": "已有", "content": "正文"},'
+                '{"title": "", "content": "无标题"}'
+                "]}"
+            ),
+            content_type="application/json",
+        )
+        body = response.json()
+        self.assertEqual(body["created"], 1)
+        self.assertEqual(len(body["skipped"]), 2)
+        self.assertEqual(KnowledgeDoc.objects.count(), 2)
+
+    def test_list_reports_embedded_count(self):
+        KnowledgeDoc.objects.create(title="有向量", content="x")
+        self.client.force_login(self.admin)
+        body = self.client.get("/api/ai/knowledge/").json()
+        self.assertEqual(body["total"], 1)
+        self.assertEqual(body["embedded"], 0)
+        self.assertFalse(body["rows"][0]["embedded"])
+
+    def test_reader_cannot_add(self):
+        self.client.force_login(self.reader)
+        response = self.client.post(
+            "/api/ai/knowledge/add/",
+            data='{"title": "x", "content": "y"}',
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)

@@ -69,3 +69,31 @@ class KnowledgeDoc(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class AiSetting(models.Model):
+    """单例：页面上「配置 API」保存的值，覆盖 settings.AI_CONFIG 里的同名项。
+
+    api_key 走项目现成的 Fernet（net.infrastructure.credentials），不要明文落库。
+    空字符串表示「没在页面上覆盖」，回落到 settings / 环境变量。
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    base_url = models.CharField(max_length=512, blank=True)
+    api_key_cipher = models.TextField(blank=True)
+    chat_model = models.CharField(max_length=128, blank=True)
+    embed_model = models.CharField(max_length=128, blank=True)
+    rag_backend = models.CharField(max_length=16, blank=True)
+    retrieval_max_distance = models.FloatField(null=True, blank=True)
+    keyword_max_distance = models.FloatField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "AI 服务配置"
+
+    def __str__(self):
+        return "AI 服务配置"
+
+    @classmethod
+    def load(cls):
+        return cls.objects.order_by("id").first()
