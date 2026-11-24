@@ -1,3 +1,21 @@
+## 2.22（2026-11-24）
+
+### 变更
+- `ipam/` 并入拓扑页所在的模块：`ipam/views.py` → `index/dashboard/ipam.py`，
+  `ipam/templates/ipam/ip_management.html` → `index/templates/dashboard/ip_management.html`，
+  `ipam/` 目录删除，`INSTALLED_APPS` 去掉 `'ipam'`。
+  `ipam` app 从来没有模型，只有 130 行视图和一个 463 字节模板壳；
+  核心逻辑一直在 `net/devices/network/ipam.py` 的 `plan_report`。
+- 路由与测试的模板根同步：`index/urls.py`、`tests/frontend/template_root.py`。
+
+### 核实记录
+- `topology/` **没有被合并**。它是一个独立 app（`verbose_name` 是「网络拓扑」），
+  但承担的是拓扑数据的 REST：`/operations/topology/`、`/batches/`、
+  `/interfaces/`、`/links/`、`/evidence/<pk>/`，前端模板与 JS 对它们 0 次请求。
+- 拓扑页本身（HTML 与 `/operations/overview/data/`）在
+  `index/dashboard/operations.py`，它 import `net.topology.read_model`
+  与 `index.dashboard.topology_presentation`，不 import `topology` app。
+
 ## 2.21（2026-11-24）
 
 ### 变更

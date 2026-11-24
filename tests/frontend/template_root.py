@@ -7,7 +7,7 @@ from pathlib import Path
 
 BASE = Path(__file__).resolve().parents[2]
 APPS = (
-    "index", "people", "domain", "alerts", "topology", "ipam",
+    "index", "people", "domain", "alerts", "topology",
     "pc", "server", "weakcurrent", "inspections", "assets", "network",
 )
 

@@ -179,6 +179,6 @@ def ip_management(request):
         "lookup": _lookup_block(query) if query else None,
         "ledger": _ledger_block(report),
     }
-    return render(request, "ipam/ip_management.html", {
+    return render(request, "dashboard/ip_management.html", {
         "ip_bootstrap": _script(payload, "ip-subnet-bootstrap"),
     })

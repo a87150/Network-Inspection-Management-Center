@@ -21,7 +21,7 @@ from assets.backups import (
     configuration_backup_download,
     configuration_backup_list,
 )
-from ipam.views import ip_management
+from index.dashboard.ipam import ip_management
 from assets.maintenance import (
     maintenance_list, maintenance_window_create, maintenance_window_delete,
 )
