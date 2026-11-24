@@ -32,8 +32,9 @@
         highlight(view);
         // 面板切换是页面内部行为，不写地址栏；URL 只由外部入口决定。
         // 换进来的表要重新挂一次表格与弹窗行为。
-        window.AppTableTools && window.AppTableTools.refresh && window.AppTableTools.refresh();
-        window.AppModalWorkflows && window.AppModalWorkflows.bind && window.AppModalWorkflows.bind(document);
+        window.AppTableWorkspace?.refreshTableWorkspaces?.();
+        window.AppModalFeedback?.bind?.(document);
+        window.AppModalTransport?.install?.(document);
         // 换进来的表是新的 Vue 岛，必须重新挂载，否则只有表头没有行。
         const fresh = pane();
         if (fresh && window.mountPages) window.mountPages(fresh);

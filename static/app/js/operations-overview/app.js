@@ -29,6 +29,9 @@ if (mountElement && bootstrapElement) {
         selectedEdgeId: '',
         expandedNodeIds: new Set(),
         drawerNodeId: '',
+        lookupOpen: false,
+        lookupQuery: '',
+        lookupRows: [],
         ledgerOpen: false,
         ledgerLoading: false,
         ledgerError: '',
@@ -180,9 +183,11 @@ if (mountElement && bootstrapElement) {
             this.liveStatus = '图上和资产里都没有「' + query + '」';
             return;
           }
-          this.liveStatus = '已在资产中找到 ' + query + '，台账里是完整信息';
-          // 图上没画，就把台账弹出来：接口、VLAN、归属设备都在那一页。
-          this.openIpLedgerModal();
+          this.liveStatus = '图上没画，资产里有 ' + rows.length + ' 条匹配';
+          // 图上没画不等于不存在：把资产里的匹配结果摊开，而不是拿台账顶替。
+          this.lookupOpen = true;
+          this.lookupQuery = query;
+          this.lookupRows = rows;
         } catch (error) {
           this.liveStatus = '台账查询失败，请稍后重试';
         }
@@ -424,6 +429,7 @@ if (mountElement && bootstrapElement) {
         this.controller?.handleVisibilityChange();
       },
     async openIpLedgerModal() {
+      this.lookupOpen = false;
       this.ledgerOpen = true;
       if (this.ledger.rows.length || this.ledgerLoading) return;
       await this.loadLedger();
@@ -443,6 +449,11 @@ if (mountElement && bootstrapElement) {
       } finally {
         this.ledgerLoading = false;
       }
+    },
+    closeLookup() {
+      this.lookupOpen = false;
+      this.lookupRows = [];
+      this.lookupQuery = '';
     },
     closeLedger() {
       this.ledgerOpen = false;

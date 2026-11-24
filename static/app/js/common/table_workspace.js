@@ -233,7 +233,7 @@
             moreFilters: workspace.querySelector('[data-more-filters]'),
             exportLinks: Array.from(workspace.querySelectorAll('[data-filtered-export]')),
             configurationExport: workspace.querySelector('[data-selected-config-export]'),
-            configurationTargets: Array.from(workspace.querySelectorAll('[data-configuration-target]')),
+            configurationTargets: Array.from(workspace.querySelectorAll('[data-device-selection-target]')),
             selectionTargets: Array.from(workspace.querySelectorAll('[data-device-selection-target]')),
             selectionAll: workspace.querySelector('[data-device-select-all]'),
             selectionInvert: workspace.querySelector('[data-device-select-invert]'),
@@ -388,6 +388,8 @@
             pairs.forEach(({workspace, replacement}) => {
                 workspace.replaceWith(replacement);
                 initializeWorkspace(replacement, storage, browserWindow.location);
+                // 换进来的是新 DOM，Vue 岛必须重挂，否则只剩表头没有行。
+                window.mountPages?.(replacement);
             });
             announceTableUpdate(documentRoot, pairs.map(({replacement}) => replacement));
             if (options.focusTableKey && options.focusSortKey) {

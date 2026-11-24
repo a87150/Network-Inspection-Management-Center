@@ -1,3 +1,29 @@
+## 2.19（2026-11-24）
+
+### 修复
+- 「导出配置」永久禁用：`table_workspace.js` 查的是 `[data-configuration-target]`，
+  而勾选框实际属性是 `data-device-selection-target`（所有 payload 都产这个名），
+  查询恒为空，链接一直是 `请先选择设备`。
+- 维护窗口保存后列表不刷新：`{{ bootstrap|json_script }}` 写在
+  `[data-table-workspace]` 容器外，局部刷新只替换容器，读回的是上一份 JSON。
+  移进容器内。
+- 域控页保存「未登录天数」后数字与着色不更新：模板的账户/计算机 stale 计数
+  缺 `data-domain-stale` 属性，`statistics.js` 取不到节点。
+- 任务页签切换后表格行为不重绑：`task_center_tabs.js` 引用并不存在的全局
+  `AppTableTools` / `AppModalWorkflows`，改为真实的
+  `AppTableWorkspace` / `AppModalFeedback` / `AppModalTransport`。
+- 表格排序/筛选/翻页后只剩表头没有行：`refreshTableWorkspaces` 替换片段后
+  没有重挂 Vue 岛，补 `window.mountPages(replacement)`。
+
+### 删除
+- 五个零引用模板：`common/table_sort_headers.html`、`common/table_caption.html`、
+  `common/text_disclosure.html`、`devices/view_tabs.html`、`pc/analysis_pane.html`。
+
+### 变更
+- IP 查询回到「查设备」：图上没有的设备显示查询结果表（类型/名称/IP），
+  不再拿台账弹窗顶替。
+- 台账弹窗补上「增加 IP 段」入口。
+
 ## 2.18（2026-11-24）
 
 ### 变更
