@@ -1,3 +1,20 @@
+## 2.21（2026-11-24）
+
+### 变更
+- 合并 `network/payloads.py` 与 `server/payloads.py` 的重复装配逻辑到
+  `index/common/device_payload.py`，参数化为
+  `build(request, *, kind, title, model, empty_title, only)`。
+  两份各 210 行的实现缩成各 13 行薄壳，删除重复约 200 行。
+  差异实际只有 6 处：模型类、`KIND`/`TITLE`、导出端点的 kind 段、
+  `project_task_queryset` 的 kind、`device_overview` 的模型参数、空态标题。
+
+### 教训
+- 上一轮同一改动跑出 210 个 error，根因是改了三处函数签名
+  （`_records_table`、`_taskbar_block`、`_records_endpoint`）却没有同步
+  所有调用点。这次先跑 `tests.devices.network` 拿到
+  `_taskbar_block() missing 1 required positional argument`，
+  一次定位。以后改签名必须同一批改完全部调用点。
+
 ## 2.20（2026-11-24）
 
 ### 删除
