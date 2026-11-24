@@ -106,7 +106,6 @@ def _device_docs():
 
 
 def _vocabulary_docs():
-    kind_labels = dict(KINDS)
     vendor_lines = ["设备类别与可选厂商。kind 是台账和采集模板共用的类别键。", ""]
     for kind, label in KINDS:
         options = VENDORS.get(kind) or []
