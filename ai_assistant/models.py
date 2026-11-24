@@ -91,6 +91,8 @@ class AiSetting(models.Model):
     summary_trigger = models.IntegerField(null=True, blank=True)
     # 思考模式：空串表示不传这个参数（有的模型不支持，传错直接 400）。
     reasoning_effort = models.CharField(max_length=16, blank=True)
+    # 可选模型名，一行一个。空表示只有 chat_model 一个。
+    models_text = models.TextField(blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

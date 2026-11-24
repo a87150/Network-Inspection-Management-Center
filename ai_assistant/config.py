@@ -53,6 +53,8 @@ def ai_config():
         config["SUMMARY_TRIGGER"] = row.summary_trigger
     if row.reasoning_effort:
         config["REASONING_EFFORT"] = row.reasoning_effort
+    if row.models_text:
+        config["MODELS"] = [line.strip() for line in row.models_text.splitlines() if line.strip()]
     return config
 
 
@@ -77,6 +79,9 @@ def save_settings(payload):
     row.summary_trigger = _int_or_none(payload.get("summary_trigger"), 4, 200)
     effort = (payload.get("reasoning_effort") or "").strip()
     row.reasoning_effort = effort if effort in {"low", "medium", "high"} else ""
+    row.models_text = "\n".join(
+        line.strip() for line in str(payload.get("models_text") or "").splitlines() if line.strip()
+    )
     row.save()
     return row
 
@@ -110,6 +115,8 @@ def masked_summary():
         "max_history": config["MAX_HISTORY"],
         "summary_trigger": config["SUMMARY_TRIGGER"],
         "reasoning_effort": config.get("REASONING_EFFORT", ""),
+        "models": list(config.get("MODELS") or [config["CHAT_MODEL"]]),
+        "models_text": "\n".join(config.get("MODELS") or []),
         "has_api_key": bool(config["API_KEY"]),
         "configured": bool(config["BASE_URL"] and config["API_KEY"]),
     }

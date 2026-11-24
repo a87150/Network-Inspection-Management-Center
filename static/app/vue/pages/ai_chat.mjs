@@ -14,6 +14,7 @@ function settingsFields(source) {
                 max_history: payload.max_history ?? 10,
                 summary_trigger: payload.summary_trigger ?? 20,
                 reasoning_effort: payload.reasoning_effort || '',
+                models_text: payload.models_text || '',
         retrieval_max_distance: numberText(payload.retrieval_max_distance),
         keyword_max_distance: numberText(payload.keyword_max_distance),
     };
@@ -75,9 +76,14 @@ export default {
     },
     computed: {
         modelOptions() {
-            const list = (this.page && this.page.models) || [];
+            // 优先用设置里填的可用模型；没填就退回当前这一个。
+            const typed = (this.settingsForm.models_text || '')
+                .split(/\r?\n/)
+                .map((line) => line.trim())
+                .filter(Boolean);
+            const list = typed.length ? typed : (this.settingsForm.chat_model ? [this.settingsForm.chat_model] : []);
             const current = this.settingsForm.chat_model;
-            return current && !list.includes(current) ? list.concat([current]) : list;
+            return current && !list.includes(current) ? [current].concat(list) : list;
         },
         canSend() {
             return this.draft.trim().length > 0 && !this.sending;
@@ -85,6 +91,8 @@ export default {
     },
     mounted() {
         this.loadHistory();
+        // 输入区的模型下拉需要当前值，进页面先拉一次设置（只读，不打知识库）。
+        this.loadSettings({ silent: true });
         // 打开弹窗才拉配置与知识库现状：进页面不多打两个请求。
         const settingsModal = this.$refs.settingsModal;
         if (settingsModal) settingsModal.addEventListener('show.bs.modal', () => this.loadSettings());
@@ -178,8 +186,9 @@ export default {
                 this.focusInput();
             }
         },
-        async loadSettings() {
-            this.settingsLoading = true;
+        async loadSettings(options) {
+            const silent = Boolean(options && options.silent);
+            if (!silent) this.settingsLoading = true;
             this.settingsError = '';
             try {
                 const payload = await api.get(this.settings_url);
@@ -188,7 +197,7 @@ export default {
             } catch (failure) {
                 this.settingsError = this.describe(failure, '读取配置失败，请稍后重试。');
             } finally {
-                this.settingsLoading = false;
+                if (!silent) this.settingsLoading = false;
             }
         },
         async saveSettings() {
@@ -200,6 +209,7 @@ export default {
                     base_url: this.settingsForm.base_url,
                     api_key: this.settingsForm.api_key,
                     chat_model: this.settingsForm.chat_model,
+                    models_text: this.settingsForm.models_text,
                     embed_model: this.settingsForm.embed_model,
                     rag_backend: this.settingsForm.rag_backend,
                     retrieval_max_distance: this.settingsForm.retrieval_max_distance,
@@ -289,6 +299,17 @@ export default {
             }
             cells.push(cell);
             return cells;
+        },
+        async persistModelChoice() {
+            // 输入框里的两个下拉要立刻生效，不然选了不保存等于没选。
+            try {
+                await api.post(this.settings_save_url, {
+                    chat_model: this.settingsForm.chat_model,
+                    reasoning_effort: this.settingsForm.reasoning_effort,
+                });
+            } catch (error) {
+                this.error = error.message || '模型选择保存失败';
+            }
         },
         async onFilePicked(event) {
             const file = event.target.files && event.target.files[0];
@@ -413,11 +434,13 @@ export default {
                           placeholder="输入运维问题，Enter 发送，Shift+Enter 换行"
                           @keydown.enter.exact.prevent="send"></textarea>
                 <div class="ai-chat__composer-bar">
-                    <select class="ai-chat__pill" v-model="settingsForm.chat_model" title="对话模型">
+                    <select class="ai-chat__pill" v-model="settingsForm.chat_model" title="对话模型"
+                            @change="persistModelChoice">
                         <option value="">跟随默认</option>
                         <option v-for="name in modelOptions" :key="name" :value="name">[[ name ]]</option>
                     </select>
-                    <select class="ai-chat__pill" v-model="settingsForm.reasoning_effort" title="思考模式">
+                    <select class="ai-chat__pill" v-model="settingsForm.reasoning_effort" title="思考模式"
+                            @change="persistModelChoice">
                         <option value="">不思考</option>
                         <option value="low">思考 low</option>
                         <option value="medium">思考 medium</option>
@@ -477,6 +500,13 @@ export default {
                                         <label class="form-label" for="ai-chat-model">Chat 模型</label>
                                         <input class="form-control" id="ai-chat-model" type="text" v-model.trim="settingsForm.chat_model" autocomplete="off">
                                     </div>
+                                        <div class="mb-3">
+                                            <label class="form-label" for="ai-models-text">可用模型</label>
+                                            <textarea class="form-control" id="ai-models-text" rows="3"
+                                                      v-model="settingsForm.models_text"
+                                                      placeholder="一行一个，例如：&#10;gpt-4o-mini&#10;deepseek-chat&#10;qwen-plus"></textarea>
+                                            <p class="form-text mb-0">输入框下方的模型下拉就从这里取；留空则只有上面这一个。</p>
+                                        </div>
                                     <div class="mb-3">
                                         <label class="form-label" for="ai-embed-model">Embedding 模型</label>
                                         <input class="form-control" id="ai-embed-model" type="text" v-model.trim="settingsForm.embed_model" autocomplete="off">
@@ -500,11 +530,11 @@ export default {
                                                v-model="settingsForm.keyword_max_distance">
                                     </div>
                                 </section>
-                                <section class="ai-chat__fieldset">
-                                    <div class="mb-1">
-                                        <h3>会话与思考</h3>
-                                        <p>上下文压缩控制长对话怎么带历史；思考模式按模型支持情况选择。</p>
-                                    </div>
+                                <section class="config-section-card mb-3" aria-label="会话与思考">
+                                <div class="config-section-heading">
+                                    <span class="config-section-index">03</span>
+                                    <div><h3>会话与思考</h3><p>上下文压缩控制长对话怎么带历史；思考模式按模型支持情况选择。</p></div>
+                                </div>
                                     <div class="row g-3">
                                         <div class="col-md-4">
                                             <label class="form-label" for="ai-max-history">保留最近消息</label>
