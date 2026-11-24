@@ -10,7 +10,7 @@ function settingsFields(source) {
         api_key: '',
         chat_model: payload.chat_model || '',
         embed_model: payload.embed_model || '',
-        rag_backend: payload.rag_backend === 'keyword' ? 'keyword' : 'vector',
+        rag_backend: ['hybrid', 'vector', 'keyword'].includes(payload.rag_backend) ? payload.rag_backend : 'hybrid',
         retrieval_max_distance: numberText(payload.retrieval_max_distance),
         keyword_max_distance: numberText(payload.keyword_max_distance),
     };
@@ -83,10 +83,11 @@ export default {
     },
     methods: {
         sourceLabel(source) {
-            if (typeof source.distance === 'number') {
-                return source.title + ' · 余弦距离 ' + source.distance.toFixed(3);
-            }
-            return source.title;
+            // 混合检索下不给距离：向量距离和关键词得分量纲不同，
+            // 混在一个列表里显示会让人以为能横向比较。via 说明命中方式。
+            const map = {vector: '语义命中', keyword: '字面命中', both: '两路命中'};
+            const mark = map[source.via];
+            return mark ? source.title + ' · ' + mark : source.title;
         },
         describe(failure, fallback) {
             if (failure && failure.status === 403) return '当前账号没有这个操作权限（403）。';
@@ -424,8 +425,9 @@ export default {
                                     <div class="mb-3">
                                         <label class="form-label" for="ai-rag-backend">检索方式</label>
                                         <select class="form-select" id="ai-rag-backend" v-model="settingsForm.rag_backend">
-                                            <option value="vector">vector（向量检索）</option>
-                                            <option value="keyword">keyword（关键词检索）</option>
+                                            <option value="hybrid">混合（向量 + 关键词）</option>
+                                <option value="vector">仅向量</option>
+                                <option value="keyword">仅关键词</option>
                                         </select>
                                     </div>
                                     <div class="mb-3">

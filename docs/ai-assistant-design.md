@@ -332,11 +332,49 @@ python manage.py build_knowledge --rebuild # 全量重建
 
 ---
 
-## 8. 降级检索（keyword 模式）
+## 8. 混合检索（默认）
 
-**向量检索不是唯一路径。** 没配 embedding 模型、或者只想先跑起来时，
-把 `AI_RAG_BACKEND` 设成 `keyword`，`retrieve()` 的签名和返回值不变，
-内部换成关键词匹配。
+**默认两路都跑。** 纯向量对字面量不敏感：「S5735」和「S5732」在语义空间
+挨得很近，但在运维里是两个型号；设备名、问题编号、命令片段这类查询，
+关键词命中比语义近邻可靠。反过来，问「端口不通怎么办」这种没有字面锚点的
+问题，向量才找得到内容相关但用词不同的条目。两种都得有。
+
+```
+hybrid   向量 + 关键词，RRF 融合（默认）
+vector   只走向量
+keyword  只走关键词，不调模型
+```
+
+### 8.0 融合方式：RRF，不加权分数
+
+```
+score = Σ 1/(60 + rank)      k=60
+```
+
+加权分数要做归一化——向量距离 0.3 和关键词得分 0.6 量纲不同，没法直接相加，
+而且换 embedding 模型后权重要重调。RRF 只看排名：一路排第一就够进结果，
+另一路没命中也不影响。k=60 是检索文献的常用取值，压低头部差异，
+让「一路第一 + 另一路第五」和「两路都第三」不至于差出一个数量级。
+
+### 8.1 标题强匹配加权
+
+标题里命中了查询词的六成以上，额外加 `TITLE_BOOST = 0.05`。
+两路都排第一的 RRF 分约 0.033，这个量级能把它顶到最前，又不足以让
+正文只擦边的条目挤掉真正的双路命中。
+
+实测（只有关键词路可用时）：
+
+```
+问：S5735 端口排查
+  1. S5735 端口排查   score 0.0664   ← 型号落地，标题命中 + 关键词排前
+  2. 端口故障处置      score 0.0161   ← 语义相关但没型号
+```
+
+### 8.2 一路失败不连累另一路
+
+`_safe_vector_search` 吞掉向量路的异常（没配 API、上游超时），返回空列表，
+关键词照常跑。`hybrid` 因此在没有 embedding 模型时自动等价于 `keyword`，
+不用手工切开关。
 
 ### 8.1 为什么不用 jieba + SQLite FTS5
 
@@ -357,7 +395,7 @@ python manage.py build_knowledge --rebuild # 全量重建
 
 所以降级路径用**纯 Python 分词 + LIKE**，不引任何依赖。
 
-### 8.2 分词
+### 8.3 分词（关键词路）
 
 ```python
 _TOKEN_RE = re.compile(r"[a-zA-Z_][a-zA-Z0-9_.-]*|[\u4e00-\u9fff]+")
@@ -370,7 +408,7 @@ _TOKEN_RE = re.compile(r"[a-zA-Z_][a-zA-Z0-9_.-]*|[\u4e00-\u9fff]+")
 
 2-gram 是 ngram 索引的标准做法，配上几百条知识库的量级，召回够用。
 
-### 8.3 打分
+### 8.4 打分（关键词路）
 
 ```
 score    = 命中 token 数 / token 总数
@@ -381,13 +419,13 @@ distance = 1 - score
 `{"id", "title", "content", "category", "distance"}`，`retrieve()` 的
 阈值过滤和上层代码一行都不用改。
 
-### 8.4 什么时候用哪条
+### 8.5 什么时候用哪条
 
 | 场景 | RAG_BACKEND | 依赖 |
 |---|---|---|
-| 配了 embedding 模型 | `vector`（默认） | AI_BASE_URL + AI_API_KEY |
-| 没配模型，只想知道知识库里有什么 | `keyword` | 无 |
-| 知识库刚建、embedding 还没算 | `keyword` | 无 |
+| 正常使用 | `hybrid`（默认） | AI_BASE_URL + AI_API_KEY |
+| 只要字面命中，不想让语义近邻掺进来 | `vector` → `keyword` | 无 |
+| 知识库刚建、embedding 还没算 | `hybrid` 自动退化 | 无 |
 
 `keyword` 模式下 `build_knowledge` 照样能跑，只是不写 `embedding` 列。
 

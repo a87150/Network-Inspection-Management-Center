@@ -95,9 +95,10 @@ AI_CONFIG = {
     "TIMEOUT": int(os.getenv("AI_TIMEOUT", "60")),
     "MAX_HISTORY": 10,
     "SUMMARY_TRIGGER": 20,
-    # vector：调 embedding + VEC_DISTANCE_COSINE。keyword：不调模型，纯 SQL。
-    # 没有 embedding 模型时把它设成 keyword，其余代码不用改。
-    "RAG_BACKEND": os.getenv("AI_RAG_BACKEND", "vector"),
+    # hybrid：向量 + 关键词两路都跑，RRF 融合排名（默认）。
+    # vector：只走向量。keyword：只走关键词，不调模型。
+    # 向量路失败时 hybrid 会自动退化成纯关键词，不用手工切。
+    "RAG_BACKEND": os.getenv("AI_RAG_BACKEND", "hybrid"),
     "RETRIEVAL_TOP_K": 5,
     "RETRIEVAL_MAX_DISTANCE": float(os.getenv("AI_RETRIEVAL_MAX_DISTANCE", "0.55")),
     # keyword 模式的阈值：1 - 命中率，问句越长天然越高，比向量阈值宽。

@@ -59,7 +59,7 @@ def save_settings(payload):
     row.chat_model = (payload.get("chat_model") or "").strip()
     row.embed_model = (payload.get("embed_model") or "").strip()
     backend = (payload.get("rag_backend") or "").strip()
-    row.rag_backend = backend if backend in {"vector", "keyword"} else ""
+    row.rag_backend = backend if backend in {"hybrid", "vector", "keyword"} else ""
     api_key = (payload.get("api_key") or "").strip()
     if api_key:
         row.api_key_cipher = _encrypt(api_key)
@@ -85,7 +85,7 @@ def masked_summary():
         "base_url": config["BASE_URL"],
         "chat_model": config["CHAT_MODEL"],
         "embed_model": config["EMBED_MODEL"],
-        "rag_backend": config.get("RAG_BACKEND", "vector"),
+        "rag_backend": config.get("RAG_BACKEND", "hybrid"),
         "retrieval_max_distance": config["RETRIEVAL_MAX_DISTANCE"],
         "keyword_max_distance": config.get("KEYWORD_MAX_DISTANCE", 0.75),
         "has_api_key": bool(config["API_KEY"]),

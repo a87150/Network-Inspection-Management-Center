@@ -8,6 +8,7 @@ Django ORM 不支持这两样，所以这里全部走原生 SQL。
   keyword 降级。AI_BASE_URL 没配、或没有 embedding 模型时用，只要数据库能查就能工作。
 """
 import re
+import uuid
 
 from .config import ai_config
 from django.db import connection
@@ -22,6 +23,19 @@ WHERE embedding IS NOT NULL
 ORDER BY distance
 LIMIT %s
 """
+
+
+def _row_id(value):
+    """把裸 SQL 读出的主键变成和 ORM 一致的带横线 UUID 字符串。
+
+    MariaDB 后端把 UUIDField 存成 char(32)（无横线），裸 SQL 不经过
+    get_prep_value，读回来是 32 位裸 hex；ORM 的 str(uuid) 是 36 位带横线。
+    两者不归一，同一条记录在融合时会被当成两条，via 永远算不出 both。
+    """
+    try:
+        return str(uuid.UUID(str(value)))
+    except (ValueError, AttributeError, TypeError):
+        return str(value)
 
 
 def _literal(vector):
@@ -44,7 +58,7 @@ def search(question, top_k=None):
         rows = cursor.fetchall()
     return [
         {
-            "id": str(row[0]),
+            "id": _row_id(row[0]),
             "title": row[1],
             "content": row[2],
             "category": row[3],
@@ -112,7 +126,7 @@ def search_keyword(question, top_k=None):
         if score <= 0:
             continue
         scored.append({
-            "id": str(row[0]),
+            "id": _row_id(row[0]),
             "title": row[1],
             "content": row[2],
             "category": row[3],
@@ -122,22 +136,91 @@ def search_keyword(question, top_k=None):
     return scored[:top_k]
 
 
+# ---------- 混合检索 ----------
+#
+# 纯向量对字面量不敏感：「S5735」和「S5732」在语义空间挨得很近，但在运维里是
+# 两个型号；设备名、问题编号、命令片段这类查询，关键词命中比语义近邻可靠。
+# 所以默认两路都跑，用 RRF 融合排名。
+
+# RRF 的平滑常数。60 是检索文献里的常用取值：它压低头部差异，
+# 让「一路第一 + 另一路第五」和「两路都第三」不至于差出一个数量级。
+RRF_K = 60
+
+# 标题覆盖率够高时给的额外分。两路都排第一的 RRF 分约 0.033，
+# 这个量级能把它顶到最前，又不足以让一个正文只擦边的条目挤掉真正的双路命中。
+TITLE_BOOST = 0.05
+TITLE_COVERAGE = 0.6
+
+
+def _safe_vector_search(question, depth, limit):
+    """向量路自己出问题不该连累关键词路：没配 API、上游超时都退化成空。"""
+    try:
+        return [row for row in search(question, depth) if row["distance"] <= limit]
+    except Exception:
+        return []
+
+
+def _title_coverage(question, title):
+    """标题命中了多少比例的查询词。0 到 1。"""
+    tokens = _tokenize(question)
+    if not tokens or not title:
+        return 0.0
+    lowered = title.lower()
+    hit = sum(1 for token in tokens if token in lowered)
+    return hit / len(tokens)
+
+
+def fuse(question, ranked_lists, top_k):
+    """RRF：每路只贡献排名分，不掺距离。返回带 score 与 via 的条目。"""
+    scores = {}
+    rows = {}
+    via = {}
+    for name, hits in ranked_lists:
+        for rank, hit in enumerate(hits, 1):
+            key = hit["id"]
+            rows[key] = hit
+            scores[key] = scores.get(key, 0.0) + 1.0 / (RRF_K + rank)
+            via.setdefault(key, set()).add(name)
+    if not rows:
+        return []
+    for key, hit in rows.items():
+        if _title_coverage(question, hit["title"]) >= TITLE_COVERAGE:
+            scores[key] += TITLE_BOOST
+    ordered = sorted(rows.values(), key=lambda row: scores[row["id"]], reverse=True)
+    result = []
+    for hit in ordered[:top_k]:
+        row = dict(hit)
+        row["score"] = round(scores[hit["id"]], 4)
+        # via 是给页面的「依据」标签用的，让人看得出这条是字面命中还是语义命中。
+        marks = via[hit["id"]]
+        row["via"] = "both" if len(marks) > 1 else marks.pop()
+        result.append(row)
+    return result
+
+
 # ---------- 统一入口 ----------
 
 
 def retrieve(question, top_k=None):
-    """命中且距离达标的条目；一条都不达标时返回 []，由调用方决定拒答。
+    """命中且达标的条目；一条都不达标时返回 []，由调用方决定拒答。
 
     空列表这条路径很关键：把它交给模型，模型会硬答。
     """
     config = ai_config()
-    backend = config.get("RAG_BACKEND", "vector")
+    backend = config.get("RAG_BACKEND", "hybrid")
+    top_k = top_k or config["RETRIEVAL_TOP_K"]
+
+    if backend == "keyword":
+        limit = config.get("KEYWORD_MAX_DISTANCE", 0.75)
+        return [row for row in search_keyword(question, top_k) if row["distance"] <= limit]
+
     if backend == "vector":
         limit = config["RETRIEVAL_MAX_DISTANCE"]
-        rows = search(question, top_k)
-    else:
-        # 两套量纲不能共用一个阈值：向量距离 0.30 已经很像，
-        # 而关键词的 1 - 命中率在问句较长时天然偏高（命中一半就是 0.5）。
-        limit = config.get("KEYWORD_MAX_DISTANCE", 0.75)
-        rows = search_keyword(question, top_k)
-    return [row for row in rows if row["distance"] <= limit]
+        return [row for row in search(question, top_k) if row["distance"] <= limit]
+
+    # hybrid：两路各多取一些再融合，depth 小于 top_k 会让融合没得选。
+    depth = max(top_k * 3, 12)
+    keyword_limit = config.get("KEYWORD_MAX_DISTANCE", 0.75)
+    vector_hits = _safe_vector_search(question, depth, config["RETRIEVAL_MAX_DISTANCE"])
+    keyword_hits = [row for row in search_keyword(question, depth) if row["distance"] <= keyword_limit]
+    return fuse(question, [("vector", vector_hits), ("keyword", keyword_hits)], top_k)

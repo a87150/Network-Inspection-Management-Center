@@ -190,7 +190,9 @@ def chat(request):
     except AiUpstreamError:
         return reply("AI 服务暂时不可用，请稍后重试。", True)
 
-    sources = [{"title": hit["title"], "distance": round(hit["distance"], 3)} for hit in hits]
+    # 不给用户看距离：向量距离和关键词得分量纲不同，混在一起显示只会误导。
+    # via 说明这条依据是字面命中还是语义命中，对运维判断更有用。
+    sources = [{"title": hit["title"], "via": hit.get("via", "")} for hit in hits]
     response = reply(answer, False, sources)
     _maybe_summarize(conversation)
     return response

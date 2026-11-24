@@ -198,6 +198,83 @@ class KeywordRetrievalTests(TestCase):
         self.assertIn("错误", tokens)
 
 
+HYBRID_CONFIG = {**CONFIGURED, "RAG_BACKEND": "hybrid"}
+
+
+@override_settings(AI_CONFIG=HYBRID_CONFIG)
+class HybridRetrievalTests(TestCase):
+    """混合检索：两路都跑，RRF 融合，关键词命中不该被向量路挤掉。"""
+
+    def setUp(self):
+        self.exact = KnowledgeDoc.objects.create(
+            title="S5735 端口排查",
+            content="先看对端光模块，再看端口计数是否增长。",
+            category="故障处置",
+        )
+        self.semantic = KnowledgeDoc.objects.create(
+            title="端口故障处置",
+            content="端口不通时逐层排查链路、光模块与配置。",
+            category="手册",
+        )
+
+    def test_keyword_hit_survives_even_when_vector_ranks_it_low(self):
+        from ai_assistant.retrieval import retrieve
+
+        # 向量路把语义条目排第一，把带型号的精确条目排在很后面。
+        vector = [
+            {"id": str(self.semantic.id), "title": self.semantic.title,
+             "content": self.semantic.content, "category": "手册", "distance": 0.10},
+            {"id": str(self.exact.id), "title": self.exact.title,
+             "content": self.exact.content, "category": "故障处置", "distance": 0.42},
+        ]
+        with patch("ai_assistant.retrieval.search", return_value=vector):
+            hits = retrieve("S5735 端口排查")
+        self.assertTrue(hits)
+        # 标题覆盖率达标，boost 应该把它顶到第一。
+        self.assertEqual(hits[0]["title"], "S5735 端口排查")
+        self.assertEqual(hits[0]["via"], "both")
+
+    def test_vector_failure_falls_back_to_keyword(self):
+        from ai_assistant.retrieval import retrieve
+
+        from ai_assistant.client import AiUpstreamError
+
+        with patch("ai_assistant.retrieval.search", side_effect=AiUpstreamError("down")):
+            hits = retrieve("S5735 端口排查")
+        self.assertTrue(hits)
+        self.assertEqual(hits[0]["via"], "keyword")
+
+    def test_both_paths_empty_refuses(self):
+        from ai_assistant.retrieval import retrieve
+
+        with patch("ai_assistant.retrieval.search", return_value=[]):
+            self.assertEqual(retrieve("今天天气怎么样"), [])
+
+    def test_score_is_descending_and_via_is_meaningful(self):
+        from ai_assistant.retrieval import retrieve
+
+        with patch("ai_assistant.retrieval.search", return_value=[]):
+            hits = retrieve("端口排查")
+        self.assertTrue(hits)
+        scores = [hit["score"] for hit in hits]
+        self.assertEqual(scores, sorted(scores, reverse=True))
+        for hit in hits:
+            self.assertIn(hit["via"], {"vector", "keyword", "both"})
+
+    def test_fuse_ranks_double_hit_above_single(self):
+        from ai_assistant.retrieval import fuse
+
+        both = {"id": "a", "title": "端口排查", "content": "x", "category": "", "distance": 0.2}
+        only = {"id": "b", "title": "别的东西", "content": "y", "category": "", "distance": 0.1}
+        result = fuse(
+            "端口排查",
+            [("vector", [only, both]), ("keyword", [both])],
+            5,
+        )
+        self.assertEqual(result[0]["id"], "a")
+        self.assertEqual(result[0]["via"], "both")
+
+
 @override_settings(AI_CONFIG=CONFIGURED)
 class SessionTests(TestCase):
     def setUp(self):
