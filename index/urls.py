@@ -28,7 +28,11 @@ from assets.maintenance import (
 from pc.bulk_analysis import computer_logs_analyze_bulk
 from pc.software_policy import pc_software_policy_template_download
 
+from ai_assistant import views as ai_views
+
 urlpatterns = [
+    path("ai/", ai_views.page, name="ai_page"),
+    path("api/ai/", include("ai_assistant.urls")),
     path('operations/ip-lookup/', views.operations_ip_lookup, name='operations_ip_lookup'),
     path('operations/overview/', views.operations_overview, name='operations_overview'),
     path('operations/overview/data/', views.operations_overview_data, name='operations_overview_data'),

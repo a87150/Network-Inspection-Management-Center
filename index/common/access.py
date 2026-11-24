@@ -27,6 +27,7 @@ READER_VIEWS = PUBLIC_VIEWS | frozenset({
     'inspection_problem_list',
     'operations_overview', 'operations_overview_data', 'operations_overview_node',
     'ip_management', 'maintenance_list',
+    'ai_page', 'ai_chat', 'ai_history', 'ai_reset',
     'topology_data', 'topology_batches', 'topology_interfaces', 'topology_links', 'topology_evidence',
 })
 AUTH_VIEWS = frozenset({

@@ -1,0 +1,35 @@
+{% extends 'common/base.html' %}
+{% load static %}
+
+{% block title %}AI 助手{% endblock %}
+
+{% block page_css %}
+<link href="{% static 'app/css/operations-overview.css' %}" rel="stylesheet">
+<link href="{% static 'app/css/ai-chat.css' %}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+{% comment %}页面里放一个 csrf_token：REST 写请求要 csrftoken cookie，光有 session 不够。{% endcomment %}
+{% csrf_token %}
+<section class="operations-overview ai-chat" aria-labelledby="ai-chat-title">
+    <header class="operations-overview__header">
+        <div>
+            <p class="operations-overview__eyebrow mb-2">{% firstof page.eyebrow '智能助手' %}</p>
+            <h1 id="ai-chat-title">{% firstof page.title 'AI 助手' %}</h1>
+            <p class="operations-overview__lede mb-0">{% firstof page.description '问设备手册、巡检规则、故障处置；回答只依据知识库。' %}</p>
+        </div>
+    </header>
+    {% if configured == False %}
+    <p class="ai-chat__notice" role="status">AI 服务尚未配置：提问只会返回「未配置」提示，请联系管理员填写 AI_BASE_URL 与 AI_API_KEY。</p>
+    {% endif %}
+    {% comment %}端点从 ai_assistant/urls.py 反查，组件里保留同值默认，bootstrap 缺失也能跑。{% endcomment %}
+    <script type="application/json" id="ai-chat-bootstrap">{"chat_url": "{% url 'ai_chat' %}", "history_url": "{% url 'ai_history' %}", "reset_url": "{% url 'ai_reset' %}"}</script>
+    <div id="ai-chat-app" data-vue-page="ai-chat" data-vue-bootstrap="ai-chat-bootstrap">
+        <noscript><p class="alert alert-warning">AI 问答需要启用 JavaScript。</p></noscript>
+    </div>
+</section>
+{% endblock %}
+
+{% block page_scripts %}
+<script type="module" src="{% static 'app/vue/boot.mjs' %}"></script>
+{% endblock %}

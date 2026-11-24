@@ -83,6 +83,29 @@ if not DEBUG:
 
 # Application definition
 
+
+# AI 助手：OpenAI 兼容端点。BASE_URL / API_KEY 为空时页面照常打开，
+# 发消息返回「未配置」而不是 500——知识库和模型可以分先后上线。
+AI_CONFIG = {
+    "BASE_URL": os.getenv("AI_BASE_URL", ""),
+    "API_KEY": os.getenv("AI_API_KEY", ""),
+    "CHAT_MODEL": os.getenv("AI_CHAT_MODEL", "gpt-4o-mini"),
+    "EMBED_MODEL": os.getenv("AI_EMBED_MODEL", "text-embedding-3-small"),
+    "EMBED_DIMS": 1536,
+    "TIMEOUT": int(os.getenv("AI_TIMEOUT", "60")),
+    "MAX_HISTORY": 10,
+    "SUMMARY_TRIGGER": 20,
+    # vector：调 embedding + VEC_DISTANCE_COSINE。keyword：不调模型，纯 SQL。
+    # 没有 embedding 模型时把它设成 keyword，其余代码不用改。
+    "RAG_BACKEND": os.getenv("AI_RAG_BACKEND", "vector"),
+    "RETRIEVAL_TOP_K": 5,
+    "RETRIEVAL_MAX_DISTANCE": float(os.getenv("AI_RETRIEVAL_MAX_DISTANCE", "0.55")),
+    # keyword 模式的阈值：1 - 命中率，问句越长天然越高，比向量阈值宽。
+    "KEYWORD_MAX_DISTANCE": float(os.getenv("AI_KEYWORD_MAX_DISTANCE", "0.75")),
+    "MAX_QUESTION_LEN": 2000,
+    "MAX_ANSWER_LEN": 4000,
+}
+
 INSTALLED_APPS = [
     # 自定义 default_site，让 /admin/login/ 也走 login_throttle 的失败计数。
     'index.common.admin_site.ThrottledAdminConfig',
@@ -92,11 +115,12 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'net',
+    'ai_assistant',
     'index',
     'people',
     'domain',
     'alerts',
-    'topology',
+    'topology',
     'pc',
     'server',
     'weakcurrent',

@@ -1,3 +1,31 @@
+## 2.17（2026-11-24）
+
+### 新增 AI 助手
+- 新 app `ai_assistant`：`Conversation` / `Message` / `KnowledgeDoc` 三张表，
+  UUID 主键，`embedding` 列由迁移里的 `RunSQL` 建成 MariaDB 原生 `VECTOR(1536)`。
+- 页面 `/ai/`，接口 `/api/ai/chat|history|reset/`。导航栏加「AI 助手」。
+- 检索两条路径：`vector` 调 embedding + `VEC_DISTANCE_COSINE` 排序，
+  `keyword` 不调模型、纯 SQL。用 `AI_RAG_BACKEND` 切换，接口与返回值不变。
+- 知识库从零建：`manage.py build_knowledge` 从模型自省和
+  `ai_assistant/data/troubleshooting.md` 抽出 34 条（设备字段 6 / 巡检模板 10 /
+  告警规则 7 / 故障处置 11），每批 32 条算向量。
+- `manage.py calibrate_retrieval` 打印工作类与无关类问题的 top-1 距离，给阈值建议。
+
+### 与旧方案的差异
+- 旧文档假设 PostgreSQL + pgvector，本项目是 MariaDB 12.3.3。
+  实测 `VECTOR(1536)` + `VEC_FromText` + `VEC_DISTANCE_COSINE` 可用，不需第二个数据库。
+- 旧文档的降级方案是「jieba + SQLite FTS5」，两处都不成立：本项目没有 SQLite；
+  MariaDB 的 ngram 分词器本机未编译（`ADD FULLTEXT ... WITH PARSER ngram`
+  报 1128 `Function 'ngram' is not defined`）。降级路径改成纯 Python 2-gram
+  分词 + LIKE + 命中率打分，不引依赖。
+- 两套量纲不共用阈值：vector 用 0.55，keyword 用 0.75。
+  关键词的 `1 - 命中率` 在问句稍长时天然偏高，共用阈值会把有效召回全滤掉。
+
+### 修复
+- AI 页复用了拓扑页的 `.operations-overview` 壳，但那个壳是「100dvh 固定高 +
+  padding 0 + header 绝对定位浮在画布上」，直接套用会让 header 变成压在正文上的
+  一块黑底。`ai-chat.css` 里把 header 还原成正常流，并放开高度。
+
 ## 2.16（2026-11-24）
 
 这一轮是拓扑页的一次连续改造，按改动性质归为一条，不再拆成多个版本号。

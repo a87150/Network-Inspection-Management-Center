@@ -36,6 +36,8 @@ const pages = {
     'configuration-backups': () => import('./pages/configuration_backups.mjs'),
     'public-summary': () => import('./pages/public_summary.mjs'),
     'public-list': () => import('./pages/public_list.mjs'),
+    // AI 问答页：一条会话，历史/提问/清空都走 /api/ai/。
+    'ai-chat': () => import('./pages/ai_chat.mjs'),
 };
 
 /* scope 用来避开弹窗里的同位 id：详情片段塞进弹窗后，
