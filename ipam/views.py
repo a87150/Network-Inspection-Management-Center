@@ -2,6 +2,7 @@
 from datetime import datetime
 
 from django.http import JsonResponse
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.shortcuts import render
 from django.urls import reverse
 from django.utils import timezone
@@ -150,6 +151,7 @@ def _ledger_block(report):
     }
 
 
+@xframe_options_sameorigin
 @require_GET
 def ip_management(request):
     query = (request.GET.get("q") or "").strip()

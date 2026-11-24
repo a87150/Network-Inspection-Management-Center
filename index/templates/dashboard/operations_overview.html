@@ -52,7 +52,7 @@
                                v-model.trim="ipQuery" @keydown.enter.prevent="locateByIp" @search="locateByIp"
                                placeholder="搜 IP 定位，如 10.4.0.105" autocomplete="off">
                         <button type="button" data-toolbar-act="ip-lookup">IP 查询</button>
-                        <button type="button" class="topology-toolbar__act" data-toolbar-act="ip-ledger"
+                        <button type="button" class="topology-toolbar__act"
                                 data-bs-toggle="modal" data-bs-target="#ipLedgerModal">IP 台账</button>
                     </div>
                     <div class="topology-toolbar__group topology-toolbar__group--map">
@@ -70,26 +70,6 @@
                     </div>
                 </div>
             </header>
-            <!-- IP 查询结果：把命中设备的类型、位置、接口和 VLAN 摊开，光靠高亮看不全。 -->
-            <section v-if="ipResult" class="topology-ip-result" aria-live="polite">
-                <div class="topology-ip-result__head">
-                    <strong>[[ ipResult.label ]]</strong>
-                    <span v-if="ipResult.ip" class="topology-ip-result__ip">[[ ipResult.ip ]]</span>
-                    <span v-if="ipResult.status" class="topology-ip-result__status">[[ ipResult.status ]]</span>
-                    <button type="button" class="topology-ip-result__close" @click="clearIpResult" aria-label="关闭查询结果">×</button>
-                </div>
-                <p v-if="ipResult.detail" class="topology-ip-result__detail">[[ ipResult.detail ]]</p>
-                <p v-if="!ipResult.fromLedger" class="topology-ip-result__pos">图上位置：[[ ipResult.x ]], [[ ipResult.y ]]</p>
-                <table v-if="ipResult.links.length" class="topology-ip-result__links">
-                    <thead><tr><th scope="col">对端设备</th><th scope="col">本端接口</th><th scope="col">VLAN</th></tr></thead>
-                    <tbody>
-                        <tr v-for="(link, index) in ipResult.links" :key="index">
-                            <td>[[ link.peer ]]</td><td>[[ link.port ]]</td><td>[[ link.vlan ]]</td>
-                        </tr>
-                    </tbody>
-                </table>
-                <p v-else class="topology-ip-result__detail">这台设备当前没有已采集的物理链路。</p>
-            </section>
             <p v-if="truncationCount" class="topology-limit-note">
                 <span aria-hidden="true">ⓘ</span>为保证交互流畅，另有 [[ truncationCount ]] 个设备未绘制；已采集物理链路的网络设备始终保留。
             </p>

@@ -1,3 +1,17 @@
+## 2.15（2026-11-24）
+
+### 修复
+- IP 台账弹窗里的 iframe 显示禁止图标：Django 默认 `X-Frame-Options: DENY`，
+  同源也嵌不进来。给 `ip_management` 加 `@xframe_options_sameorigin`，
+  其余页面仍是 `DENY`。
+- IP 台账按钮同时挂了声明式 `data-bs-toggle` 和 JS 委托，点一次触发两次；
+  去掉 JS 那条，只留声明式。
+- 删除 IP 查询的结果卡片（模板、CSS、`describeNode`/`ipStatusText`/`clearIpResult`
+  三个方法）：命中图上设备时开完整侧边栏，图上没有则弹台账弹窗，卡片是多余的一层。
+- 清掉 `bindToolbarFallback` 死方法（定义在、无调用方），工具栏事件统一走
+  `.mount()` 之后的 `document` 委托。
+- 状态文案错别字：「图上来绘制」→「图上没有这台设备」。
+
 ## 2.14（2026-11-24）
 
 ### 修复

@@ -42,7 +42,6 @@ if (mountElement && bootstrapElement) {
         // 按 IP 定位：输入的查询串和命中的节点 id，模板据此高亮。
         ipQuery: '',
         searchHitId: '',
-        ipResult: null,
         // 悬停的边：和选中一样露出端口/VLAN 标签，移开就收。
         hoveredEdgeId: '',
       };
@@ -149,7 +148,6 @@ if (mountElement && bootstrapElement) {
         }
         this.searchHitId = hit.id;
         // 直接开完整侧边栏：接口、VLAN、对端都在里面，比一张小卡片信息全。
-        this.ipResult = this.describeNode(hit);
         this.openDrawer(hit);
         // 命中的节点居中：视口 translate 是把内容点搬到屏幕中心的反向量。
         const scale = this.viewport?.scale || 1;
@@ -163,7 +161,7 @@ if (mountElement && bootstrapElement) {
       },
       /* 图上找不到时回台账查：ARP/MAC 记录能回答"这个 IP 是谁、在哪台设备下"。 */
       async locateByLedger(query) {
-        this.liveStatus = '图上来绘制，正在查台账…';
+        this.liveStatus = '图上没有这台设备，正在查台账…';
         try {
           const response = await fetch(
             '/operations/ip-lookup/?q=' + encodeURIComponent(query),
@@ -173,72 +171,17 @@ if (mountElement && bootstrapElement) {
           const data = await response.json();
           const rows = data.results || [];
           if (!rows.length) {
-            this.ipResult = null;
             this.liveStatus = '图上和资产里都没有「' + query + '」';
             return;
           }
-          this.ipResult = {
-            label: rows[0].name,
-            ip: rows[0].ip || query,
-            status: rows[0].kind + ' · 未绘制在图上',
-            detail: '图上只画主干与部分终端，这台设备在资产台账里。',
-            x: 0, y: 0,
-            links: rows.map((row) => ({
-              peer: row.kind + ' ' + row.name,
-              port: row.ip || '—',
-              vlan: '—',
-            })),
-            fromLedger: true,
-          };
           this.liveStatus = '已在资产中找到 ' + query + '，台账里是完整信息';
           // 图上没画，就把台账弹出来：接口、VLAN、归属设备都在那一页。
           this.openIpLedgerModal(query);
         } catch (error) {
-          this.ipResult = null;
           this.liveStatus = '台账查询失败，请稍后重试';
         }
       },
       /* 命中节点的可读摘要：位置、类型、状态，以及它连出去的物理口和 VLAN。 */
-      describeNode(node) {
-        // source/target 一个是数字一个是字符串时严格比较永远不成立，统一成字符串。
-        const key = String(node.id);
-        const edges = (this.topology?.edges || []).filter(
-          (edge) => String(edge.source) === key || String(edge.target) === key,
-        );
-        const links = edges.slice(0, 6).map((edge) => {
-          const outgoing = String(edge.source) === key;
-          const port = outgoing ? edge.localInterfaceLabel : edge.remoteInterfaceLabel;
-          const peer = outgoing
-            ? (this.topology.nodes.find((n) => n.id === edge.target) || {})
-            : (this.topology.nodes.find((n) => n.id === edge.source) || {});
-          const vlan = (edge.vlanIds || []).join('/');
-          return {
-            peer: peer.label || peer.ip || '未知设备',
-            port: port || '—',
-            vlan: vlan || '—',
-          };
-        });
-        return {
-          label: node.label || node.ip || '',
-          ip: node.ip || '',
-          detail: node.detail || node.subtitle || '',
-          status: this.ipStatusText(node.status),
-          x: Math.round(node.x || 0),
-          y: Math.round(node.y || 0),
-          links,
-        };
-      },
-      ipStatusText(status) {
-        return {
-          ok: '正常', warning: '告警', critical: '严重', down: '不可达',
-          unknown: '状态未知',
-        }[status] || (status || '状态未知');
-      },
-      clearIpResult() {
-        this.ipResult = null;
-        this.searchHitId = '';
-        this.ipQuery = '';
-      },
       zoomBy(delta) {
         const scale = Math.min(2.2, Math.max(0.6, this.viewport.scale + delta));
         this.viewport = { ...this.viewport, scale: Number(scale.toFixed(2)) };
@@ -507,28 +450,6 @@ if (mountElement && bootstrapElement) {
       // 这页的模板事件在本环境下没有生效，工具栏按钮改用原生监听兜底；
       // Vue 那层若恢复，两套监听都在，动作是同一份幂等逻辑。
     },
-    bindToolbarFallback() {
-      if (this.toolbarDelegate) return;
-      // 模板事件在这页没生效，改用 document 级委托：只要按钮在 DOM 里就一定点得到。
-      const handlers = {
-        'zoom-in': () => this.zoomBy(0.15),
-        'zoom-out': () => this.zoomBy(-0.15),
-        fit: () => this.fitViewport(),
-        reset: () => this.resetViewport(),
-        'ip-lookup': () => this.locateByIp(),
-        'ip-ledger': () => this.openIpLedgerModal(),
-      };
-      this.toolbarDelegate = (event) => {
-        const button = event.target.closest && event.target.closest('[data-toolbar-act]');
-        if (!button) return;
-        const name = button.getAttribute('data-toolbar-act');
-        const handler = handlers[name];
-        if (!handler) return;
-        event.preventDefault();
-        handler();
-      };
-      document.addEventListener('click', this.toolbarDelegate);
-    },
     openIpLedgerModal(query) {
       const frame = document.querySelector('.ip-ledger-frame');
       if (frame && query) {
@@ -544,7 +465,6 @@ if (mountElement && bootstrapElement) {
       this.unsubscribe?.();
       this.ambientEffects?.destroy();
       document.removeEventListener('visibilitychange', this.handleVisibility);
-      if (this.toolbarDelegate) document.removeEventListener('click', this.toolbarDelegate);
       window.removeEventListener('resize', this.updateDimensions);
     },
   });
