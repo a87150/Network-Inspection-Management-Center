@@ -637,3 +637,29 @@ body:has(.operations-overview) .app-footer {
     border-top: 1px solid rgba(111, 229, 255, .12);
     color: #8fa9bd; font-size: .78rem;
 }
+
+.topo-ledger__form {
+    display: grid; gap: .55rem .9rem;
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    padding: .9rem 1.1rem;
+    border-bottom: 1px solid rgba(111, 229, 255, .14);
+    background: rgba(111, 229, 255, .04);
+}
+.topo-ledger__form label {
+    display: flex; flex-direction: column; gap: .25rem;
+    font-size: .75rem; color: #8fa9bd;
+}
+.topo-ledger__form input {
+    padding: .4rem .55rem;
+    font-size: .82rem;
+    color: var(--overview-text);
+    background: rgba(6, 16, 26, .9);
+    border: 1px solid rgba(111, 229, 255, .26);
+    border-radius: .35rem;
+}
+.topo-ledger__form input::placeholder { color: #55707f; }
+.topo-ledger__form-actions {
+    display: flex; align-items: center; gap: .7rem;
+    grid-column: 1 / -1;
+}
+.topo-ledger__form-error { color: #ff9b9b; font-size: .78rem; }

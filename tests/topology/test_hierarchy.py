@@ -2,7 +2,7 @@
 
 from django.test import SimpleTestCase
 
-from index.dashboard.topology_presentation import backbone_parents, network_role
+from topology.presentation import backbone_parents, network_role
 
 
 def node(pk, *, tier, label, role='access_switch'):

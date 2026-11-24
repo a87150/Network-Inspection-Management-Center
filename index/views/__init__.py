@@ -13,7 +13,7 @@ from assets.views import (
 # re-exported it, which a linter correctly flags and removes.
 from index.dashboard.views import index
 from net.dashboard.assets import with_latest_status
-from index.dashboard.operations import (
+from topology.operations import (
     operations_ip_lookup as operations_ip_lookup,
     operations_node_detail,
     operations_overview,

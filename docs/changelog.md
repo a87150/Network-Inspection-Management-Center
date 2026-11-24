@@ -1,3 +1,19 @@
+## 2.23（2026-11-24）
+
+### 变更
+- 拓扑页拆成独立 app：`index/dashboard/operations.py` → `topology/operations.py`、
+  `topology_presentation.py` → `topology/presentation.py`、
+  `ipam.py` → `topology/ipam.py`，两个模板移到 `topology/templates/topology/`。
+  `index/dashboard/` 只剩首页的 `views.py`。
+- IP 查询改成一律开侧边栏：图上画了的直接命中节点，图上没画的用
+  `kind:pk` 走同一个抽屉（`/operations/overview/node/<kind:pk>/`），
+  不再弹结果卡片。接口补 `kindKey` 字段供前端拼 id。
+- 「增加 IP 段」不再跳页面，改成台账弹窗内的表单，提交到
+  `/api/v1/ip-subnets/`，成功后原地刷新台账。
+
+### 修正
+- 搜索框与表单占位符去掉具体地址示例，改成描述性文字。
+
 ## 2.22（2026-11-24）
 
 ### 变更

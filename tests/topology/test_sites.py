@@ -2,7 +2,7 @@
 
 from django.test import SimpleTestCase
 
-from index.dashboard.topology_presentation import site_components
+from topology.presentation import site_components
 
 
 def node(pk, *, role, tier, label=None):

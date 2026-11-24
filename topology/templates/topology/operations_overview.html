@@ -50,7 +50,7 @@
                         <label class="visually-hidden" for="topology-ip-search">按 IP 定位设备</label>
                         <input id="topology-ip-search" class="topology-ip-search" type="search"
                                v-model.trim="ipQuery" @keydown.enter.prevent="locateByIp" @search="locateByIp"
-                               placeholder="搜 IP 定位，如 10.4.0.105" autocomplete="off">
+                               placeholder="搜 IP 或设备名定位" autocomplete="off">
                         <button type="button" data-toolbar-act="ip-lookup">IP 查询</button>
                         <button type="button" class="topology-toolbar__act" data-toolbar-act="ip-ledger">IP 台账</button>
                     </div>
@@ -189,30 +189,6 @@
                 </ul>
             </details>
         </section>
-<div class="topo-ledger" v-if="lookupOpen" role="dialog" aria-modal="true" aria-labelledby="topo-lookup-title">
-    <div class="topo-ledger__backdrop" @click="closeLookup"></div>
-    <div class="topo-ledger__panel">
-        <header class="topo-ledger__head">
-            <h2 id="topo-lookup-title">查询结果</h2>
-            <div class="topo-ledger__counts"><span>[[ lookupQuery ]]</span></div>
-            <a class="topo-ledger__act" href="{% url 'ip_management' %}" target="_blank" rel="noopener">打开台账</a>
-            <button type="button" class="topo-ledger__close" @click="closeLookup" aria-label="关闭">×</button>
-        </header>
-        <div class="topo-ledger__scroll">
-            <table class="topo-ledger__table">
-                <thead><tr><th>类型</th><th>名称</th><th>IP</th></tr></thead>
-                <tbody>
-                    <tr v-for="row in lookupRows" :key="row.kind + row.pk">
-                        <td>[[ row.kind ]]</td>
-                        <td>[[ row.name ]]</td>
-                        <td>[[ row.ip || '—' ]]</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-        <p class="topo-ledger__note">图上只画主干与部分终端，这几台在资产台账里，图上没有对应位置。</p>
-    </div>
-</div>
 <div class="topo-ledger" v-if="ledgerOpen" role="dialog" aria-modal="true" aria-labelledby="topo-ledger-title">
     <div class="topo-ledger__backdrop" @click="closeLedger"></div>
     <div class="topo-ledger__panel">
@@ -223,9 +199,20 @@
                     [[ count.label ]] <b>[[ count.value ]]</b>
                 </span>
             </div>
-            <a class="topo-ledger__act" href="{% url 'ip_management' %}" target="_blank" rel="noopener">增加 IP 段</a>
+            <button type="button" class="topo-ledger__act" @click="toggleSubnetForm">[[ subnetFormOpen ? '收起' : '增加 IP 段' ]]</button>
             <button type="button" class="topo-ledger__close" @click="closeLedger" aria-label="关闭">×</button>
         </header>
+        <form v-if="subnetFormOpen" class="topo-ledger__form" @submit.prevent="submitSubnet">
+            <label>网段<input v-model="subnetForm.cidr" placeholder="CIDR，形如 前缀长度/24" required></label>
+            <label>用途<input v-model="subnetForm.purpose" placeholder="选填，如办公、服务器"></label>
+            <label>VLAN<input v-model="subnetForm.vlan" placeholder="选填，如 100"></label>
+            <label>网关<input v-model="subnetForm.gateway" placeholder="选填，本网段的网关地址"></label>
+            <label>DHCP 地址池<input v-model="subnetForm.pool" placeholder="选填，起止地址"></label>
+            <div class="topo-ledger__form-actions">
+                <button type="submit" class="topo-ledger__act" :disabled="subnetBusy">[[ subnetBusy ? '保存中…' : '保存' ]]</button>
+                <span v-if="subnetError" class="topo-ledger__form-error">[[ subnetError ]]</span>
+            </div>
+        </form>
         <p v-if="ledgerLoading" class="topo-ledger__state">正在读取台账…</p>
         <p v-else-if="ledgerError" class="topo-ledger__state topo-ledger__state--error">[[ ledgerError ]]</p>
         <div v-else-if="!ledger.rows.length" class="topo-ledger__state">

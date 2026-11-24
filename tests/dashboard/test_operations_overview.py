@@ -66,7 +66,7 @@ class OperationsSnapshotTests(TestCase):
         return task, target
 
     def test_snapshot_contains_only_network_topology_data(self):
-        from index.dashboard.operations import build_operations_snapshot
+        from topology.operations import build_operations_snapshot
 
         snapshot = build_operations_snapshot(now=self.now)
 
@@ -75,7 +75,7 @@ class OperationsSnapshotTests(TestCase):
         self.assertEqual(set(snapshot), {'schema_version', 'generated_at', 'topology'})
 
     def test_network_roles_accept_chinese_english_and_keep_unknown_devices(self):
-        from index.dashboard.operations import build_operations_snapshot
+        from topology.operations import build_operations_snapshot
 
         firewall = Network_Device.objects.create(
             device_name='EDGE-FW-01', ip='10.0.0.1', device_type='防火墙',
@@ -127,7 +127,7 @@ class OperationsSnapshotTests(TestCase):
         self.assertFalse(any(node_id.startswith('domain') for node_id in nodes))
 
     def test_empty_inventory_has_honest_empty_backbone_payload(self):
-        from index.dashboard.operations import build_operations_snapshot
+        from topology.operations import build_operations_snapshot
 
         topology = build_operations_snapshot(now=self.now)['topology']
 
@@ -137,7 +137,7 @@ class OperationsSnapshotTests(TestCase):
         self.assertEqual(topology['mode'], 'empty')
 
     def test_endpoint_attachment_prefers_access_and_is_stable(self):
-        from index.dashboard.operations import build_operations_snapshot
+        from topology.operations import build_operations_snapshot
 
         Network_Device.objects.create(
             device_name='CORE', ip='10.30.0.2', device_type='core switch',
@@ -161,7 +161,7 @@ class OperationsSnapshotTests(TestCase):
         self.assertEqual(access_node['child_count'], 1)
 
     def test_invalid_endpoint_address_remains_unattached(self):
-        from index.dashboard.operations import build_operations_snapshot
+        from topology.operations import build_operations_snapshot
 
         Network_Device.objects.create(
             device_name='ACCESS', ip='10.30.0.3', device_type='access switch',
@@ -180,7 +180,7 @@ class OperationsSnapshotTests(TestCase):
         self.assertEqual(topology['attachment_edges'], [])
 
     def test_ap_physical_relationship_beats_subnet_inference_and_stays_physical(self):
-        from index.dashboard.operations import build_operations_snapshot
+        from topology.operations import build_operations_snapshot
 
         switch = Network_Device.objects.create(
             device_name='ACCESS', ip='10.40.0.2', device_type='access switch',
@@ -222,7 +222,7 @@ class OperationsSnapshotTests(TestCase):
         self.assertEqual(topology['physical_edges'][0]['status'], 'stale')
 
     def test_snapshot_includes_allowlisted_physical_topology(self):
-        from index.dashboard.operations import build_operations_snapshot
+        from topology.operations import build_operations_snapshot
 
         device = Network_Device.objects.create(
             device_name='core', ip='192.0.2.80', vendor='cisco',
@@ -257,10 +257,10 @@ class OperationsSnapshotTests(TestCase):
         self.assertNotIn('community', str(topology))
 
     def test_topology_database_failure_is_isolated_and_sanitized(self):
-        from index.dashboard.operations import build_operations_snapshot
+        from topology.operations import build_operations_snapshot
 
         with patch(
-            'index.dashboard.operations._build_topology',
+            'topology.operations._build_topology',
             side_effect=DatabaseError('secret database coordinates'),
         ):
             snapshot = build_operations_snapshot(now=self.now)
@@ -269,7 +269,7 @@ class OperationsSnapshotTests(TestCase):
         self.assertNotIn('secret database coordinates', str(snapshot))
 
     def test_logical_topology_caps_dense_categories_and_reports_omissions(self):
-        from index.dashboard.operations import ASSET_NODE_LIMIT_PER_KIND, build_operations_snapshot
+        from topology.operations import ASSET_NODE_LIMIT_PER_KIND, build_operations_snapshot
 
         Computer.objects.bulk_create([
             Computer(computer_name=f'overview-pc-{index:03d}')
@@ -285,7 +285,7 @@ class OperationsSnapshotTests(TestCase):
         self.assertEqual(topology['asset_truncation']['computers'], 5)
 
     def test_physical_link_endpoints_survive_the_logical_network_cap(self):
-        from index.dashboard.operations import ASSET_NODE_LIMIT_PER_KIND, build_operations_snapshot
+        from topology.operations import ASSET_NODE_LIMIT_PER_KIND, build_operations_snapshot
 
         devices = Network_Device.objects.bulk_create([
             Network_Device(device_name=f'network-{index:03d}', ip=f'198.18.{index // 250}.{index % 250 + 1}')

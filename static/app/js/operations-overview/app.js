@@ -29,10 +29,16 @@ if (mountElement && bootstrapElement) {
         selectedEdgeId: '',
         expandedNodeIds: new Set(),
         drawerNodeId: '',
+        drawerFallback: null,
+        csrfToken: '',
         lookupOpen: false,
         lookupQuery: '',
         lookupRows: [],
         ledgerOpen: false,
+        subnetFormOpen: false,
+        subnetBusy: false,
+        subnetError: '',
+        subnetForm: { cidr: '', purpose: '', vlan: '', gateway: '', pool: '' },
         ledgerLoading: false,
         ledgerError: '',
         ledger: { columns: [], rows: [], counts: [], empty_title: '', empty_message: '' },
@@ -82,7 +88,8 @@ if (mountElement && bootstrapElement) {
       },
       drawerNode() {
         if (!this.drawerNodeId) return null;
-        return this.topology.nodes.find((node) => node.id === this.drawerNodeId) || null;
+        const hit = this.topology.nodes.find((node) => node.id === this.drawerNodeId);
+        return hit || this.drawerFallback;
       },
       canvasHeight() {
         const maxY = (this.topology && this.topology.bounds && this.topology.bounds.maxY) || 0;
@@ -183,11 +190,10 @@ if (mountElement && bootstrapElement) {
             this.liveStatus = '图上和资产里都没有「' + query + '」';
             return;
           }
-          this.liveStatus = '图上没画，资产里有 ' + rows.length + ' 条匹配';
-          // 图上没画不等于不存在：把资产里的匹配结果摊开，而不是拿台账顶替。
-          this.lookupOpen = true;
-          this.lookupQuery = query;
-          this.lookupRows = rows;
+          const row = rows[0];
+          this.liveStatus = '图上没画这台设备，已从资产里打开它的详情';
+          // 图上没画不等于不存在：用 kind:pk 直接查这台资产的详情，展开同一个侧边栏。
+          this.openAssetDrawer(row);
         } catch (error) {
           this.liveStatus = '台账查询失败，请稍后重试';
         }
@@ -393,6 +399,7 @@ if (mountElement && bootstrapElement) {
       },
       closeDrawer() {
         this.drawerNodeId = '';
+        this.drawerFallback = null;
       },
 
       formatTime(value) {
@@ -450,10 +457,56 @@ if (mountElement && bootstrapElement) {
         this.ledgerLoading = false;
       }
     },
+    /** 图上没有的资产：用同一个抽屉展示，id 用后端认的 kind:pk 形式。 */
+    openAssetDrawer(row) {
+      if (!row) return;
+      const id = row.kindKey + ':' + row.pk;
+      const node = {
+        id,
+        label: row.name,
+        ip: row.ip || '',
+        kind: row.kindKey,
+        detailsUrl: '/operations/overview/node/' + encodeURIComponent(id) + '/',
+      };
+      this.drawerFallback = node;
+      this.openDrawer(node);
+    },
     closeLookup() {
       this.lookupOpen = false;
       this.lookupRows = [];
       this.lookupQuery = '';
+    },
+    toggleSubnetForm() {
+      this.subnetFormOpen = !this.subnetFormOpen;
+      this.subnetError = '';
+    },
+    /** 新增网段就在这个弹窗里做，不跳页面。 */
+    async submitSubnet() {
+      this.subnetBusy = true;
+      this.subnetError = '';
+      try {
+        const response = await fetch('/api/v1/ip-subnets/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken,
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          body: JSON.stringify(this.subnetForm),
+        });
+        if (!response.ok) {
+          const detail = await response.json().catch(function () { return {}; });
+          throw new Error(detail.detail || ('保存失败（HTTP ' + response.status + '）'));
+        }
+        this.subnetForm = { cidr: '', purpose: '', vlan: '', gateway: '', pool: '' };
+        this.subnetFormOpen = false;
+        this.ledger = { ...this.ledger, rows: [] };
+        await this.loadLedger();
+      } catch (error) {
+        this.subnetError = error.message || '保存失败';
+      } finally {
+        this.subnetBusy = false;
+      }
     },
     closeLedger() {
       this.ledgerOpen = false;
@@ -488,6 +541,8 @@ if (mountElement && bootstrapElement) {
       window.addEventListener('resize', this.updateDimensions, { passive: true });
       this.updateDimensions();
       this.ambientEffects = createAmbientEffects(document.querySelector('[data-overview-ambient]'));
+      const token = document.querySelector('[name=csrfmiddlewaretoken]') || document.querySelector('meta[name=csrf-token]');
+      this.csrfToken = token ? (token.value || token.content) : '';
       // 这页的模板事件在本环境下没有生效，工具栏按钮改用原生监听兜底；
       // Vue 那层若恢复，两套监听都在，动作是同一份幂等逻辑。
     },

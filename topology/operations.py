@@ -8,7 +8,7 @@ from django.views.decorators.http import require_GET
 
 from net.models import Computer, Network_Device, WeakCurrentDevice, Server
 from net.topology.read_model import current_topology_payload
-from index.dashboard.topology_presentation import build_enterprise_topology
+from topology.presentation import build_enterprise_topology
 
 
 ASSET_NODE_LIMIT_PER_KIND = 80
@@ -99,7 +99,7 @@ def build_operations_snapshot(*, now=None):
 def operations_overview(request):
     return render(
         request,
-        'dashboard/operations_overview.html',
+        'topology/operations_overview.html',
         {'snapshot': build_operations_snapshot()},
     )
 
@@ -123,18 +123,19 @@ def operations_ip_lookup(request):
         return JsonResponse({'query': '', 'results': []})
     rows = []
     sources = (
-        (Computer, 'PC', ('computer_name',), 'ip_addresses'),
-        (Network_Device, '网络设备', ('device_name',), 'ip'),
-        (Server, '服务器', ('name',), 'ip'),
-        (WeakCurrentDevice, '弱电设备', ('device_name',), 'ip'),
+        (Computer, 'PC', ('computer_name',), 'ip_addresses', 'computers'),
+        (Network_Device, '网络设备', ('device_name',), 'ip', 'networks'),
+        (Server, '服务器', ('name',), 'ip', 'servers'),
+        (WeakCurrentDevice, '弱电设备', ('device_name',), 'ip', 'weakcurrent'),
     )
-    for model, label, name_fields, ip_field in sources:
+    for model, label, name_fields, ip_field, kind_key in sources:
         condition = Q(**{f'{ip_field}__icontains': query})
         for field in name_fields:
             condition |= Q(**{f'{field}__icontains': query})
         for obj in model.objects.filter(condition)[:10]:
             rows.append({
                 'kind': label,
+                'kindKey': kind_key,
                 'name': next(
                     (getattr(obj, f) for f in name_fields if getattr(obj, f, '')),
                     str(obj.pk),
@@ -152,7 +153,7 @@ def operations_node_detail(request, node_id):
     名称、IP、型号这些一眼要看的字段；点开抽屉再单独拿这一份。这里按 id
     直接查那台资产，不重算整张拓扑。
     """
-    from index.dashboard.topology_presentation import _details
+    from topology.presentation import _details
 
     kind, _, pk = str(node_id).partition(':')
     model = {
