@@ -9,8 +9,6 @@ HOST_DIRECTORY = Path(__file__).resolve().parents[2] / 'agents' / 'pc' / 'window
 PREBUILT_HOST = HOST_DIRECTORY / 'PCCollectorHost.exe'
 HOST_TEMPLATE = Path(__file__).with_name('templates') / 'PCCollectorHost.cs'
 MAGIC = b'PCCOLV02'
-FOOTER_SIZE = len(MAGIC) + 8 + 32
-PAYLOAD_HEADER_SIZE = 8 + 8 + 32 + 32
 # Updated by the reproducible Windows build command whenever the host changes.
 PREBUILT_HOST_SHA256 = '22887c5443aa6734adc4b3524f6ee482995d1ef8078acec4bde8d622205978aa'
 

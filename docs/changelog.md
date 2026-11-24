@@ -1,3 +1,19 @@
+## 2.20（2026-11-24）
+
+### 删除
+- 11 个零引用定义：`kind_target_type`、`_computer_analyses`、`NOTICE`、
+  `SEVERITY_LABELS`、`evaluate_computer`、`extract_network_info`、
+  `threshold_snapshot`、`FOOTER_SIZE`、`PAYLOAD_HEADER_SIZE`、`NeighborCandidate`。
+- `foundation.css` 里 `is-embed` 整块 89 行，以及 `base.html` 的
+  `{% if request.GET.embed %}` 分支。台账弹窗改成拓扑页原生组件后，
+  全仓已无任何地方生成 `?embed=1`，这一层只服务已删除的 iframe。
+
+### 说明
+- 三个 `payloads.py` 的合并尝试失败：把 `network` 的装配逻辑参数化到
+  共享模块后全量跑出 210 个 error，已回滚，`network`/`server`/`weakcurrent`
+  三份实现保持原样。重复量实测为两两最高 168 行、三文件共同 150 行，
+  下次动它需要先补齐针对 `build()` 各参数组合的测试。
+
 ## 2.19（2026-11-24）
 
 ### 修复

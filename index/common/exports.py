@@ -45,10 +45,6 @@ MODEL_TABLES = {
 }
 
 
-def _computer_analyses(target):
-    return _computer_analysis_records(target)
-
-
 def _table_source(request, table_key, scope):
     if table_key in MODEL_TABLES:
         if scope:

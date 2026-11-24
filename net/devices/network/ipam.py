@@ -6,9 +6,6 @@ import ipaddress
 from net.devices.network.observations import normalize_mac, observed_addresses
 from net.models import IpSubnet
 
-SEVERITY_LABELS = {"error": "需处理", "warning": "需确认"}
-
-
 def _overlapping(subnets):
     issues = []
     for index, left in enumerate(subnets):

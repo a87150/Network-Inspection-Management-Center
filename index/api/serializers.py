@@ -6,7 +6,7 @@ so the hydrated first paint and the REST list share one field definition.
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
-from assets.maintenance import KIND_TARGET_TYPES, TARGET_MODELS, asset_names
+from assets.maintenance import TARGET_MODELS, asset_names
 from net.models import IpSubnet, MaintenanceWindow
 from net.models.ipam import normalize_cidr
 
@@ -81,6 +81,3 @@ class IpSubnetCreateSerializer(serializers.Serializer):
         return attrs
 
 
-def kind_target_type(kind):
-    """List-page kind -> alert target type; None when the kind has no windows."""
-    return KIND_TARGET_TYPES.get(kind)

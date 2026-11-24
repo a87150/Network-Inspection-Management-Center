@@ -67,10 +67,6 @@ def policy_snapshot(project='computers'):
     return configuration_snapshot(project)[0]
 
 
-def threshold_snapshot(project):
-    return configuration_snapshot(project)[1]
-
-
 def issue_categories(issues):
     from net.devices.pc.severity import grade_issue
     return '、'.join(sorted({grade_issue(issue)['category'] for issue in issues}))

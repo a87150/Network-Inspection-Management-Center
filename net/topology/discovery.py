@@ -34,20 +34,6 @@ class InterfaceCandidate:
 
 
 @dataclass(frozen=True)
-class NeighborCandidate:
-    local_key_hint: str = ''
-    local_port_id: str = ''
-    local_port_description: str = ''
-    remote_chassis_id: str = ''
-    remote_port_id: str = ''
-    remote_port_description: str = ''
-    remote_system_name: str = ''
-    remote_management_addresses: tuple[str, ...] = ()
-    protocol: str = 'lldp'
-    evidence: object = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
 class ResolvedObservation:
     local_device_id: object
     local_interface_key: str

@@ -231,32 +231,6 @@ def check_resource(data, current_issues, cpu_max_percent=90, memory_max_percent=
         add_issue(current_issues, '资源使用问题', '；'.join(problems))
 
 
-def evaluate_computer(data, config, collected_at):
-    issues = []
-    system_info = data.get('系统信息概览') or {}
-    identity = str(system_info.get('当前登录用户工号') or system_info.get('计算机名') or '')
-    identity = identity.rsplit('\\', 1)[-1]
-    check_software(data, identity, issues, config)
-    check_bitlocker(data, issues)
-    check_defender(data, issues, collected_at)
-    check_update_history(data, issues, collected_at)
-    check_system_version(data, issues)
-    check_activation(data, issues)
-    check_uptime(data, issues, collected_at)
-    return issues
-
-
-def extract_network_info(data, field):
-    network_info = data.get('网络信息') or []
-    if isinstance(network_info, dict):
-        network_info = [network_info]
-    return ';'.join(
-        str(item.get(field))
-        for item in network_info
-        if isinstance(item, dict) and item.get(field)
-    )
-
-
 def normalize_windows_state(value):
     text = str(value or '').strip().casefold()
     if text in {'正常', '正常通讯', '成功', 'true', 'ok', 'success', 'healthy'}:

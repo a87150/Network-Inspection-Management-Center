@@ -1,6 +1,5 @@
 """Pure snapshot adapters. No adapter opens a device connection."""
 
-NOTICE = '只读脱敏配置快照，非完整恢复备份 / NOT A FULL RECOVERY BACKUP'
 MAX_CONFIG_BYTES = 4 * 1024 * 1024
 
 
