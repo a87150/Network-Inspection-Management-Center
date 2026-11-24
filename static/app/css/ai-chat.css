@@ -398,3 +398,108 @@
     border-radius: .9rem !important;
     background: #fff !important;
 }
+
+/* ---------- 消息区与页面同底 ---------- */
+.ai-chat,
+.ai-chat .ai-chat__panel,
+.ai-chat .ai-chat__panel.card,
+.ai-chat .ai-chat__panel-body,
+.ai-chat .ai-chat__panel .card-body,
+.ai-chat .ai-chat__thread {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+}
+
+/* ---------- 输入区：浮起来的一层 ---------- */
+.ai-chat__composer {
+    display: flex;
+    flex-direction: column;
+    margin: .6rem 0 1rem;
+    padding: .55rem .7rem .4rem;
+    border: 1px solid rgba(15, 40, 60, .1);
+    border-radius: 1rem;
+    background: #fff;
+    box-shadow: 0 6px 22px rgba(15, 40, 60, .1), 0 1px 3px rgba(15, 40, 60, .06);
+}
+
+.ai-chat__composer .ai-chat__input {
+    width: 100%;
+    min-height: 3rem;
+    padding: .3rem .15rem;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    resize: none;
+    font-size: .94rem;
+    line-height: 1.6;
+    color: var(--color-text);
+}
+
+.ai-chat__composer .ai-chat__input:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+.ai-chat__composer-bar {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    padding-top: .3rem;
+}
+
+.ai-chat__spacer {
+    flex: 1;
+}
+
+/* 下拉做成胶囊，和输入框同层悬浮，不像表单控件。 */
+.ai-chat__pill {
+    max-width: 12rem;
+    padding: .18rem .5rem;
+    border: 1px solid rgba(15, 40, 60, .12);
+    border-radius: .5rem;
+    background: rgba(15, 40, 60, .03);
+    color: #46617a;
+    font-size: .76rem;
+    line-height: 1.5;
+    cursor: pointer;
+}
+
+.ai-chat__pill:hover {
+    background: rgba(15, 40, 60, .06);
+}
+
+.ai-chat__send {
+    width: 2.1rem;
+    height: 2.1rem;
+    border: 0;
+    border-radius: .6rem;
+    background: #2f7de1;
+    color: #fff;
+    font-size: .74rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.ai-chat__send:disabled {
+    background: rgba(15, 40, 60, .16);
+    cursor: default;
+}
+
+.ai-chat__composer-meta {
+    display: flex;
+    gap: .8rem;
+    padding: .3rem .15rem .1rem;
+    color: #93a4b3;
+    font-size: .72rem;
+}
+
+/* 发送按钮：宽度自适应，不能把两个字挤成竖排。 */
+.ai-chat__send {
+    width: auto;
+    min-width: 3.2rem;
+    height: 2.1rem;
+    padding: 0 .85rem;
+    white-space: nowrap;
+}

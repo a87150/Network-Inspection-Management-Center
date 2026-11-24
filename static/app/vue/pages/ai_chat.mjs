@@ -74,6 +74,11 @@ export default {
         };
     },
     computed: {
+        modelOptions() {
+            const list = (this.page && this.page.models) || [];
+            const current = this.settingsForm.chat_model;
+            return current && !list.includes(current) ? list.concat([current]) : list;
+        },
         canSend() {
             return this.draft.trim().length > 0 && !this.sending;
         },
@@ -402,13 +407,33 @@ export default {
                 </div>
 
                 <form class="ai-chat__composer" @submit.prevent="send">
-                    <label class="visually-hidden" for="ai-chat-input">提问内容</label>
-                    <textarea id="ai-chat-input" ref="input" class="form-control ai-chat__input" rows="2" v-model="draft"
-                              :disabled="sending" autocomplete="off"
-                              placeholder="输入问题，Enter 发送，Shift+Enter 换行"
-                              @keydown.enter.exact.prevent="send"></textarea>
-                    <button type="submit" class="btn btn-primary" :disabled="!canSend">[[ sending ? '发送中…' : '发送' ]]</button>
-                </form>
+                <label class="visually-hidden" for="ai-chat-input">提问内容</label>
+                <textarea id="ai-chat-input" ref="input" class="ai-chat__input" rows="2" v-model="draft"
+                          :disabled="sending" autocomplete="off"
+                          placeholder="输入运维问题，Enter 发送，Shift+Enter 换行"
+                          @keydown.enter.exact.prevent="send"></textarea>
+                <div class="ai-chat__composer-bar">
+                    <select class="ai-chat__pill" v-model="settingsForm.chat_model" title="对话模型">
+                        <option value="">跟随默认</option>
+                        <option v-for="name in modelOptions" :key="name" :value="name">[[ name ]]</option>
+                    </select>
+                    <select class="ai-chat__pill" v-model="settingsForm.reasoning_effort" title="思考模式">
+                        <option value="">不思考</option>
+                        <option value="low">思考 low</option>
+                        <option value="medium">思考 medium</option>
+                        <option value="high">思考 high</option>
+                    </select>
+                    <span class="ai-chat__spacer"></span>
+                    <button class="ai-chat__send" type="submit" :disabled="!canSend">
+                        [[ sending ? '…' : '发送' ]]
+                    </button>
+                </div>
+                <div class="ai-chat__composer-meta">
+                    <span>[[ messages.length ]] 条消息</span>
+                    <span v-if="draft.length">[[ draft.length ]] 字</span>
+                    <span v-if="knowledge.total">知识库 [[ knowledge.total ]] 条</span>
+                </div>
+            </form>
             </div>
         </section>
 
