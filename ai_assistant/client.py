@@ -62,11 +62,16 @@ def embed(texts):
 
 def chat(messages):
     """发一组消息，返回回答文本。"""
-    data = _post("/chat/completions", {
-        "model": ai_config()["CHAT_MODEL"],
+    config = ai_config()
+    payload = {
+        "model": config["CHAT_MODEL"],
         "messages": messages,
         "temperature": 0.2,
-    })
+    }
+    # 空串表示不传：不是每个 OpenAI 兼容端点都认这个参数，传错值直接 400。
+    if config.get("REASONING_EFFORT"):
+        payload["reasoning_effort"] = config["REASONING_EFFORT"]
+    data = _post("/chat/completions", payload)
     try:
         return data["choices"][0]["message"]["content"] or ""
     except (KeyError, IndexError, TypeError) as error:

@@ -86,6 +86,11 @@ class AiSetting(models.Model):
     rag_backend = models.CharField(max_length=16, blank=True)
     retrieval_max_distance = models.FloatField(null=True, blank=True)
     keyword_max_distance = models.FloatField(null=True, blank=True)
+    # 上下文压缩：保留多少条最近消息，总共超过多少条才触发摘要。
+    max_history = models.IntegerField(null=True, blank=True)
+    summary_trigger = models.IntegerField(null=True, blank=True)
+    # 思考模式：空串表示不传这个参数（有的模型不支持，传错直接 400）。
+    reasoning_effort = models.CharField(max_length=16, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

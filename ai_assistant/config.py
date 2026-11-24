@@ -47,6 +47,12 @@ def ai_config():
         config["RETRIEVAL_MAX_DISTANCE"] = row.retrieval_max_distance
     if row.keyword_max_distance is not None:
         config["KEYWORD_MAX_DISTANCE"] = row.keyword_max_distance
+    if row.max_history:
+        config["MAX_HISTORY"] = row.max_history
+    if row.summary_trigger:
+        config["SUMMARY_TRIGGER"] = row.summary_trigger
+    if row.reasoning_effort:
+        config["REASONING_EFFORT"] = row.reasoning_effort
     return config
 
 
@@ -67,8 +73,21 @@ def save_settings(payload):
         row.api_key_cipher = ""
     row.retrieval_max_distance = _float_or_none(payload.get("retrieval_max_distance"))
     row.keyword_max_distance = _float_or_none(payload.get("keyword_max_distance"))
+    row.max_history = _int_or_none(payload.get("max_history"), 2, 50)
+    row.summary_trigger = _int_or_none(payload.get("summary_trigger"), 4, 200)
+    effort = (payload.get("reasoning_effort") or "").strip()
+    row.reasoning_effort = effort if effort in {"low", "medium", "high"} else ""
     row.save()
     return row
+
+
+def _int_or_none(value, low, high):
+    """界面上是数字输入框，留空或越界都当没填，回落环境变量。"""
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if low <= number <= high else None
 
 
 def _float_or_none(value):
@@ -88,6 +107,9 @@ def masked_summary():
         "rag_backend": config.get("RAG_BACKEND", "hybrid"),
         "retrieval_max_distance": config["RETRIEVAL_MAX_DISTANCE"],
         "keyword_max_distance": config.get("KEYWORD_MAX_DISTANCE", 0.75),
+        "max_history": config["MAX_HISTORY"],
+        "summary_trigger": config["SUMMARY_TRIGGER"],
+        "reasoning_effort": config.get("REASONING_EFFORT", ""),
         "has_api_key": bool(config["API_KEY"]),
         "configured": bool(config["BASE_URL"] and config["API_KEY"]),
     }

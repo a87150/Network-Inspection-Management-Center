@@ -1,6 +1,6 @@
 /* AI 助手：单用户单会话问答 + 「配置 API」「添加知识库条目」两个 Bootstrap 弹窗。
    历史/提问/清空/配置/知识库全走 /api/ai/ REST；X-CSRFToken 由 api.mjs 负责。 */
-import { api } from '../api.mjs';
+import { api, csrfToken } from '../api.mjs';
 
 /* 配置回填：api_key 永远留空——只存密文，不回显。 */
 function settingsFields(source) {
@@ -11,6 +11,9 @@ function settingsFields(source) {
         chat_model: payload.chat_model || '',
         embed_model: payload.embed_model || '',
         rag_backend: ['hybrid', 'vector', 'keyword'].includes(payload.rag_backend) ? payload.rag_backend : 'hybrid',
+                max_history: payload.max_history ?? 10,
+                summary_trigger: payload.summary_trigger ?? 20,
+                reasoning_effort: payload.reasoning_effort || '',
         retrieval_max_distance: numberText(payload.retrieval_max_distance),
         keyword_max_distance: numberText(payload.keyword_max_distance),
     };
@@ -61,7 +64,9 @@ export default {
             adding: false,
             addError: '',
             addMessage: '',
-            importText: '',
+            importFile: null,
+            importPreview: '',
+            importName: '',
             importing: false,
             importError: '',
             importMessage: '',
@@ -280,6 +285,33 @@ export default {
             cells.push(cell);
             return cells;
         },
+        async onFilePicked(event) {
+            const file = event.target.files && event.target.files[0];
+            this.importError = '';
+            this.importResult = null;
+            if (!file) {
+                this.importFile = null;
+                this.importName = '';
+                this.importPreview = '';
+                return;
+            }
+            this.importFile = file;
+            this.importName = file.name;
+            try {
+                // 只做预览：解析在服务端也做一遍，这里是为了让用户看到读到了什么。
+                this.importPreview = await file.text();
+            } catch (error) {
+                this.importError = '读不了这个文件：' + error.message;
+                this.importPreview = '';
+            }
+        },
+        clearFile() {
+            this.importFile = null;
+            this.importName = '';
+            this.importPreview = '';
+            this.importError = '';
+            this.importResult = null;
+        },
         parseTable(text) {
             const lines = String(text || '')
                 .replace(/\r\n?/g, '\n')
@@ -296,23 +328,36 @@ export default {
         },
         async runImport() {
             if (this.importing) return;
+            if (!this.importFile) {
+                this.importError = '先选一个 CSV 或 TXT 文件。';
+                return;
+            }
             this.importError = '';
             this.importMessage = '';
             this.importSkipped = [];
-            const rows = this.parseTable(this.importText);
-            if (!rows.length) {
-                this.importError = '没解析出任何行，检查一下粘贴的内容。';
-                return;
-            }
             this.importing = true;
             try {
-                const payload = await api.post(this.knowledge_import_url, {rows});
-                const skipped = (payload && payload.skipped) || [];
-                this.importMessage = '新增 ' + (Number(payload && payload.created) || 0) + ' 条，跳过 ' + skipped.length + ' 条';
-                this.importSkipped = skipped;
+                // 走 multipart：编码由服务端按 utf-8-sig / utf-8 / gb18030 依次试，
+                // Excel 在中文 Windows 上导出的 CSV 是 GBK，前端猜编码只会猜错。
+                const body = new FormData();
+                body.append('file', this.importFile);
+                const response = await fetch(this.knowledge_import_url, {
+                    method: 'POST',
+                    body,
+                    credentials: 'same-origin',
+                    headers: {'X-CSRFToken': csrfToken()},
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(payload.error || ('导入失败（' + response.status + '）'));
+                }
+                this.importMessage = '新增 ' + (Number(payload.created) || 0) + ' 条，跳过 '
+                    + ((payload.skipped || []).length) + ' 条。';
+                this.importSkipped = payload.skipped || [];
+                this.clearFile();
                 this.loadKnowledge();
             } catch (failure) {
-                this.importError = this.describe(failure, '导入失败，请稍后重试。');
+                this.importError = failure.message || '导入失败，请稍后重试。';
             } finally {
                 this.importing = false;
             }
@@ -441,6 +486,36 @@ export default {
                                                v-model="settingsForm.keyword_max_distance">
                                     </div>
                                 </section>
+                                <section class="ai-chat__fieldset">
+                                    <div class="mb-1">
+                                        <h3>会话与思考</h3>
+                                        <p>上下文压缩控制长对话怎么带历史；思考模式按模型支持情况选择。</p>
+                                    </div>
+                                    <div class="row g-3">
+                                        <div class="col-md-4">
+                                            <label class="form-label" for="ai-max-history">保留最近消息</label>
+                                            <input class="form-control" id="ai-max-history" type="number" min="2" max="50"
+                                                   v-model.number="settingsForm.max_history">
+                                            <p class="form-text mb-0">每次带给模型的消息条数。</p>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label" for="ai-summary-trigger">压缩触发条数</label>
+                                            <input class="form-control" id="ai-summary-trigger" type="number" min="4" max="200"
+                                                   v-model.number="settingsForm.summary_trigger">
+                                            <p class="form-text mb-0">总消息超过此数才把旧消息压成摘要。</p>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label" for="ai-reasoning">思考模式</label>
+                                            <select class="form-select" id="ai-reasoning" v-model="settingsForm.reasoning_effort">
+                                                <option value="">不传（跟随模型默认）</option>
+                                                <option value="low">low</option>
+                                                <option value="medium">medium</option>
+                                                <option value="high">high</option>
+                                            </select>
+                                            <p class="form-text mb-0">模型不支持时选「不传」。</p>
+                                        </div>
+                                    </div>
+                                </section>
                             </div>
                         </form>
                     </div>
@@ -511,9 +586,28 @@ export default {
                             <ul v-if="importSkipped.length" class="ai-chat__skipped" aria-label="跳过明细">
                                 <li v-for="(item, index) in importSkipped" :key="index">第 [[ item.line ]] 行：[[ item.reason ]]</li>
                             </ul>
-                            <label class="form-label" for="ai-import-text">粘贴区域</label>
-                            <textarea class="form-control" id="ai-import-text" rows="6" v-model="importText"
-                                      placeholder="标题,内容,分类&#10;核心交换机离线处置,先确认上联口与电源,网络设备"></textarea>
+                            <div class="mb-2">
+                            <label class="form-label" for="ai-import-file">选择文件</label>
+                            <input class="form-control" type="file" id="ai-import-file"
+                                   accept=".csv,.txt,.tsv,text/csv,text/plain"
+                                   @change="onFilePicked">
+                        </div>
+                        <p class="text-body-secondary small mb-2">
+                            支持 CSV / TXT / TSV，三列依次是标题、内容、分类，首行可以是表头。
+                            Excel 请先「另存为 CSV（逗号分隔）」——.xlsx 是二进制格式，读不了。
+                        </p>
+                        <p v-if="importName" class="small mb-2">
+                            已选：[[ importName ]]
+                            <button class="btn btn-sm btn-link p-0 ms-2 align-baseline"
+                                    type="button" @click="clearFile">清除</button>
+                        </p>
+                        <p v-if="importError" class="text-danger small mb-2">[[ importError ]]</p>
+                        <p v-if="importMessage" class="text-success small mb-2">[[ importMessage ]]</p>
+                        <ul v-if="importSkipped.length" class="small text-body-secondary mb-2">
+                            <li v-for="item in importSkipped" :key="item.line">
+                                第 [[ item.line ]] 行：[[ item.reason ]]
+                            </li>
+                        </ul>
                             <p class="form-text">支持逗号或制表符分隔；首行是表头会自动跳过；字段里的逗号用引号包起来。</p>
                             <button type="button" class="btn btn-primary mt-2" :disabled="importing" @click="runImport">
                                 [[ importing ? '导入中…' : '导入' ]]

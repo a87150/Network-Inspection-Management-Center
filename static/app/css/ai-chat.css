@@ -1,9 +1,59 @@
 /* AI 助手页：普通浅色页面。颜色只取 tokens.css 的通用变量（--color-*），
    不引深色壳那套变量，页面也不再加载拓扑样式表。 */
 
+/* 全屏对话窗口：整页就是聊天区，不嵌在卡片里。
+   高度锁到视口减去顶栏，消息区自己滚动，输入区钉在底部。 */
 .ai-chat {
-    display: grid;
-    gap: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    height: calc(100vh - 9.5rem);
+    min-height: 28rem;
+    /* 内容超出就裁掉：这条是「输入框被顶出视口」的最后一道保险。 */
+    overflow: hidden;
+}
+
+/* 全屏对话窗口：页头只留一行身份信息，不占版面。 */
+.ai-chat .page-heading {
+    flex: 0 0 auto;
+    margin-bottom: .6rem;
+    padding-bottom: .5rem;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.ai-chat .page-heading__title {
+    font-size: clamp(1.1rem, 1.6vw, 1.35rem);
+}
+
+.ai-chat .page-heading__eyebrow,
+.ai-chat .page-heading__description {
+    font-size: var(--fs-sm);
+}
+
+.ai-chat__panel {
+    display: flex;
+    /* 同上：basis 0 才能被父容器压缩。 */
+    flex: 1 1 0;
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Bootstrap 的 .card-body 默认没有高度约束，不收紧它就会把输入区顶出视口。 */
+.ai-chat__panel .card-body {
+    display: flex;
+    flex: 1 1 0;
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.ai-chat__panel-body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    flex-direction: column;
+    gap: .75rem;
 }
 
 /* 提示条自己带 margin 会和面板的 gap 叠加，这里统一清零。 */
@@ -13,10 +63,9 @@
 }
 
 .ai-chat__panel-body {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    padding: clamp(1rem, 1.8vw, 1.35rem);
+    flex: 1;
+    min-height: 0;
+    padding: clamp(.9rem, 1.5vw, 1.2rem);
 }
 
 .ai-chat__panel-head {
@@ -47,6 +96,11 @@
     gap: .6rem;
 }
 
+/* 输入区和面板头不能被消息区挤掉。 */
+.ai-chat__panel .card-body > *:not(.ai-chat__thread) {
+    flex: 0 0 auto;
+}
+
 .ai-chat__reset-hint {
     margin: 0;
     color: var(--color-warning);
@@ -59,8 +113,14 @@
     display: grid;
     align-content: start;
     gap: .7rem;
-    min-height: clamp(14rem, 40vh, 26rem);
-    max-height: 58vh;
+    /* 硬算高度：整条 flex 链（.ai-chat → .card-body → thread）只要有一层
+       没拿到 min-height:0，消息区就会按内容撑开把输入框顶出视口。
+       这里直接按视口减掉固定部分，不依赖任何父级是否压缩。
+       减掉的是：顶栏 5rem + 页头 5.5rem + 面板头 3.5rem + 输入区 7rem + 页面留白 4rem。 */
+    height: calc(100vh - 25rem);
+    max-height: calc(100vh - 25rem);
+    flex: 0 0 auto;
+    min-height: 10rem;
     padding: .5rem;
     overflow-y: auto;
     overscroll-behavior: contain;
