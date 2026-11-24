@@ -379,18 +379,7 @@ export default {
 
         <section class="card surface-card ai-chat__panel" aria-labelledby="ai-chat-panel-title">
             <div class="card-body ai-chat__panel-body">
-                <header class="ai-chat__panel-head">
-                    <div>
-                        <h2 class="ai-chat__panel-title" id="ai-chat-panel-title">知识库问答</h2>
-                        <p class="ai-chat__panel-hint">只依据知识库作答；问设备手册、巡检规则、日志排查、故障处置。</p>
-                    </div>
-                    <div class="ai-chat__panel-actions">
-                        <p v-if="confirmReset" class="ai-chat__reset-hint" role="alert">再次点击即清空，历史无法恢复。</p>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" :disabled="resetting || sending" @click="requestReset">
-                            [[ resetting ? '清空中…' : (confirmReset ? '确认清空' : '清空会话') ]]
-                        </button>
-                    </div>
-                </header>
+                
 
                 <p v-if="error" class="alert alert-danger ai-chat__error" role="alert">[[ error ]]</p>
 

@@ -98,7 +98,7 @@ class ChatTests(TestCase):
             )
         body = response.json()
         self.assertTrue(body["blocked"])
-        self.assertIn("知识范围", body["answer"])
+        self.assertIn("工作范围", body["answer"])
         call_model.assert_not_called()
 
     def test_hit_returns_answer_and_sources(self):
