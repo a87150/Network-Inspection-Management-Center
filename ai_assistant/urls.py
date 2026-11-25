@@ -6,6 +6,7 @@ urlpatterns = [
     path("chat/", views.chat, name="ai_chat"),
     path("history/", views.history, name="ai_history"),
     path("reset/", views.reset, name="ai_reset"),
+    path("retrieve_test/", views.retrieve_test, name="ai_retrieve_test"),
     path("settings/", views.settings_view, name="ai_settings"),
     path("settings/save/", views.settings_save, name="ai_settings_save"),
     path("knowledge/", views.knowledge_list, name="ai_knowledge"),

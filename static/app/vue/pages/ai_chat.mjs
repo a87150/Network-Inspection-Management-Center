@@ -42,6 +42,8 @@ export default {
     },
     data() {
         return {
+        // 与后端 CATEGORY_CHOICES 一致；改这里要同步改 views.py。
+        categories: ['设备手册', '故障案例', '模板说明', '告警规则', '巡检规范', '其他'],
             messages: [],
             usage: {prompt_tokens: 0, completion_tokens: 0, total_tokens: 0},
             draft: '',
@@ -63,6 +65,11 @@ export default {
             knowledgeLoading: false,
             knowledgeError: '',
             knowledgeForm: {title: '', category: '', content: ''},
+        probeQuery: '',
+        probing: false,
+        probeDone: false,
+        probeError: '',
+        probeHits: [],
             adding: false,
             addError: '',
             addMessage: '',
@@ -301,6 +308,23 @@ export default {
             }
             cells.push(cell);
             return cells;
+        },
+        async runProbe() {
+            const query = this.probeQuery.trim();
+            if (!query || this.probing) return;
+            this.probing = true;
+            this.probeError = '';
+            this.probeDone = false;
+            this.probeHits = [];
+            try {
+                const payload = await api.post('/api/ai/retrieve_test/', {query});
+                this.probeHits = (payload && payload.hits) || [];
+                this.probeDone = true;
+            } catch (failure) {
+                this.probeError = this.describe(failure, '检索失败，请稍后重试。');
+            } finally {
+                this.probing = false;
+            }
         },
         async persistModelChoice() {
             // 输入框里的两个下拉要立刻生效，不然选了不保存等于没选。
@@ -584,7 +608,39 @@ export default {
                     </div>
                     <div class="modal-body modal-body--scroll">
                         <p v-if="knowledgeError" class="alert alert-danger" role="alert">[[ knowledgeError ]]</p>
-                        <section class="config-section-card mb-3" aria-label="知识库现状">
+                        <section class="config-section-card mb-3" aria-label="测试检索">
+                        <div class="config-section-heading">
+                            <span class="config-section-index">03</span>
+                            <div><h3>测试检索</h3><p>直接跑一遍 retrieve()，看每条为什么进、为什么没进。调阈值别靠猜。</p></div>
+                        </div>
+                        <div class="d-flex gap-2 mb-2">
+                            <input class="form-control" type="text" v-model="probeQuery"
+                                   placeholder="输入一句运维问题，例如：S5735 端口不通"
+                                   @keydown.enter.prevent="runProbe">
+                            <button class="btn btn-outline-primary text-nowrap" type="button"
+                                    :disabled="probing || !probeQuery.trim()" @click="runProbe">
+                                [[ probing ? '检索中…' : '试一下' ]]
+                            </button>
+                        </div>
+                        <p v-if="probeError" class="text-danger small mb-2">[[ probeError ]]</p>
+                        <p v-if="probeDone" class="small mb-2">
+                            命中 [[ probeHits.length ]] 条
+                            <span v-if="!probeHits.length">—— 说明这条问题在知识库里找不到依据，会被拒答。</span>
+                        </p>
+                        <table v-if="probeHits.length" class="table table-sm small mb-0">
+                            <thead><tr><th>标题</th><th>分类</th><th>距离</th><th>得分</th><th>来源</th></tr></thead>
+                            <tbody>
+                                <tr v-for="hit in probeHits" :key="hit.title">
+                                    <td>[[ hit.title ]]</td>
+                                    <td>[[ hit.category ]]</td>
+                                    <td>[[ hit.distance ]]</td>
+                                    <td>[[ hit.score === null ? '—' : hit.score ]]</td>
+                                    <td>[[ hit.via ]]</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </section>
+                    <section class="config-section-card mb-3" aria-label="知识库现状">
                             <div class="config-section-heading">
                                 <span class="config-section-index">00</span>
                                 <div><h3>知识库现状</h3><p>新增条目先落库，向量要跑 build_knowledge 才建。</p></div>
@@ -611,7 +667,10 @@ export default {
                                     </div>
                                     <div class="col-12 col-md-4">
                                         <label class="form-label" for="ai-knowledge-category">分类</label>
-                                        <input class="form-control" id="ai-knowledge-category" type="text" v-model="knowledgeForm.category" autocomplete="off">
+                                        <select class="form-select" id="ai-knowledge-category" v-model="knowledgeForm.category">
+                                <option value="">未分类</option>
+                                <option v-for="item in categories" :key="item" :value="item">[[ item ]]</option>
+                            </select>
                                     </div>
                                     <div class="col-12">
                                         <label class="form-label" for="ai-knowledge-content">内容</label>

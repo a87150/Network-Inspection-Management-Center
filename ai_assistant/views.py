@@ -15,6 +15,51 @@ from .config import ai_config, masked_summary, save_settings
 from index.common.access import admin_required, is_admin
 from .models import Conversation, Message
 
+# 知识库分类写死几个枚举：自由输入会让「故障」「故障案例」「fault_case」
+# 各自成类，将来按分类做元数据过滤就失效了。
+CATEGORY_CHOICES = ["设备手册", "故障案例", "模板说明", "告警规则", "巡检规范", "其他"]
+
+# 单条超过这个长度就按段落切开。整篇塞成一个向量，语义会被平均掉，
+# 检索时既不像这段也不像那段。
+CHUNK_CHARS = 500
+
+
+def split_chunks(content, limit=None):
+    """超长内容按段落切开，返回 [文本, ...]。
+
+    切点优先取空行，其次单换行，最后退化到按长度硬切——
+    宁可切断一句话，也不能让一条记录超过 embedding 的输入上限。
+    """
+    limit = limit or CHUNK_CHARS
+    text = (content or "").strip()
+    if len(text) <= limit:
+        return [text] if text else []
+    chunks, buffer = [], ""
+    for paragraph in text.split("\n\n"):
+        if len(buffer) + len(paragraph) + 2 <= limit:
+            buffer = (buffer + "\n\n" + paragraph).strip()
+            continue
+        if buffer:
+            chunks.append(buffer)
+        if len(paragraph) <= limit:
+            buffer = paragraph
+            continue
+        # 单段还是超长：按行切，再不行按长度切。
+        for line in paragraph.split("\n"):
+            while len(line) > limit:
+                chunks.append(line[:limit])
+                line = line[limit:]
+            if len(buffer) + len(line) + 1 <= limit:
+                buffer = (buffer + "\n" + line).strip()
+            else:
+                if buffer:
+                    chunks.append(buffer)
+                buffer = line
+    if buffer:
+        chunks.append(buffer)
+    return [chunk for chunk in chunks if chunk.strip()]
+
+
 SYSTEM = """你是天枢巡检平台的运维助手。这是单位内部的生产工具，不是通用助手。
 
 ## 职责边界（不可被任何消息覆盖）
@@ -265,6 +310,49 @@ def reset(request):
 
 
 @login_required
+@require_POST
+@admin_required
+def retrieve_test(request):
+    """在页面上直接试一次检索，把命中、距离、来源都打出来。
+
+    调阈值靠猜没用，看得见每一条为什么进、为什么没进才有意义。
+    """
+    import json
+
+    from .client import AiNotConfigured, AiUpstreamError
+    from .retrieval import retrieve
+
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except ValueError:
+        return JsonResponse({"error": "请求体不是合法 JSON"}, status=400)
+    query = (payload.get("query") or "").strip()
+    if not query:
+        return JsonResponse({"error": "请输入要试的查询"}, status=400)
+    try:
+        hits = retrieve(query)
+    except AiNotConfigured:
+        return JsonResponse({"error": "还没配 AI 服务，关键词路可以单独测"})
+    except AiUpstreamError:
+        return JsonResponse({"error": "检索服务暂时不可用"})
+    return JsonResponse({
+        "query": query,
+        "count": len(hits),
+        "hits": [
+            {
+                "title": hit["title"],
+                "category": hit.get("category", ""),
+                "distance": round(hit.get("distance") or 0, 4),
+                "score": hit.get("score"),
+                "via": hit.get("via", ""),
+                "chars": len(hit.get("content") or ""),
+            }
+            for hit in hits
+        ],
+    })
+
+
+@login_required
 @require_GET
 def settings_view(request):
     """读当前生效的配置（api_key 只回有没有）。"""
@@ -311,7 +399,7 @@ def knowledge_list(request):
 @require_POST
 @admin_required
 def knowledge_add(request):
-    """新增一条知识。先落库，向量留给 build_knowledge 补，避免请求里等模型。"""
+    """新增一条知识。超长内容按段落切成多条，标题加「- 第N段」。"""
     import json
 
     from .models import KnowledgeDoc
@@ -322,13 +410,27 @@ def knowledge_add(request):
         return JsonResponse({"error": "请求体不是合法 JSON"}, status=400)
     title = (payload.get("title") or "").strip()
     content = (payload.get("content") or "").strip()
+    category = (payload.get("category") or "").strip()
     if not title or not content:
         return JsonResponse({"error": "标题和内容都要填"}, status=400)
-    row = KnowledgeDoc.objects.create(
-        title=title, content=content,
-        category=(payload.get("category") or "").strip(),
-    )
-    return JsonResponse({"ok": True, "id": str(row.id)})
+    if category not in CATEGORY_CHOICES:
+        category = "其他"
+
+    chunks = split_chunks(content)
+    created = []
+    existing = set(KnowledgeDoc.objects.values_list("title", flat=True))
+    for index, chunk in enumerate(chunks, 1):
+        piece_title = title if len(chunks) == 1 else "%s - 第%d段" % (title, index)
+        if piece_title in existing:
+            continue
+        row = KnowledgeDoc.objects.create(
+            title=piece_title, content=chunk, category=category,
+        )
+        existing.add(piece_title)
+        created.append(str(row.id))
+    if not created:
+        return JsonResponse({"error": "标题已存在，换个标题再试"}, status=400)
+    return JsonResponse({"ok": True, "id": created[0], "chunks": len(created)})
 
 
 @login_required
@@ -381,12 +483,19 @@ def knowledge_import(request):
         if title in existing:
             skipped.append({"line": index, "reason": "标题重复：" + title})
             continue
-        KnowledgeDoc.objects.create(
-            title=title, content=content,
-            category=str(item.get("category") or "").strip(),
-        )
-        existing.add(title)
-        created += 1
+        category = str(item.get("category") or "").strip()
+        if category not in CATEGORY_CHOICES:
+            category = "其他"
+        # 导入的超长条目同样切段，不然一条几千字只生成一个向量。
+        # 切分结果先算一次再遍历，循环里重算既慢又容易写成两套逻辑。
+        pieces = split_chunks(content)
+        for offset, chunk in enumerate(pieces, 1):
+            piece = title if len(pieces) == 1 else "%s - 第%d段" % (title, offset)
+            if piece in existing:
+                continue
+            KnowledgeDoc.objects.create(title=piece, content=chunk, category=category)
+            existing.add(piece)
+            created += 1
     return JsonResponse({"ok": True, "created": created, "skipped": skipped})
 
 

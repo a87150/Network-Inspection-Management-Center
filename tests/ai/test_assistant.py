@@ -308,6 +308,30 @@ class SessionTests(TestCase):
         self.assertEqual(anonymous.get("/api/ai/history/").status_code, 302)
 
 
+class SplitChunksTests(TestCase):
+    """超长内容必须切段：整篇塞一个向量，检索时既不像这段也不像那段。"""
+
+    def test_short_content_is_one_chunk(self):
+        from ai_assistant.views import split_chunks
+
+        self.assertEqual(split_chunks("短内容"), ["短内容"])
+
+    def test_long_content_is_split(self):
+        from ai_assistant.views import split_chunks
+
+        text = "\n\n".join("段落%d 的内容" % index * 20 for index in range(20))
+        chunks = split_chunks(text, limit=100)
+        self.assertGreater(len(chunks), 1)
+        for chunk in chunks:
+            self.assertLessEqual(len(chunk), 100)
+
+    def test_empty_content_yields_nothing(self):
+        from ai_assistant.views import split_chunks
+
+        self.assertEqual(split_chunks(""), [])
+        self.assertEqual(split_chunks("   "), [])
+
+
 @override_settings(AI_CONFIG=CONFIGURED)
 class SettingsApiTests(TestCase):
     """「配置 API」弹窗背后的读写接口。"""
