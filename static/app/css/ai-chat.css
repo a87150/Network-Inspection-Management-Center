@@ -625,3 +625,50 @@
 .ai-chat__composer .ai-chat__composer-bar .ai-chat__spacer {
     display: none !important;
 }
+
+/* ---------- 消息条：白底 + 一道边框，我右 AI 左 ---------- */
+.ai-chat__thread > .ai-chat__bubble,
+.ai-chat__bubble {
+    max-width: 74%;
+    padding: .6rem .85rem;
+    border: 1px solid rgba(15, 40, 60, .14);
+    border-radius: .7rem;
+    background: #fff;
+    box-shadow: none;
+}
+
+/* 我问的靠右，蓝边框。 */
+.ai-chat__bubble--user {
+    align-self: flex-end;
+    border-color: #2f7de1;
+    background: #fff;
+}
+
+/* AI 答的靠左，灰边框；被拦截时换警示色。 */
+.ai-chat__bubble--assistant {
+    align-self: flex-start;
+    border-color: #c9d4de;
+    background: #fff;
+}
+
+.ai-chat__bubble.is-blocked {
+    border-color: #d9a13b;
+}
+
+/* 说话人那行小字跟着边框走，不要单独再铺一层底。 */
+.ai-chat__bubble > span:first-child,
+.ai-chat__bubble__head {
+    display: inline-block;
+    margin-bottom: .2rem;
+    background: transparent;
+    font-size: .74rem;
+    font-weight: 650;
+}
+
+.ai-chat__bubble--user > span:first-child {
+    color: #2f7de1;
+}
+
+.ai-chat__bubble--assistant > span:first-child {
+    color: #7d8fa0;
+}
