@@ -92,12 +92,6 @@ export default {
         };
     },
     computed: {
-        fmtTokens(value) {
-            const number = Number(value) || 0;
-            if (number >= 1000000) return (number / 1000000).toFixed(1) + 'M';
-            if (number >= 1000) return (number / 1000).toFixed(1) + 'k';
-            return String(number);
-        },
         activeProviderId() {
             const current = this.providers.find((row) => row.is_active);
             return current ? current.id : '';
@@ -128,6 +122,12 @@ export default {
         if (knowledgeModal) knowledgeModal.addEventListener('show.bs.modal', () => this.loadKnowledge());
     },
     methods: {
+        fmtTokens(value) {
+            const number = Number(value) || 0;
+            if (number >= 1000000) return (number / 1000000).toFixed(1) + 'M';
+            if (number >= 1000) return (number / 1000).toFixed(1) + 'k';
+            return String(number);
+        },
         sourceLabel(source) {
             // 混合检索下不给距离：向量距离和关键词得分量纲不同，
             // 混在一个列表里显示会让人以为能横向比较。via 说明命中方式。
