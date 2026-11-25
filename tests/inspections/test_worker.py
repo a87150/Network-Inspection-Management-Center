@@ -189,11 +189,11 @@ class TaskWorkerTests(TransactionTestCase):
         device.save()
         seen = {}
 
-        def snmp_result(asset, timeout, selected_items=None):
+        def snmp_result(asset, timeout, selected_items=None, total_timeout=None):
             seen['snmp'] = (
                 asset.username, asset.password, asset.snmp_auth_password,
                 asset.snmp_priv_password, asset.snmp_community, asset.snmp_port, timeout,
-                list(selected_items or []),
+                list(selected_items or []), total_timeout,
             )
             return CollectionResult(
                 True,
@@ -247,6 +247,8 @@ class TaskWorkerTests(TransactionTestCase):
             'live-ssh-user', 'live-ssh-password', 'live-auth-password',
             'live-priv-password', 'live-community-secret', 1161, 9,
             ['cpu', 'memory'],
+            # 总时限跟着单次超时走，慢了就该被掐断，不能靠每 PDU 超时兜底。
+            9,
         ))
         self.assertEqual(seen['ssh'], (
             'live-ssh-user', 'live-ssh-password', 9, ['logs', 'config_info'],

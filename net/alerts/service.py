@@ -435,15 +435,27 @@ def deliver_due_alerts(*, event=None, limit=1):
     """Claim due rows briefly, send outside locks, then fence the result."""
     delivered = []
     for delivery_id, token in _claim_deliveries(event=event, limit=limit):
-        delivery = AlertDelivery.objects.select_related('event', 'channel').get(pk=delivery_id)
+        # 这一整段都在 try 里：取行、取 channel、解密 settings、渲染消息，任何一步
+        # 抛错都只影响这一行。放在外面的话异常会逃出 for 循环，本批剩余行不处理，
+        # 而 claim 按 created_at 排序，坏行每轮都在队头 —— 一行坏数据就能让整个
+        # 告警队列停摆到 attempt 耗尽。
         try:
+            delivery = AlertDelivery.objects.select_related('event', 'channel').get(pk=delivery_id)
             result = send_alert(delivery.channel, build_alert_message(delivery.event))
         except Exception as exc:  # The durable row records an unexpected adapter failure.
             from net.alerts.base import DeliveryResult
 
-            result = DeliveryResult(
-                False, summarize(str(exc), *delivery.channel.settings.values()), True,
+            logging.getLogger(__name__).warning(
+                'delivery=%s 发送前处理失败，按可重试记录', delivery_id, exc_info=True,
             )
+            # delivery 可能压根没取到（get 抛了），所以脱敏用的 secret 单独兜一层：
+            # 拿不到就不脱敏，能拿到就一定脱。
+            secrets = ()
+            try:
+                secrets = tuple(delivery.channel.settings.values())
+            except Exception:
+                pass
+            result = DeliveryResult(False, summarize(str(exc), *secrets), True)
         delivered.append(_finish_delivery(delivery_id, token, result))
     return delivered
 

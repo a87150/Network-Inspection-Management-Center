@@ -134,6 +134,8 @@ def collect_sangfor_ac(device, timeout=12, selected_items=None, *, request=None)
                 detail = '接口拒绝请求或返回数据无效，请检查共享密钥、白名单和接口版本'
             data[item]['message'] = detail
             messages.append(f'{item}: {detail}')
+    if not selected:
+        return CollectionResult(False, 'failed', '未选择采集项目，本次没有采集任何内容。')
     missing = [item for item in selected if item not in completed]
     status = 'success' if not missing else 'partial' if (completed or all(isinstance(data.get(item), dict) and data[item].get('status') == 'unsupported' for item in missing)) else 'failed'
     return CollectionResult(bool(completed), status, '；'.join(messages), data, raw, max(0, round((monotonic() - started) * 1000)))

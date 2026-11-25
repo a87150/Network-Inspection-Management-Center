@@ -57,8 +57,11 @@ export default {
     methods: {
         badgeClass,
         async sortBy(column) {
+            // 先算方向再记列。反过来的话 nextOrder 里的「同一列」判断恒真，
+            // 切到新列会沿用上一列的方向取反，提示文字也跟着说反。
+            const order = this.nextOrder(column);
             this.sortKey = column.key;
-            this.sortOrder = this.nextOrder(column);
+            this.sortOrder = order;
             await this.load(1);
         },
         nextOrder(column) {

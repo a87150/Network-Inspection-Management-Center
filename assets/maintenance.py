@@ -8,8 +8,11 @@ from datetime import timedelta
 from django import forms
 from django.contrib import messages
 from django.core.paginator import Paginator
+from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import Count, Q
 from django.shortcuts import redirect, render
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST, require_http_methods
@@ -77,7 +80,12 @@ def attach_phase(windows, now=None):
 
 
 def window_metrics(now=None):
-    """Counters for the page header cards; one aggregate query."""
+    """Counters for the page header cards; one aggregate query.
+
+    The four buckets must add up to total. 「已结束」天然包含停用过的窗口，
+    所以「停用且还没结束」单独记一格，否则这类窗口既不在进行中、也不在待生效、
+    也不在已结束，三块之和永远小于总数。
+    """
     now = now or timezone.now()
     return MaintenanceWindow.objects.aggregate(
         total=Count("id"),
@@ -85,6 +93,7 @@ def window_metrics(now=None):
             is_enabled=True, starts_at__lte=now, ends_at__gt=now)),
         pending=Count("id", filter=Q(is_enabled=True, starts_at__gt=now)),
         ended=Count("id", filter=Q(ends_at__lte=now)),
+        disabled=Count("id", filter=Q(is_enabled=False, ends_at__gt=now)),
     )
 
 
@@ -142,14 +151,38 @@ def row_payloads(windows, now=None):
 
 
 def create_windows(target_type, target_ids, starts_at, ends_at, note=""):
-    """One window per asset. Shared by the form view and the REST endpoint."""
-    return MaintenanceWindow.objects.bulk_create([
-        MaintenanceWindow(
-            target_type=target_type, target_id=value,
-            starts_at=starts_at, ends_at=ends_at, note=note,
-        )
-        for value in target_ids
-    ])
+    """One window per asset. Shared by the form view and the REST endpoint.
+
+    Validation lives here rather than in the callers: the REST endpoint used to
+    skip it entirely and could write windows pointing at assets that never
+    existed, or two overlapping windows for the same asset.
+    """
+    model = TARGET_MODELS.get(target_type)
+    if model is None:
+        raise ValidationError("这类资产不支持维护窗口。")
+    wanted = list(dict.fromkeys(str(value) for value in target_ids))
+    if not wanted:
+        raise ValidationError("请先勾选要加入维护窗口的资产。")
+    with transaction.atomic():
+        known = {str(pk) for pk in model.objects.filter(pk__in=wanted).values_list("pk", flat=True)}
+        missing = [value for value in wanted if value not in known]
+        if missing:
+            raise ValidationError("有 %d 个选中项已不存在，请刷新列表后重新选择。" % len(missing))
+        overlapping = {
+            str(value) for value in MaintenanceWindow.objects.filter(
+                target_type=target_type, target_id__in=wanted,
+                starts_at__lt=ends_at, ends_at__gt=starts_at,
+            ).values_list("target_id", flat=True)
+        }
+        rows = [
+            MaintenanceWindow(
+                target_type=target_type, target_id=value,
+                starts_at=starts_at, ends_at=ends_at, note=note,
+            )
+            for value in wanted
+            if value not in overlapping
+        ]
+        return MaintenanceWindow.objects.bulk_create(rows)
 
 
 @admin_required
@@ -175,14 +208,16 @@ def maintenance_window_create(request, kind):
             "%s %s" % (field, " ".join(errors)) for field, errors in form.errors.items()
         ))
 
-    known = asset_names(target_type, requested)
-    missing = [value for value in requested if value not in known]
-    if missing:
-        return fail("有 %d 个选中项已不存在，请刷新列表后重新选择。" % len(missing))
-
     data = form.cleaned_data
-    create_windows(target_type, list(known), data["starts_at"], data["ends_at"], data["note"])
-    message = "已为 %d 个资产登记维护窗口：窗口内告警照常入库，但不外发。" % len(known)
+    try:
+        created = create_windows(
+            target_type, requested, data["starts_at"], data["ends_at"], data["note"],
+        )
+    except ValidationError as exc:
+        return fail(" ".join(exc.messages))
+    if not created:
+        return fail("这些资产在该时段已经有维护窗口了。")
+    message = "已为 %d 个资产登记维护窗口：窗口内告警照常入库，但不外发。" % len(created)
     if wants_json(request):
         return form_saved(message, reverse("asset_list", args=[kind]))
     messages.success(request, message)
@@ -194,7 +229,14 @@ def maintenance_window_create(request, kind):
 def maintenance_window_delete(request, window_id):
     deleted, _ = MaintenanceWindow.objects.filter(pk=window_id).delete()
     messages.success(request, "维护窗口已删除。" if deleted else "维护窗口不存在。")
-    return redirect(request.POST.get("next") or "maintenance_list")
+    # next 来自表单，不能直接交给 redirect：传 https://别处 时 Django 会原样
+    # 302 出去，配合「发给另一个管理员点一下」就是一条开放重定向。
+    target = request.POST.get("next") or ""
+    if not url_has_allowed_host_and_scheme(
+        target, allowed_hosts={request.get_host()}, require_https=request.is_secure(),
+    ):
+        target = "maintenance_list"
+    return redirect(target)
 
 
 @admin_required
@@ -213,7 +255,6 @@ def maintenance_list(request):
         "pages": page.paginator.num_pages,
         "page_size": PAGE_SIZE,
         "rows": row_payloads(page.object_list, now),
-        "metrics": window_metrics(now),
         "can_administer": True,
     }
     return render(request, "maintenance/list.html", {"bootstrap": bootstrap})

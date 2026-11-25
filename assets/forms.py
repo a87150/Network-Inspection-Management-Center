@@ -86,9 +86,17 @@ def device_form(kind, data=None, instance=None):
     form.fields['ip'] = forms.GenericIPAddressField(label='IP地址', unpack_ipv4=True)
     for name, field in form.fields.items():
         if name in {'port', 'snmp_port'}:
-            # 留空即用协议默认端口，因此不强制填写。
+            # 留空即用协议默认端口 —— 但这只对「模型列允许 NULL」的字段成立。
+            # Server.port 是 NOT NULL 且只有 DB 层 default，Django 的模型校验会
+            # 把「表单非必填、模型必填」的空值排除出去，None 一路落到 INSERT，
+            # 最后被 IntegrityError 翻译成「请检查 IP 是否已存在」，方向全错。
+            model_field = spec['model']._meta.get_field(name)
+            nullable = getattr(model_field, 'null', False)
             form.fields[name] = field = forms.IntegerField(
-                label=field.label, min_value=1, max_value=65535, required=False)
+                label=field.label, min_value=1, max_value=65535,
+                required=not nullable,
+                initial=None if nullable else model_field.get_default(),
+            )
         field.widget.attrs['class'] = ('form-check-input' if isinstance(field.widget, forms.CheckboxInput)
                                        else 'form-select' if isinstance(field.widget, forms.Select)
                                        else 'form-control')

@@ -353,6 +353,25 @@ def collect_network_ssh(device, timeout=12, selected_items=None):
         return CollectionResult(False, 'failed', f'网络设备 SSH 采集失败：{sanitize(str(exc), secrets=(device.username, device.password))}', duration_ms=getattr(timer, 'duration_ms', 0))
 
 
+def _table_result(value, key, row):
+    """接口表 / VLAN 表：把「没采全」的标记带到顶层。
+
+    原来只把数据包成 {'interfaces': [...]}，顶层没有 status，上面第 338 行
+    的完成度判定就识别不出来 —— 一条命令失败仍然算 success，巡检结论把
+    不完整当正常。空表同样处理：它说明没读到，不等于设备没有接口。
+    """
+    rows = value if isinstance(value, list) else [value]
+    entry = {key: rows}
+    # 只认 status == 'partial'。_empty_table 是「命令成功、表确实为空」的
+    # 正常结果（设备没有 VLAN 就是这样），把它当不完整会误判整台设备。
+    partial = any(
+        isinstance(item, dict) and item.get('status') == 'partial' for item in rows
+    ) or (isinstance(row, dict) and row.get('status') == 'partial')
+    if partial:
+        entry['status'] = 'partial'
+    return entry
+
+
 def _template_network_data(values):
     """Normalize parsed template records into established inspection shapes."""
     result = {}
@@ -390,9 +409,9 @@ def _template_network_data(values):
                     except (TypeError, ValueError): pass
             if numbers: result[item] = {'values_celsius': numbers}
         elif item == 'interface_status':
-            result[item] = {'interfaces': value if isinstance(value, list) else [value]}
+            result[item] = _table_result(value, 'interfaces', row)
         elif item == 'vlan_status':
-            result[item] = {'vlans': value if isinstance(value, list) else [value]}
+            result[item] = _table_result(value, 'vlans', row)
         elif item == 'logs':
             result[item] = value.get('raw', '') if isinstance(value, dict) else str(value)
         elif item == 'memory' and isinstance(row, dict):

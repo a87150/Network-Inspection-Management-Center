@@ -69,7 +69,6 @@ def task_rows(page_obj, *, redact_profiles=False):
             'abnormal': summary['abnormal'],
             'pending': summary['pending'],
             'cancelled': summary['cancelled'],
-            'fetch_success': summary['fetch_success'],
             'integrity_warning': summary['integrity_warning'],
             'detail_url': reverse('task_detail', args=[task.pk]),
         })

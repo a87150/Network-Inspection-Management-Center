@@ -247,7 +247,9 @@ def _persist_configuration_backup(target, collection, now):
     for key in list(collection.raw):
         if key == 'config_info' or key.partition(':')[2] == 'config_info':
             collection.raw[key] = metadata
-    if metadata.get('status') != 'success' and collection.status == RecordStatus.SUCCESS:
+    # 「不支持」不是「没采到」：弱电设备、sangfor、未注册厂商必然返回 unsupported，
+    # 拿它降级会让这些机器每天第一次巡检都必然 partial，还白写一条 Error_*。
+    if metadata.get('status') not in ('success', 'unsupported') and collection.status == RecordStatus.SUCCESS:
         collection.status = RecordStatus.PARTIAL if len(collection.data) > 1 else RecordStatus.FAILED
 
 
@@ -268,11 +270,16 @@ def _selected_details(task, collection):
         if key in selected
     }
     raw = collection.raw if isinstance(collection.raw, dict) else {}
-    errors = raw.get('collection_errors')
-    if isinstance(errors, dict):
-        selected_errors = {key: value for key, value in errors.items() if key in selected}
-        if selected_errors:
-            result['collection_errors'] = selected_errors
+    # Windows 和拓扑都叫 collection_errors，Linux SSH 侧叫 command_errors。
+    # 只认前者的话，Linux 的 exit code 和 stderr 既不进 details 也不进 raw_output，
+    # 排障只剩一句「缺少有效采集证据」。
+    merged = {}
+    for key in ('collection_errors', 'command_errors'):
+        value = raw.get(key)
+        if isinstance(value, dict):
+            merged.update({name: detail for name, detail in value.items() if name in selected})
+    if merged:
+        result['collection_errors'] = merged
     return result
 
 
@@ -517,11 +524,13 @@ def execute_target(target_run, *, worker_id, lease_guard=None):
         and 'lldp_neighbors' in effective_task.selected_items_snapshot
     )
     topology_batch_id = None
-    if wants_topology:
-        from net.topology.service import begin_topology_batch
-        topology_batch_id = begin_topology_batch(started.pk, started.started_at or timezone.now())
     secrets = ()
     try:
+        if wants_topology:
+            from net.topology.service import begin_topology_batch
+            topology_batch_id = begin_topology_batch(
+                started.pk, started.started_at or timezone.now(),
+            )
         asset = _asset_context(started)
         secrets = tuple(getattr(asset, field, '') for field in (
             'username', 'password', 'snmp_community', 'snmp_auth_password',
@@ -546,6 +555,7 @@ def execute_target(target_run, *, worker_id, lease_guard=None):
                 payload = _topology_payload(started.target_id, collection, collected_at)
                 if payload is None:
                     fail_topology_batch(topology_batch_id, status='failed', message='拓扑巡检未返回可解析证据。')
+                    _append_topology_error(collection, '拓扑巡检未返回可解析证据；普通巡检结果仍会保存。')
                 else:
                     complete_topology_batch(topology_batch_id, payload,
                                             collection_status=_record_status(collection),

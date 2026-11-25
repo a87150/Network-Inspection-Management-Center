@@ -99,8 +99,6 @@ def _with_card_actions(item, csrf=''):
     if item.get('object_urls'):
         for label, key in (('域账户', 'accounts'), ('域计算机', 'computers'), ('域分组', 'groups')):
             secondary.append({'label': label, 'url': item['object_urls'][key]})
-    if item.get('detail_url'):
-        secondary.append({'label': item['detail_label'], 'url': item['detail_url']})
     item['primary_action'] = primary
     item['secondary_actions'] = secondary
     return item

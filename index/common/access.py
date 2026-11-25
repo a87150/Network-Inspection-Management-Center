@@ -20,6 +20,7 @@ READER_VIEWS = PUBLIC_VIEWS | frozenset({
     'computer_analysis_list', 'computer_log_list',
     'computer_log_detail', 'computer_analysis_detail', 'computer_error_list',
     'task_list', 'task_detail', 'alert_list', 'alert_detail',
+    'dashboard_tasks', 'operations_ip_lookup',
     'table_export', 'table_export_scoped', 'domain_account_list', 'domain_account_detail',
     'domain_computer_list', 'domain_computer_detail', 'domain_group_list', 'domain_group_detail',
     'inspection_records', 'error_records', 'record_list', 'record_detail',

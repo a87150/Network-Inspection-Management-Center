@@ -25,19 +25,26 @@ def ai_config():
     from .models import AiProvider, AiSetting
 
     config = dict(settings.AI_CONFIG)
+    # 端点/密钥/模型以「当前激活的那组」为准：AiSetting 里同名项可能是切换前
+    # 留下的旧值，让它再盖一遍会让「切换提供方」看着成功、实际没换。
+    from_provider = set()
     provider = AiProvider.active()
     if provider is not None:
         if provider.base_url:
             config["BASE_URL"] = provider.base_url
+            from_provider.add("BASE_URL")
         if provider.chat_model:
             config["CHAT_MODEL"] = provider.chat_model
+            from_provider.add("CHAT_MODEL")
         if provider.embed_model:
             config["EMBED_MODEL"] = provider.embed_model
+            from_provider.add("EMBED_MODEL")
         if provider.api_key_cipher:
             try:
                 config["API_KEY"] = _decrypt(provider.api_key_cipher)
             except Exception:
                 config["API_KEY"] = ""
+            from_provider.add("API_KEY")
     row = AiSetting.load()
     if row is None:
         return config
@@ -48,9 +55,9 @@ def ai_config():
         "RAG_BACKEND": row.rag_backend,
     }
     for key, value in overrides.items():
-        if value:
+        if value and key not in from_provider:
             config[key] = value
-    if row.api_key_cipher:
+    if row.api_key_cipher and "API_KEY" not in from_provider:
         try:
             config["API_KEY"] = _decrypt(row.api_key_cipher)
         except Exception:
@@ -99,28 +106,61 @@ def save_settings(payload):
         provider.api_key_cipher = _encrypt(api_key)
     provider.save()
 
+    # 只改 payload 里出现过的键。提交部分字段（比如输入区切模型只发
+    # chat_model/reasoning_effort）时，没提交的项必须保持原值，不能被写成空。
     row = AiSetting.load() or AiSetting()
-    row.base_url = (payload.get("base_url") or "").strip()
-    row.chat_model = (payload.get("chat_model") or "").strip()
-    row.embed_model = (payload.get("embed_model") or "").strip()
-    backend = (payload.get("rag_backend") or "").strip()
-    row.rag_backend = backend if backend in {"hybrid", "vector", "keyword"} else ""
+    if "base_url" in payload:
+        row.base_url = (payload.get("base_url") or "").strip()
+    if "chat_model" in payload:
+        row.chat_model = (payload.get("chat_model") or "").strip()
+    if "embed_model" in payload:
+        row.embed_model = (payload.get("embed_model") or "").strip()
+    if "rag_backend" in payload:
+        backend = (payload.get("rag_backend") or "").strip()
+        row.rag_backend = backend if backend in {"hybrid", "vector", "keyword"} else ""
     api_key = (payload.get("api_key") or "").strip()
     if api_key:
         row.api_key_cipher = _encrypt(api_key)
     elif payload.get("clear_api_key"):
         row.api_key_cipher = ""
-    row.retrieval_max_distance = _float_or_none(payload.get("retrieval_max_distance"))
-    row.keyword_max_distance = _float_or_none(payload.get("keyword_max_distance"))
-    row.max_history = _int_or_none(payload.get("max_history"), 2, 50)
-    row.summary_trigger = _int_or_none(payload.get("summary_trigger"), 4, 200)
-    effort = (payload.get("reasoning_effort") or "").strip()
-    row.reasoning_effort = effort if effort in {"low", "medium", "high"} else ""
-    row.models_text = "\n".join(
-        line.strip() for line in str(payload.get("models_text") or "").splitlines() if line.strip()
-    )
+    if "retrieval_max_distance" in payload:
+        row.retrieval_max_distance = _float_or_none(payload.get("retrieval_max_distance"))
+    if "keyword_max_distance" in payload:
+        row.keyword_max_distance = _float_or_none(payload.get("keyword_max_distance"))
+    if "max_history" in payload:
+        row.max_history = _int_or_none(payload.get("max_history"), 2, 50)
+    if "summary_trigger" in payload:
+        row.summary_trigger = _int_or_none(payload.get("summary_trigger"), 4, 200)
+    if "reasoning_effort" in payload:
+        effort = (payload.get("reasoning_effort") or "").strip()
+        row.reasoning_effort = effort if effort in {"low", "medium", "high"} else ""
+    if "models_text" in payload:
+        row.models_text = "\n".join(
+            line.strip() for line in str(payload.get("models_text") or "").splitlines() if line.strip()
+        )
     row.save()
     return row
+
+
+def sync_setting_from_provider():
+    """把当前生效那组的端点/密钥/模型镜像到 AiSetting。
+
+    AiSetting 同时是设置页的显示来源。切换或删除提供方后不镜像，页面上会显示
+    上一组的地址、实际请求用的却是新的；删光所有组时也就清不掉旧值。
+    """
+    from .models import AiProvider, AiSetting
+
+    row = AiSetting.load()
+    if row is None:
+        return
+    provider = AiProvider.active()
+    row.base_url = provider.base_url if provider else ""
+    row.chat_model = provider.chat_model if provider else ""
+    row.embed_model = provider.embed_model if provider else ""
+    row.api_key_cipher = provider.api_key_cipher if provider else ""
+    row.save(update_fields=[
+        "base_url", "chat_model", "embed_model", "api_key_cipher", "updated_at",
+    ])
 
 
 def _int_or_none(value, low, high):

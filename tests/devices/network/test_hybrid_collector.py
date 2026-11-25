@@ -20,7 +20,7 @@ class FakeCollector:
     def selected_items(self):
         return self.calls[-1] if self.calls else None
 
-    def __call__(self, _device, _timeout=12, selected_items=None):
+    def __call__(self, _device, _timeout=12, selected_items=None, total_timeout=None):
         self.calls.append(list(selected_items or []))
         return self.result
 

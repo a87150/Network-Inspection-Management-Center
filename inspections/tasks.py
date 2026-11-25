@@ -601,7 +601,7 @@ def _error_metrics():
     from .records import _error_records
 
     # 行集合是 UNION，遍历会带上各分支的排序；计数走 count() 最省。
-    return {'total': _error_records().count(), 'pending': 0}
+    return {'total': _error_records().count()}
 
 
 def _error_center_context(request):

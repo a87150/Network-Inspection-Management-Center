@@ -8,6 +8,20 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 from net.models import TaskRun, TaskTargetRun
 
+def _integrity_message(exc):
+    """把数据库约束失败翻译成用户能照做的提示。
+
+    原来所有写入失败都说「请检查 IP 是否已存在」，包括端口为空这种跟 IP 毫无
+    关系的情况，用户会一直盯着 IP 改。
+    """
+    text = str(getattr(exc, '__cause__', None) or exc).lower()
+    if 'port' in text:
+        return '端口必须填写（1-65535）。'
+    if 'ip' in text:
+        return '设备保存冲突，请检查 IP 是否已存在。'
+    return '设备保存失败，请检查填写内容是否与已有记录冲突。'
+
+
 from .forms import DEVICE_KINDS, device_form, preserve_empty_secrets
 
 
@@ -21,8 +35,8 @@ def asset_create(request, kind):
         try:
             with transaction.atomic():
                 form.save()
-        except IntegrityError:
-            form.add_error(None, '设备保存冲突，请检查 IP 是否已存在。')
+        except IntegrityError as exc:
+            form.add_error(None, _integrity_message(exc))
         else:
             if wants_json(request):
                 return form_saved('设备已添加，可在列表中查看；尚未执行巡检。',
@@ -77,8 +91,8 @@ def asset_edit(request, kind, pk):
                     form.add_error(None, '该设备存在活动巡检任务，任务结束后才能修改连接配置。')
                 else:
                     form.save()
-        except IntegrityError:
-            form.add_error(None, '设备保存冲突，请检查 IP 是否已存在。')
+        except IntegrityError as exc:
+            form.add_error(None, _integrity_message(exc))
         else:
             if not form.errors:
                 message = '设备配置已更新；硬件与系统信息仍由巡检自动采集。'

@@ -1,6 +1,9 @@
+from django.contrib.admin.sites import AdminSite
 from django.db.models import ProtectedError
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 from django.utils import timezone
+
+from django.contrib.auth import get_user_model
 
 from net.admin.assets import NetworkDeviceAdmin
 from net.models import (
@@ -92,3 +95,16 @@ class BulkDeviceDeleteTests(TestCase):
         self.assertTrue(
             NetworkTopologyInterface.objects.filter(pk=self.peer.pk).exists())
 
+
+    def _delete_objects_for(self, device):
+        admin = NetworkDeviceAdmin(Network_Device, AdminSite())
+        request = RequestFactory().get("/")
+        request.user = get_user_model().objects.create_superuser(
+            "delete-probe", "probe@example.invalid", "x",
+        )
+        return admin.get_deleted_objects([device], request)
+
+    def test_confirm_page_does_not_treat_topology_as_protected(self):
+        """拓扑数据由 delete_queryset 先清，不该在确认页就把删除拦下来。"""
+        _to_delete, _count, _perms, protected = self._delete_objects_for(self.device)
+        self.assertEqual(protected, [])

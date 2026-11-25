@@ -7,7 +7,10 @@ import time
 
 import requests
 
-from .base import HTTP_TIMEOUT, DeliveryResult, disabled_result, response_payload, response_summary, summarize
+from .base import (
+    HTTP_TIMEOUT, DeliveryResult, disabled_result, looks_rate_limited,
+    response_payload, response_summary, summarize,
+)
 
 
 def _feishu_signature(timestamp, secret):
@@ -62,5 +65,9 @@ def send_feishu(channel, message, *, http_post=None, now=None):
         return _http_failure(response, webhook_url, secret)
     payload_result = response_payload(response)
     if not isinstance(payload_result, dict) or payload_result.get('code') != 0:
-        return DeliveryResult(False, response_summary(response, webhook_url, secret), False)
+        return DeliveryResult(
+            False,
+            response_summary(response, webhook_url, secret),
+            looks_rate_limited(payload_result),
+        )
     return DeliveryResult(True, response_summary(response, webhook_url, secret), False)

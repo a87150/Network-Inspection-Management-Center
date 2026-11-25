@@ -46,7 +46,16 @@ def encrypt(value):
     if value is None or value == '':
         return value
     if looks_encrypted(value):
-        return value
+        # 前缀像密文不等于真是密文：口令本身就可能以 gAAAA 开头。
+        # 只有能用手上的 key 解开，才当作「已加密，保持原样」；
+        # 解不开就是一段普通口令，老老实实加密，否则明文入库之后
+        # 读出来会直接抛 ValueError，那台设备的详情和巡检全废。
+        try:
+            _fernet().decrypt(str(value).encode('ascii'))
+        except (InvalidToken, ValueError):
+            pass
+        else:
+            return value
     return _fernet().encrypt(str(value).encode('utf-8')).decode('ascii')
 
 

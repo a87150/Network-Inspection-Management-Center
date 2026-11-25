@@ -57,10 +57,12 @@ def _summary(request, view_name):
             for kind, (model, title, _fields) in PUBLIC_INVENTORIES.items()
         ]
     else:
-        context['departments'] = list(People.objects.order_by('department').values('department').annotate(
-            total=Count('pk'), active=Count('pk', filter=Q(is_active=True)),
-            inactive=Count('pk', filter=Q(is_active=False)),
-        ))
+        # 复用登录版的口径：合并空白部门、归并「未分配部门」、给出 departed
+        # 和 active_rate。这里自己再算一份会和登录页对不上，字段名也会错
+        # （前端读的是 departed，不是 inactive）。
+        from assets.overview import department_totals
+
+        context['departments'] = department_totals()
     # 访客页也走同一种岛：一份 JSON，一个组件，页面上没有权限控件。
     context['summary_bootstrap'] = _script({
         'page': {'title': context['title'], 'eyebrow': '汇总'},

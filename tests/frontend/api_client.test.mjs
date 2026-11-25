@@ -109,3 +109,53 @@ test('204 resolves to null instead of trying to parse JSON', async () => {
     globalThis.fetch = async () => fakeResponse({status: 204, body: null});
     assert.equal(await apiRequest('/api/v1/x/', {method: 'DELETE', origin: ORIGIN}), null);
 });
+
+test('a redirect to the login page surfaces as an auth error, not null', async () => {
+    stubGlobals(fakeDocument({inputValue: 'token'}));
+    globalThis.fetch = async () => ({
+        ok: true,
+        status: 200,
+        redirected: true,
+        url: 'http://127.0.0.1:8000/login/?next=/api/v1/x/',
+        headers: {get: () => 'text/html'},
+        json: async () => { throw new Error('not json'); },
+        text: async () => '<html>login</html>',
+    });
+    await assert.rejects(
+        () => apiRequest('/api/v1/x/', {origin: ORIGIN}),
+        (error) => error instanceof ApiError
+            && error.status === 401
+            && /登录已失效/.test(error.message),
+    );
+});
+
+test('an html body without a redirect is also treated as an expired session', async () => {
+    stubGlobals(fakeDocument({inputValue: 'token'}));
+    globalThis.fetch = async () => ({
+        ok: true,
+        status: 200,
+        redirected: false,
+        url: 'http://127.0.0.1:8000/api/v1/x/',
+        headers: {get: () => 'text/html; charset=utf-8'},
+        json: async () => { throw new Error('not json'); },
+        text: async () => '<html>login</html>',
+    });
+    await assert.rejects(
+        () => apiRequest('/api/v1/x/', {origin: ORIGIN}),
+        (error) => error instanceof ApiError && error.status === 401,
+    );
+});
+
+test('204 still resolves to null so empty deletes keep working', async () => {
+    stubGlobals(fakeDocument({inputValue: 'token'}));
+    globalThis.fetch = async () => ({
+        ok: true,
+        status: 204,
+        redirected: false,
+        url: 'http://127.0.0.1:8000/api/v1/x/',
+        headers: {get: () => ''},
+        json: async () => { throw new Error('no body'); },
+    });
+    const payload = await apiRequest('/api/v1/x/', {method: 'DELETE', origin: ORIGIN});
+    assert.equal(payload, null);
+});

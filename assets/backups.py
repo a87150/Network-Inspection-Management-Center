@@ -294,7 +294,7 @@ def configuration_backup_diff(request, kind, pk, backup_id):
 
     try:
         asset = _asset(kind, pk)
-        versions = list(list_configuration_backups(asset))
+        versions = list(list_configuration_backups(asset))  # 最新在前
     except Http404:
         return HttpResponseNotFound('未找到设备或配置备份。')
 
@@ -303,10 +303,13 @@ def configuration_backup_diff(request, kind, pk, backup_id):
         return HttpResponseNotFound('未找到配置备份。')
 
     position = next(index for index, item in enumerate(versions) if item.pk == current.pk)
+    # 只有比当前更旧的版本才能当「旧版本」。原来候选里包含比 current 更新的版本，
+    # 选中后旧/新标签和 +/- 行数整个反过来，两版内容有差异时就是错的结论。
+    older_versions = versions[position + 1:]
     against = versions[position + 1] if position + 1 < len(versions) else None
     requested = (request.GET.get('against') or '').strip()
     if requested:
-        against = next((item for item in versions if str(item.pk) == requested), None)
+        against = next((item for item in older_versions if str(item.pk) == requested), None)
         if against is None:
             return HttpResponseNotFound('未找到用于对比的配置版本。')
 
@@ -318,7 +321,7 @@ def configuration_backup_diff(request, kind, pk, backup_id):
             return HttpResponse('备份暂时无法读取或校验失败，请联系管理员。', status=503,
                                 content_type='text/plain; charset=utf-8')
 
-    payload = _diff_bootstrap(kind, asset, current, against, versions, diff)
+    payload = _diff_bootstrap(kind, asset, current, against, older_versions, diff)
     # 换对比版本不下拉整页：岛里重取这一份 JSON，地址栏保持不动。
     if request.GET.get('fragment') == 'diff':
         return JsonResponse(payload)

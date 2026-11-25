@@ -35,6 +35,11 @@ def asset_row_actions(kind, admin):
             entries.append({'kind': 'link', 'label': run_label, 'variant': 'primary',
                             'url': '?task_modal=run&task_single_target=%s' % obj.pk,
                             'single_device_run': True})
+        if admin and kind in {'networks', 'weakcurrent'}:
+            # configuration_backup_list / _diff / _download 三个视图本来就没入口，
+            # 用户只能手打 URL；拿配置的唯一可达路径是列表页的 ZIP 导出。
+            entries.append({'kind': 'link', 'label': '配置备份',
+                            'url': reverse('configuration_backup_list', args=[kind, obj.pk])})
         if admin and device_kind:
             entries.append({
                 'kind': 'form', 'label': '停用' if obj.is_enabled else '启用',

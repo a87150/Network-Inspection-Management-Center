@@ -7,13 +7,16 @@ Django ORM 不支持这两样，所以这里全部走原生 SQL。
   vector  默认。调 embedding + VEC_DISTANCE_COSINE 排序。
   keyword 降级。AI_BASE_URL 没配、或没有 embedding 模型时用，只要数据库能查就能工作。
 """
+import logging
 import re
 import uuid
+
+logger = logging.getLogger(__name__)
 
 from .config import ai_config
 from django.db import connection
 
-from .client import embed
+from .client import AiNotConfigured, embed
 
 _SEARCH_SQL = """
 SELECT id, title, content, category,
@@ -153,10 +156,17 @@ TITLE_COVERAGE = 0.6
 
 
 def _safe_vector_search(question, depth, limit):
-    """向量路自己出问题不该连累关键词路：没配 API、上游超时都退化成空。"""
+    """向量路自己出问题不该连累关键词路：上游超时、维度不符都退化成空。
+
+    「没配 AI 服务」要单独抛出去 —— 那不是故障，是把整条检索都关掉了，
+    吞成空列表只会让用户看到「这个问题不在我的工作范围内」。
+    """
     try:
         return [row for row in search(question, depth) if row["distance"] <= limit]
+    except AiNotConfigured:
+        raise
     except Exception:
+        logger.warning("向量检索失败，本轮退化为关键词检索", exc_info=True)
         return []
 
 

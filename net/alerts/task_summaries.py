@@ -1,10 +1,14 @@
 """One durable notification per completed task, after its target evidence settles."""
+import logging
+
 from django.db import transaction
 from django.db.models import Count, F, Q
 from django.utils import timezone
 
 from net.models import AlertChannel, AlertDelivery, AlertEvent, AlertPolicy, TaskRun
 from net.infrastructure.sanitization import sanitize
+
+logger = logging.getLogger(__name__)
 
 
 TASK_TYPES = ('inspection', 'computer_analysis')
@@ -120,6 +124,8 @@ def process_task_summary(task_run):
                 TaskRun.objects.filter(pk=task.pk).update(alert_summary_processed_at=now, alert_summary_error='')
                 return event
         except Exception as exc:
+            # 只写字段没人看得到：这个列全仓没有任何页面读取，持续失败等于永久静默。
+            logger.warning('任务总结生成失败 task=%s', task_id, exc_info=True)
             TaskRun.objects.filter(pk=task_id, alert_summary_processed_at__isnull=True).update(
                 alert_summary_attempted_at=timezone.now(),
                 alert_summary_error=f'任务总结生成失败（{type(exc).__name__}），稍后自动重试。')

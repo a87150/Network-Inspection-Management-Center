@@ -240,7 +240,7 @@ class CollectionProfilesTests(TestCase):
         enqueue_task(profile,[str(self.device.pk)],TaskRun.Source.MANUAL)
         claimed=claim_next_task('inheritance-test',30)
         def collect(asset,timeout=12,selected_items=None):
-            def snmp(asset,timeout,selected_items):
+            def snmp(asset,timeout,selected_items,total_timeout=None):
                 return collect_network_snmp(asset,timeout,selected_items=selected_items,session_factory=lambda *args:MemorySession(scalars={'1.3.6.1.4.1.999.1.0':6400}))
             return collect_network(asset,timeout,selected_items,snmp_collector=snmp,ssh_collector=lambda *args,**kwargs:CollectionResult(True,'partial','test: no config backup'))
         with patch('net.inspections.executor.collect_network',side_effect=collect):

@@ -107,7 +107,8 @@ def _collect_auto(device, timeout, selected_items, settings, api_collector):
     has_api = bool(getattr(device, 'api_url', ''))
     requested = _requested(selected_items, ping=not has_snmp and not has_api)
     if not requested:
-        return CollectionResult(False, 'success', '未选择采集项目。')
+        # 空请求不能记 success：没连上也没采到东西，成功台数会虚高。
+        return CollectionResult(False, 'failed', '未选择采集项目，本次没有采集任何内容。')
     results = []
     deadline = monotonic() + max(0, float(timeout))
     snmp_items = [item for item in requested if item in {'device_info', 'status_data'}]

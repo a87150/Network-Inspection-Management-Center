@@ -266,6 +266,9 @@ export default {
                     rag_backend: this.settingsForm.rag_backend,
                     retrieval_max_distance: this.settingsForm.retrieval_max_distance,
                     keyword_max_distance: this.settingsForm.keyword_max_distance,
+                    max_history: this.settingsForm.max_history,
+                    summary_trigger: this.settingsForm.summary_trigger,
+                    reasoning_effort: this.settingsForm.reasoning_effort,
                 });
                 this.settingsForm.api_key = '';
                 this.hasApiKey = Boolean(payload && payload.has_api_key);

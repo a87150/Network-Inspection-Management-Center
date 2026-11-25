@@ -145,17 +145,38 @@ def _asset_action_context(request, kind):
     return context
 
 
+def _selected_task(request):
+    """任务栏点了哪个历史任务，就按那一次取记录。
+
+    不解析这个参数的话，标题会换成所选任务、表格行却还是最近一次的结果，
+    用户看历史任务时读到的是别人的数据，导出也一起错。
+    """
+    import uuid
+
+    from net.models import TaskRun
+
+    raw = (request.GET.get('task') or '').strip()
+    if not raw:
+        return None
+    try:
+        pk = uuid.UUID(raw)
+    except ValueError:
+        return None
+    return TaskRun.objects.filter(pk=pk).first()
+
+
 def record_list_context(request, kind):
     """记录页的全部上下文。资产页的 object=records 视图直接复用它。"""
     page = _record_page(kind)
     table_definition = project_record_definition(kind)
     target = request.GET.get('target', '').strip()
+    selected_task = _selected_task(request)
     records, table_state = apply_table_filters(
         request,
-        _infrastructure_records(kind, target=target),
+        _infrastructure_records(kind, target=target, task=selected_task),
         table_definition,
     )
-    preserve_table_parameters(table_state, {'target': target})
+    preserve_table_parameters(table_state, {'target': target, 'task': request.GET.get('task', '')})
     page_obj = Paginator(records, table_state['page_size']).get_page(
         request.GET.get('page'),
     )

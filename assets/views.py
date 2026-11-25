@@ -1,4 +1,6 @@
 import logging
+import uuid
+
 from dataclasses import dataclass
 from io import StringIO
 
@@ -305,7 +307,13 @@ def asset_toggle_enabled(request, kind):
         raise Http404('该资产类型不支持停用')
     if not is_admin(request.user):
         raise PermissionDenied('只有管理员可以停用设备')
-    asset = get_object_or_404(page.model, pk=request.POST.get('pk'))
+    # get_object_or_404 遇到非 UUID 会抛 ValidationError 而不是 DoesNotExist，
+    # 一个手工构造的 POST 就能打出 500。
+    try:
+        pk = uuid.UUID(str(request.POST.get('pk') or ''))
+    except (TypeError, ValueError):
+        raise Http404('设备标识无效')
+    asset = get_object_or_404(page.model, pk=pk)
     asset.is_enabled = not asset.is_enabled
     asset.save(update_fields=['is_enabled'])
     messages.success(request, ('%s 已启用' if asset.is_enabled else '%s 已停用') % asset)

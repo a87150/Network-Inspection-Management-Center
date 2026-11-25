@@ -66,7 +66,9 @@ def build_configuration_zip(assets) -> bytes:
     archive = BytesIO()
     manifest = StringIO(newline='')
     writer = csv.writer(manifest, lineterminator='\r\n')
-    writer.writerow(('asset_id', 'name', 'status', 'filename', 'scope_notice'))
+    # 一列装两种语义是错的：成功行写 scope（running-config），失败行写错误文案。
+    # 拆开之后，读这一列的人不用猜这格到底是什么。
+    writer.writerow(('asset_id', 'name', 'status', 'filename', 'scope', 'notice'))
     used = {'manifest.csv'}
     with ZipFile(archive, 'w', compression=ZIP_DEFLATED) as bundle:
         for asset in assets:
@@ -86,7 +88,7 @@ def build_configuration_zip(assets) -> bytes:
             # Status/scope/filename are already generated from validated metadata
             # and sanitized basenames. Only the raw display name is untrusted.
             values = (str(asset.pk), sanitize_configuration(asset.device_name or asset.ip, secrets=secrets),
-                      result.status, filename, result.message)
+                      result.status, filename, getattr(result, 'scope', '') or '', result.message)
             writer.writerow([_spreadsheet_safe(value) for value in values])
         bundle.writestr('manifest.csv', '\ufeff' + manifest.getvalue())
     return archive.getvalue()

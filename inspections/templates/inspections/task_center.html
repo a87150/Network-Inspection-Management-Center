@@ -38,7 +38,6 @@
                     <span class="metric-card__ready"><span class="status-dot status-dot--ok"></span>异常</span>
                 </div>
                 <div class="metric">{{ error_metrics.total|default:0 }}<span class="metric__unit">条</span></div>
-                <div class="metric-card__detail mt-2">未处理 <span class="{% if error_metrics.pending %}text-danger{% endif %}">{{ error_metrics.pending|default:0 }}</span></div>
                 <div class="metric-card__detail mt-1"><span class="text-secondary">按设备与时间聚合，可逐条跟进</span></div>
                 <div class="metric-card__entry mt-auto pt-3 text-end text-primary">查看异常{% if view == 'errors' %} · 当前{% endif %}</div>
             </div>

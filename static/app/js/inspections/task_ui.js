@@ -260,10 +260,6 @@ async function selectTask(row) {
         table.querySelectorAll('[data-task-row]').forEach((item) => {
             item.classList.toggle('is-selected', item === row);
         });
-        const clean = new URL(window.location.href);
-        clean.searchParams.set('task', row.dataset.taskId);
-        clean.searchParams.delete('fragment');
-        clean.searchParams.delete('page');
         // 选中任务是页面内部切换，不写地址栏。
     } catch (error) {
         region.classList.remove('is-loading');
@@ -273,20 +269,23 @@ async function selectTask(row) {
 }
 
 function bindTaskTable(doc) {
-    const table = doc.querySelector('.inspection-taskbar');
-    if (!table || table.dataset.taskTableBound === '1') return;
-    table.dataset.taskTableBound = '1';
-    table.addEventListener('click', (event) => {
+    // 委托到 document，只绑一次。绑在 .inspection-taskbar 上的话，任务栏翻页
+    // 是 replaceWith 整块换节点，处理器跟着旧节点一起消失 —— 新节点上照样是
+    // 手型光标和 role=link，点了却没有任何反应。
+    const root = doc === document ? document.documentElement : doc;
+    if (!root || root.dataset.taskTableBound === '1') return;
+    root.dataset.taskTableBound = '1';
+    doc.addEventListener('click', (event) => {
         // 详情按钮交给共享的 detail_modal.js，这里只管任务行的原地切换。
         if (event.target.closest?.('[data-detail-modal]')) return;
         const row = event.target.closest?.('[data-task-row]');
-        if (!row) return;
+        if (!row || !row.closest('.inspection-taskbar')) return;
         selectTask(row);
     });
-    table.addEventListener('keydown', (event) => {
+    doc.addEventListener('keydown', (event) => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         const row = event.target.closest?.('[data-task-row]');
-        if (!row) return;
+        if (!row || !row.closest('.inspection-taskbar')) return;
         event.preventDefault();
         row.click();
     });

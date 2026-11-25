@@ -4,6 +4,8 @@ from django import forms
 from django.db.models import Q
 from net.secret_masks import MASKED_SECRET, MaskedSecretInput
 from django.contrib import admin
+from django.contrib.admin.utils import NestedObjects
+from django.db import router
 
 from net.models.topology import (
     NetworkTopologyInterface,
@@ -148,6 +150,36 @@ class DeleteSelectedMixin:
     """
 
     actions = ('delete_selected',)
+
+    # 设备自带的拓扑数据：delete_queryset 会按依赖顺序先清掉它们。
+    TOPOLOGY_OWNED = (
+        NetworkTopologyInterface, NetworkTopologyObservation, TopologyDiscoveryBatch,
+    )
+
+    def get_deleted_objects(self, objs, request):
+        """让拓扑数据算作「一起删掉」，别把它当成挡住删除的理由。
+
+        Django 的删除确认页只要看到 protected 非空就直接拒绝，根本不调
+        delete_queryset —— 于是下面那套清理顺序永远轮不到。这里在确认页
+        阶段就先判断：受保护对象如果全是被设备独占的拓扑行，就清空拦截。
+        还有别的受保护对象时照旧走父类结果，正常拦。
+        """
+        result = super().get_deleted_objects(objs, request)
+        to_delete, model_count, perms_needed, protected = result
+        if not protected:
+            return result
+        rows = list(objs)
+        if not rows:
+            return result
+        using = router.db_for_write(type(rows[0]), instance=rows[0])
+        probe = NestedObjects(using=using, origin=rows)
+        probe.collect(rows)
+        if any(not isinstance(obj, self.TOPOLOGY_OWNED) for obj in probe.protected):
+            return result
+        # protected 被清空后，父类里「perms_needed = perms_needed or protected」
+        # 可能把那段文字列表塞进了 perms_needed，这里只保留真正的权限集合。
+        keep_perms = perms_needed if isinstance(perms_needed, set) else set()
+        return to_delete, model_count, keep_perms, []
 
     def delete_queryset(self, request, queryset):
         device_ids = list(queryset.values_list('pk', flat=True))

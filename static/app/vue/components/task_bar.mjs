@@ -75,7 +75,7 @@ export default {
                             <td>[[ row.source_label ]]</td>
                             <td class="text-nowrap">[[ row.created_at ]]</td>
                             <td class="text-nowrap">[[ row.finished_at || '—' ]]</td>
-                            <td>[[ row.total ]]<span v-if="row.fetch_success" class="inspection-taskbar__scan-note">获取成功 [[ row.fetch_success ]]</span><span v-if="row.integrity_warning" class="inspection-taskbar__integrity-warning">[[ row.integrity_warning ]]</span></td>
+                            <td>[[ row.total ]]<span v-if="row.integrity_warning" class="inspection-taskbar__integrity-warning">[[ row.integrity_warning ]]</span></td>
                             <td><span class="text-success">[[ row.normal ]]</span></td>
                             <td><span :class="row.abnormal ? 'text-danger fw-semibold' : ''">[[ row.abnormal ]]</span></td>
                             <td>[[ row.pending ]]</td>

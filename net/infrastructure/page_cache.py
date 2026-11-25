@@ -96,6 +96,8 @@ class PageCacheMiddleware(MiddlewareMixin):
             _page_cache_generation(),
             request.headers.get('Accept-Language', ''),
             request.headers.get('Accept', ''),
+            # 缓存里存的是压缩前的内容，但不同编码偏好的响应头不一样，分开存。
+            request.headers.get('Accept-Encoding', ''),
         ]
 
     def _key(self, request):
@@ -154,7 +156,10 @@ class PageCacheMiddleware(MiddlewareMixin):
                 or response.has_header('Content-Disposition')
                 or response.get('Content-Type', '').split(';', 1)[0].strip().lower() != 'text/html'
                 or 'no-store' in _directives(response.get('Cache-Control', ''))
-                or _directives(response.get('Vary', '')) - {'', 'cookie', 'accept-language'}
+                # GZipMiddleware 在 PageCacheMiddleware 之后，process_response 反向执行时
+                # 它会先给响应加上 Vary: Accept-Encoding。浏览器都带这个头，不放进允许
+                # 集合的话缓存对真实浏览器一次都写不进去。
+                or _directives(response.get('Vary', '')) - {'', 'cookie', 'accept-language', 'accept-encoding'}
                 or self._key(request) != key):
             return response
         # Store a plain snapshot, never a request, lazy template, or response

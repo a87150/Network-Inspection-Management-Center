@@ -108,6 +108,27 @@ def device_overview(kind, model):
     return metrics
 
 
+def _device_status_counts(kind, page):
+    """每台设备的当前状态：总数取资产表，异常取最新一条巡检记录。"""
+    from django.db.models import OuterRef, Subquery
+
+    asset = page.asset_field
+    asset_model = page.model._meta.get_field(asset).related_model
+    latest_severity = (
+        page.model.objects
+        .filter(**{asset: OuterRef('pk')})
+        .order_by('-created_at', '-pk')
+        .values('report_severity')[:1]
+    )
+    queryset = asset_model.objects.annotate(_latest_severity=Subquery(latest_severity))
+    return {
+        'devices': queryset.count(),
+        'abnormal': queryset.filter(
+            _latest_severity__in=('warning', 'critical'),
+        ).count(),
+    }
+
+
 def record_block_lines(kind):
     """巡检记录方块的统计行：任务总数、成功数、涉及设备数。
 
@@ -126,20 +147,17 @@ def record_block_lines(kind):
     done = stats['done'] or 0
     rate = round(done * 100 / tasks, 1) if tasks else 0.0
     # 设备侧的现状：和 PC 方块一样的口径，正常/异常按最新快照的严重级别分。
-    from inspections.result_query import infrastructure_queryset
     from inspections.records import RECORD_PAGES
 
     page = RECORD_PAGES.get(kind)
     devices = normal = abnormal = 0
     if page:
-        device_stats = infrastructure_queryset(kind, page).aggregate(
-            devices=Count('pk'),
-            abnormal=Count(
-                'pk', filter=Q(report_severity__in=('warning', 'critical')),
-            ),
-        )
-        devices = device_stats['devices'] or 0
-        abnormal = device_stats['abnormal'] or 0
+        # 记录表一行是一次巡检，不是一台设备：直接 Count('pk') 会让重跑过的
+        # 设备重复计数（12 台各跑 3 次会显示成 36 台）。台数取资产表，
+        # 异常按每台设备**最新**那条记录的严重级别判断，和列表页口径一致。
+        device_stats = _device_status_counts(kind, page)
+        devices = device_stats['devices']
+        abnormal = device_stats['abnormal']
         normal = devices - abnormal
     device_rate = round(abnormal * 100 / devices, 1) if devices else 0.0
     return [

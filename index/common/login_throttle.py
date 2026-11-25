@@ -50,6 +50,11 @@ def record_failure(username, address):
     for kind, value in _pairs(username, address):
         if not value:
             continue
+        # 0 表示「这一路关掉」。只对用户名上限做过早退，IP 上限漏了：
+        # 照抄「设 0 关掉」的写法会让 count >= 0 恒真，任何一次输错口令
+        # 就把整个出口 IP 锁住，共用 NAT 的办公室全员登不进来。
+        if not limits[kind]:
+            continue
         key = _key('fail-' + kind, value)
         try:
             count = cache.incr(key)
@@ -63,9 +68,13 @@ def record_failure(username, address):
 
 
 def clear(username, address):
-    """A successful login lifts the counters immediately."""
+    """A successful login lifts the counters for **this account** only.
+
+    IP 计数不能一起清：只要手里有一个有效账号，猜几次成功登录一次就能把
+    出口 IP 的失败次数抹平，撞库上限形同不存在。IP 侧交给窗口自然过期。
+    """
     for kind, value in _pairs(username, address):
-        if value:
+        if value and kind == 'user':
             _set(_key('fail-' + kind, value), 0, 1)
             _set(_key('lock-' + kind, value), 0, 1)
 

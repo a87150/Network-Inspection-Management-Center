@@ -38,17 +38,24 @@ def _configuration_response(asset):
     return _response(result.content, result.media_type, result.filename)
 
 
+MAX_ZIP_ASSETS = 500
+
+
 def _selected_ids(request):
+    """返回 (ids, error)。ids 为 None 表示没带筛选，导出全部。"""
     raw = request.GET.get('target_ids')
     if raw is None:
-        return None
+        return None, None
     values = [value.strip() for value in raw.split(',') if value.strip()]
-    if not values or len(values) > 500:
-        return ()
+    if not values:
+        return (), '请选择有效的设备。'
+    if len(values) > MAX_ZIP_ASSETS:
+        # 超限不是「没选」：原来两件事都回「请选择有效的设备」，用户按提示重选还是过不去。
+        return (), '一次最多导出 %d 台设备，当前选了 %d 台。' % (MAX_ZIP_ASSETS, len(values))
     try:
-        return tuple(dict.fromkeys(UUID(value) for value in values))
+        return tuple(dict.fromkeys(UUID(value) for value in values)), None
     except (TypeError, ValueError):
-        return ()
+        return (), '设备标识无效，请刷新列表后重新选择。'
 
 
 @never_cache
@@ -64,10 +71,10 @@ def configuration_download(request, kind, pk):
 @require_GET
 def configuration_zip(request, kind):
     model = _model(kind)
-    selected_ids = _selected_ids(request)
+    selected_ids, selection_error = _selected_ids(request)
+    if selection_error is not None:
+        return _response(selection_error, 'text/plain; charset=utf-8', status=400)
     if selected_ids is not None:
-        if not selected_ids:
-            return _response('请选择有效的设备。', 'text/plain; charset=utf-8', status=400)
         assets = model.objects.filter(pk__in=selected_ids)
         if len(selected_ids) == 1:
             asset = assets.first()

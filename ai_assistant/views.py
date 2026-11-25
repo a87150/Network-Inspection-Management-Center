@@ -5,13 +5,14 @@
 import re
 
 from django.contrib.auth.decorators import login_required
+from django.db import DatabaseError
 from django.db.models import Sum
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET, require_POST
 
 from .client import AiNotConfigured, AiUpstreamError, chat as call_model
-from .config import ai_config, masked_summary, save_settings
+from .config import ai_config, masked_summary, save_settings, sync_setting_from_provider
 from index.common.access import admin_required, is_admin
 from .models import Conversation, Message
 
@@ -41,6 +42,8 @@ def split_chunks(content, limit=None):
             continue
         if buffer:
             chunks.append(buffer)
+            # 不清空的话，下面按行切时会把新段的行拼到刚才那段后面，造成重复入库。
+            buffer = ""
         if len(paragraph) <= limit:
             buffer = paragraph
             continue
@@ -173,7 +176,8 @@ def _maybe_summarize(conversation):
         return
     transcript = "\n".join("%s：%s" % (m.role, m.content) for m in stale)
     try:
-        summary = call_model([
+        # call_model 返回 (text, usage)，只取正文。
+        summary, _usage = call_model([
             {"role": "system", "content": (
                 "把下面的运维对话压成三句话以内的摘要。"
                 "必须保留：涉及的设备名、用户的问题、已经排查过的动作。"
@@ -183,9 +187,13 @@ def _maybe_summarize(conversation):
     except (AiNotConfigured, AiUpstreamError):
         # 压缩失败不该让提问失败，下一轮再试。
         return
-    conversation.summary = (conversation.summary + "\n" + summary).strip()
-    conversation.summarized_count = total - config["MAX_HISTORY"]
-    conversation.save(update_fields=["summary", "summarized_count", "updated_at"])
+    try:
+        conversation.summary = (conversation.summary + "\n" + summary).strip()
+        conversation.summarized_count = total - config["MAX_HISTORY"]
+        conversation.save(update_fields=["summary", "summarized_count", "updated_at"])
+    except (TypeError, DatabaseError):
+        # 压缩是旁路：写不进去就跳过这一轮，别把已经存好的回答变成 500。
+        return
 
 
 def _build_reference(hits):
@@ -374,6 +382,8 @@ def provider_save(request):
     if not AiProvider.objects.exclude(pk=row.pk).exists() and not row.is_active:
         row.is_active = True
     row.save()
+    if row.is_active:
+        sync_setting_from_provider()
     return JsonResponse({"ok": True, "id": row.id.hex})
 
 
@@ -396,6 +406,7 @@ def provider_activate(request):
     AiProvider.objects.update(is_active=False)
     target.is_active = True
     target.save(update_fields=["is_active"])
+    sync_setting_from_provider()
     return JsonResponse({"ok": True, "name": target.name})
 
 
@@ -422,6 +433,8 @@ def provider_delete(request):
         if fallback:
             fallback.is_active = True
             fallback.save(update_fields=["is_active"])
+    if was_active:
+        sync_setting_from_provider()
     return JsonResponse({"ok": True})
 
 
@@ -622,6 +635,7 @@ def _parse_table(text):
     甚至带换行都很常见，手写的状态机在「字段内换行」这一项上必错。
     """
     import csv
+    import io
 
     lines = text.splitlines()
     if not lines:
@@ -632,7 +646,9 @@ def _parse_table(text):
     except csv.Error:
         dialect = csv.excel_tab if "\t" in (lines[0] if lines else "") else csv.excel
     rows = []
-    for cells in csv.reader(lines, dialect):
+    # 交给 csv 读原始文本而不是已切好的行：splitlines() 已经把行尾换行剥掉，
+    # 解析器拼接跨行引号字段时插不回分隔符，多行的排查记录会被粘成一整行。
+    for cells in csv.reader(io.StringIO(text), dialect):
         if not any((cell or "").strip() for cell in cells):
             continue
         rows.append([(cell or "").strip() for cell in cells])
@@ -652,10 +668,25 @@ def _parse_table(text):
 @require_POST
 @admin_required
 def knowledge_delete(request):
+    import json
+    import uuid
+
     from .models import KnowledgeDoc
 
-    doc_id = (request.POST.get("id") or "").strip()
+    # 前端统一发 JSON（见 static/app/vue/api.mjs），读 request.POST 永远是空。
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except ValueError:
+        return JsonResponse({"error": "请求体不是合法 JSON"}, status=400)
+    raw = (payload.get("id") or "").strip()
+    try:
+        doc_id = uuid.UUID(raw)
+    except (AttributeError, TypeError, ValueError):
+        # 空串或乱填的 id 不该抛 ValidationError 变成 500。
+        return JsonResponse({"error": "找不到这条知识"}, status=404)
     deleted, _ = KnowledgeDoc.objects.filter(pk=doc_id).delete()
+    if not deleted:
+        return JsonResponse({"error": "找不到这条知识"}, status=404)
     return JsonResponse({"ok": True, "deleted": deleted})
 
 

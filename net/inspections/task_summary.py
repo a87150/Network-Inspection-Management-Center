@@ -175,7 +175,6 @@ def summarize_task(task) -> dict:
         'abnormal': 0,
         'pending': 0,
         'cancelled': 0,
-        'fetch_success': 0,
         'ignored': 0,
     }
     if hasattr(task, '_summary_counts'):

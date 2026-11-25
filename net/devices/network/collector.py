@@ -121,8 +121,13 @@ def _merge_network_results(requested, results, *, item_completed=None):
                 completed.discard('lldp_neighbors')
                 if data['lldp_neighbors']['status'] == 'partial':
                     partial_items.add('lldp_neighbors')
+    if not requested:
+        return CollectionResult(False, 'failed', '未选择采集项目，本次没有采集任何内容。', {}, {}, duration_ms)
     missing = [item for item in requested if item not in completed]
     status = 'failed' if missing and not (completed or partial_items) else 'partial' if missing else 'success'
+    if status == 'success' and not reachable:
+        # 不可达不可能「成功」。放过去会让任务成功率和成功台数都虚高。
+        status = 'failed'
     message = '缺少有效采集证据：' + ', '.join(missing) if missing else ''
     if messages:
         message = '; '.join(([message] if message else []) + messages)
@@ -170,7 +175,11 @@ def collect_network(
                 False, 'failed', '未配置网络设备 SNMP 凭据',
             )
         else:
-            snmp_result = snmp_collector(device, timeout, selected_items=snmp_items)
+            # 接口采集要顺序 walk 十几张表，只靠每 PDU 的超时挡不住慢设备：
+            # 单台能跑好几分钟，占死 4 线程的 worker 池，其余目标全排队。
+            snmp_result = snmp_collector(
+                device, timeout, selected_items=snmp_items, total_timeout=max(5, timeout),
+            )
         if 'lldp_neighbors' in snmp_items and 'lldp_neighbors' not in (snmp_result.data or {}):
             snmp_result.data['lldp_neighbors'] = {
                 'status': 'failed', 'complete': False, 'protocols': ['snmp_lldp'],

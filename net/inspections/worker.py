@@ -135,14 +135,18 @@ class TaskWorker:
                         )
                 return executor(target, worker_id=self.worker_id, lease_guard=lease_guard)
             except BudgetTimeout:
-                if lease_guard.is_set():
-                    return None
-                return persist_execution_failure(
-                    target, worker_id=self.worker_id,
-                    error='等待设备命令行并发配额超时，本次未建立连接；'
-                          '可调低巡检并发或提高 NET_SSH_CONCURRENCY。',
-                    lease_guard=lease_guard,
-                )
+                # 配额等不到不等于设备采集失败：这台设备根本没连过。
+                # 记成 failed 会污染异常率，而且不会自动重试。保持 RUNNING
+                # 不落失败态，租约到期后由 recover_expired_tasks 重新排队。
+                # ponytail: 重排要等一个租约周期（默认几十秒）；如果这个等待
+                # 变得显眼，再给 TaskTargetRun 加显式的 defer（改回 QUEUED +
+                # available_at 退避），现在不值得为它加一层状态。
+                if not lease_guard.is_set():
+                    logging.getLogger(__name__).warning(
+                        'task=%s target=%s: 等待命令行并发配额超时，本次未执行，等租约重排',
+                        target.task_id, target.pk,
+                    )
+                return None
             except Exception as exc:
                 database_message = ''
                 if isinstance(exc, OperationalError):
@@ -190,7 +194,12 @@ class TaskWorker:
                             lease_guard=lease_guard,
                         )
                     except Exception:
-                        # Leave unfinished state recoverable by the existing lease contract.
+                        # 失败状态本身写不进去时最不能静默：target 会停在 RUNNING，
+                        # 三次租约过期后被标成「租约过期」，真实原因彻底丢失。
+                        logging.getLogger(__name__).exception(
+                            'task=%s target=%s: 写入失败状态时出错',
+                            target.task_id, target.pk,
+                        )
                         return None
         finally:
             try:

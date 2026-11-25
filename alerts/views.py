@@ -226,7 +226,7 @@ def alert_list(request):
             'page_size': PAGE_SIZE,
             'rows': row_payloads(page.object_list, now),
             'metrics': window_metrics(now),
-            'can_administer': True,
+            'can_administer': is_admin(request.user),
         }
     return render(request, 'alerts/list.html', context)
 

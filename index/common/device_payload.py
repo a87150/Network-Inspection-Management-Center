@@ -172,9 +172,9 @@ def build(request, *, kind, title, model, empty_title, only=None):
     )
     assets.update(tableKey=kind, label=title, regionLabel=title + '数据表',
                   csrf=get_token(request))
-    if admin:
-        # 维护窗口批处理靠行首勾选框，提交时由 maintenance_window.js 收集。
-        assets['selectAttr'] = 'data-device-selection-target'
+    # 勾选列是通用能力（反选、全选、导出所选），和 assets/views.py 保持一致；
+    # 提交任务的入口另有 task_allow_target_selection 控制，不靠这里挡。
+    assets['selectAttr'] = 'data-device-selection-target'
     return workspace.bootstrap(
         page={'key': kind, 'title': title, 'heading': '台账与巡检记录', 'view': {'records': 'logs', 'logs': 'logs', 'access': 'access'}.get(request.GET.get('object') or '', 'assets')},
         blocks=[

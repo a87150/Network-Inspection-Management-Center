@@ -126,7 +126,9 @@ def _logs_table(request, logs):
         'exportUrl': reverse('table_export', args=[definition.key])
                      + _export_query(request, 'logs_page'),
         'visibleColumns': {field.key: bool(field.default_visible) for field in definition.fields},
-        'shownFilters': {field.key: bool(field.default_filter)
+        # 地址栏带了 filter_* 时筛选其实是生效的，控件也要显示成勾选状态，
+        # 否则用户以为没应用会重复操作。和 assets/payloads.py 保持一致。
+        'shownFilters': {field.key: bool(field.default_filter) or field.key in state['filters']
                          for field in definition.fields if field.filterable},
     })
     table.pop('page_param', None)

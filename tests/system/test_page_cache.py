@@ -121,6 +121,31 @@ class PageCacheTests(SimpleTestCase):
         self.assertIn('no-store', second['Cache-Control'])
         self.assertIn('Cookie', second['Vary'])
 
+    def test_gzip_vary_header_does_not_disable_caching(self):
+        """GZipMiddleware 会给响应加 Vary: Accept-Encoding，不该因此一次都不缓存。
+
+        GZip 排在 PageCache 之后，process_response 反向执行时它先跑，
+        所以真实浏览器拿到的响应都带这个 Vary。
+        """
+        global render_page
+        render_page = lambda request: HttpResponse(
+            'display', headers={'Vary': 'Accept-Encoding'},
+        )
+
+        first = self.client.get('/', HTTP_ACCEPT_ENCODING='gzip, deflate')
+        second = self.client.get('/', HTTP_ACCEPT_ENCODING='gzip, deflate')
+
+        self.assertEqual(second['X-Render'], first['X-Render'])
+        self.assertEqual(calls, 1)
+
+    def test_accept_encoding_variants_are_cached_separately(self):
+        before = calls
+        gz = self.client.get('/', HTTP_ACCEPT_ENCODING='gzip')
+        self.assertEqual(calls, before + 1)
+        plain = self.client.get('/', HTTP_ACCEPT_ENCODING='identity')
+        self.assertEqual(calls, before + 2)
+        self.assertNotEqual(gz['X-Render'], plain['X-Render'])
+
     def test_each_allowlisted_display_route_hits(self):
         for url in ('/', '/statistics/', '/detail/', '/person/'):
             with self.subTest(url=url):

@@ -55,9 +55,19 @@ def diff_texts(left_text, right_text) -> dict:
                 "text": right_lines[index],
             })
             added += 1
+    # 差异集中在很靠后的位置时，从头切会让用户看到「新增 3 行」却在表里找不到
+    # 任何变化。截断时先保住变更行，上下文行让位。
+    if len(rows) > MAX_ROWS:
+        changed_rows = [row for row in rows if row.get("kind") != "context"]
+        context_rows = [row for row in rows if row.get("kind") == "context"]
+        kept = changed_rows[:MAX_ROWS]
+        if len(kept) < MAX_ROWS:
+            kept = kept + context_rows[:MAX_ROWS - len(kept)]
+            kept.sort(key=lambda row: (row.get("right") or row.get("left") or 0))
+        rows = kept
     return {
-        "rows": rows[:MAX_ROWS],
-        "truncated": len(rows) > MAX_ROWS,
+        "rows": rows,
+        "truncated": added + removed > MAX_ROWS or len(rows) >= MAX_ROWS and added + removed > len(rows),
         "added": added,
         "removed": removed,
         "changed": bool(added or removed),

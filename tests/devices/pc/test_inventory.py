@@ -347,6 +347,42 @@ class AssetInventoryRefreshTests(TestCase):
         self.assertFalse(hasattr(network, 'active_port_count'))
         self.assertFalse(hasattr(network, 'cpu_usage_percent'))
 
+    def test_port_and_vlan_counts_come_from_complete_tables(self):
+        """采集器不产出 port_count/vlan_count，得从表长度算。"""
+        from net.devices.inventory import refresh_asset_inventory
+
+        network = Network_Device.objects.create(ip='192.0.2.94')
+        changed = refresh_asset_inventory(network, {
+            'interface_status': {
+                'status': 'success',
+                'interfaces': [{'name': 'Gi0/%d' % index} for index in range(48)],
+            },
+            'vlan_status': {
+                'status': 'success',
+                'vlans': [{'id': index} for index in range(12)],
+            },
+        })
+        network.refresh_from_db()
+
+        self.assertEqual(network.port_count, 48)
+        self.assertEqual(network.vlan_count, 12)
+        self.assertEqual(changed, {'port_count', 'vlan_count'})
+
+    def test_partial_interface_table_does_not_write_a_count(self):
+        """采到一半的接口表不能当成设备的真实端口数。"""
+        from net.devices.inventory import refresh_asset_inventory
+
+        network = Network_Device.objects.create(ip='192.0.2.95')
+        refresh_asset_inventory(network, {
+            'interface_status': {
+                'status': 'partial',
+                'interfaces': [{'name': 'Gi0/1'}, {'name': 'Gi0/2'}],
+            },
+        })
+        network.refresh_from_db()
+
+        self.assertIsNone(network.port_count)
+
 
 class PeopleInventoryDateSyncTests(TestCase):
     def test_directory_sync_updates_dates_only_when_the_provider_supplies_them(self):

@@ -219,7 +219,7 @@ class HomeTaskbarTests(TestCase):
         self.assertEqual(
             sum(
                 summary[key]
-                for key in ('normal', 'abnormal', 'pending', 'cancelled', 'fetch_success')
+                for key in ('normal', 'abnormal', 'pending', 'cancelled')
             ),
             summary['total'],
         )
@@ -263,7 +263,7 @@ class HomeTaskbarTests(TestCase):
         self.assertEqual(
             sum(
                 summary[key]
-                for key in ('normal', 'abnormal', 'pending', 'cancelled', 'fetch_success')
+                for key in ('normal', 'abnormal', 'pending', 'cancelled')
             ),
             summary['total'],
         )

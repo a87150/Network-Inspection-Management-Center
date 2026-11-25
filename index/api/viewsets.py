@@ -5,6 +5,8 @@ list response and the page's hydrated first paint cannot drift apart.
 """
 from django.core.paginator import Paginator
 from django.utils import timezone
+from django.core.exceptions import ValidationError
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -61,10 +63,15 @@ class MaintenanceWindowViewSet(mixins.DestroyModelMixin, viewsets.GenericViewSet
         serializer = MaintenanceWindowCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        created = create_windows(
-            data["target_type"], [str(item) for item in data["target_ids"]],
-            data["starts_at"], data["ends_at"], data.get("note", ""),
-        )
+        try:
+            created = create_windows(
+                data["target_type"], [str(item) for item in data["target_ids"]],
+                data["starts_at"], data["ends_at"], data.get("note", ""),
+            )
+        except ValidationError as exc:
+            # create_windows 是 HTML 与 REST 共用的校验点，它抛的是 Django 的
+            # ValidationError，DRF 不认，直接冒出去会变成 500。
+            raise DRFValidationError({"target_ids": list(exc.messages)}) from exc
         return Response(
             {"created": len(created), "ids": [str(window.pk) for window in created]},
             status=status.HTTP_201_CREATED,

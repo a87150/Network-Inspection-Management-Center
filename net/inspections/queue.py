@@ -312,6 +312,9 @@ def _enqueue_task(profile, target_ids, source, overrides=None, *, _frozen_parent
         not isinstance(item, str) or not item.strip() for item in selected_items
     ) or len(selected_items) != len(set(selected_items)):
         raise ValidationError({'selected_items': '检查项目必须是无重复的非空字符串列表。'})
+    if not selected_items:
+        # 空列表过去能建出任务：服务器会正常连一次 SSH、循环为空、记 success。
+        raise ValidationError({'selected_items': '检查项目不能为空。'})
     parameters = _json_object_copy(overrides.get('parameters', {}), 'parameters')
     available_at = overrides.get('available_at', timezone.now())
     if not isinstance(available_at, datetime) or timezone.is_naive(available_at):

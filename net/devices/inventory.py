@@ -145,6 +145,20 @@ def refresh_asset_inventory(asset, normalized_result) -> set[str]:
                 if isinstance(value, str) and value.strip():
                     source['os_version'] = ' '.join(value.split())[:1024]
                     break
+        # 端口数 / VLAN 数采集器不直接产出，得从表长度算。只认 complete 的表：
+        # 部分成功的接口表按条数写进去，会把「采到一半」当成设备的真实端口数。
+        for result_key, list_key, field_name in (
+            ('interface_status', 'interfaces', 'port_count'),
+            ('vlan_status', 'vlans', 'vlan_count'),
+        ):
+            table = normalized_result.get(result_key)
+            if not isinstance(table, dict):
+                continue
+            if table.get('status') not in (None, 'success') or table.get('complete') is False:
+                continue
+            rows = table.get(list_key)
+            if isinstance(rows, list):
+                source[field_name] = len(rows)
     changed_fields = set()
     for field_name in allowed_fields:
         value = _value_for_field(field_name, source.get(field_name))
