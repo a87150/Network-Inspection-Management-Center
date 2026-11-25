@@ -73,6 +73,12 @@ def chat(messages):
         payload["reasoning_effort"] = config["REASONING_EFFORT"]
     data = _post("/chat/completions", payload)
     try:
-        return data["choices"][0]["message"]["content"] or ""
+        text = data["choices"][0]["message"]["content"] or ""
     except (KeyError, IndexError, TypeError) as error:
         raise AiUpstreamError("chat 响应结构不认识") from error
+    # usage 是可选字段：有的兼容端点不返回，页面按 0 处理。
+    usage = data.get("usage") or {}
+    return text, {
+        "prompt_tokens": int(usage.get("prompt_tokens") or 0),
+        "completion_tokens": int(usage.get("completion_tokens") or 0),
+    }

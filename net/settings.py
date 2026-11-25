@@ -101,8 +101,10 @@ AI_CONFIG = {
     "RAG_BACKEND": os.getenv("AI_RAG_BACKEND", "hybrid"),
     "RETRIEVAL_TOP_K": 5,
     "RETRIEVAL_MAX_DISTANCE": float(os.getenv("AI_RETRIEVAL_MAX_DISTANCE", "0.55")),
-    # keyword 模式的阈值：1 - 命中率，问句越长天然越高，比向量阈值宽。
-    "KEYWORD_MAX_DISTANCE": float(os.getenv("AI_KEYWORD_MAX_DISTANCE", "0.75")),
+    # keyword 模式的阈值：1 - 命中率。默认 1.0 = 不卡。
+    # 0.75 等于要求命中 25% 的查询词，中文 2-gram 切出词多，短查询容易全军覆没。
+    # 初期靠 RETRIEVAL_MAX_DISTANCE 兜底，看「测试检索」的结果再决定收紧。
+    "KEYWORD_MAX_DISTANCE": float(os.getenv("AI_KEYWORD_MAX_DISTANCE", "1.0")),
     "MAX_QUESTION_LEN": 2000,
     "MAX_ANSWER_LEN": 4000,
 }

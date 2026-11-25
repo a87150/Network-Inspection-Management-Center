@@ -5,6 +5,7 @@
 import re
 
 from django.contrib.auth.decorators import login_required
+from django.db.models import Sum
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET, require_POST
@@ -163,13 +164,17 @@ def chat(request):
     question = (payload.get("message") or "").strip()
     conversation = _conversation(request.user)
 
-    def reply(text, blocked, sources=None):
+    def reply(text, blocked, sources=None, usage=None):
+        usage = usage or {}
+        # 提问那条记 0：本轮 token 归到回答上，避免一轮算两次。
         Message.objects.create(
             conversation=conversation, role="user", content=question,
         )
         Message.objects.create(
             conversation=conversation, role="assistant", content=text,
             blocked=blocked, sources=sources or [],
+            prompt_tokens=usage.get("prompt_tokens", 0),
+            completion_tokens=usage.get("completion_tokens", 0),
         )
         return JsonResponse({
             "answer": text,
@@ -205,7 +210,8 @@ def chat(request):
         "content": _build_reference(hits) + "\n\n用户问题：" + question,
     })
     try:
-        answer = postcheck(call_model(messages))
+        raw_answer, usage = call_model(messages)
+        answer = postcheck(raw_answer)
     except AiNotConfigured:
         return reply(UNCONFIGURED, True)
     except AiUpstreamError:
@@ -214,7 +220,7 @@ def chat(request):
     # 不给用户看距离：向量距离和关键词得分量纲不同，混在一起显示只会误导。
     # via 说明这条依据是字面命中还是语义命中，对运维判断更有用。
     sources = [{"title": hit["title"], "via": hit.get("via", "")} for hit in hits]
-    response = reply(answer, False, sources)
+    response = reply(answer, False, sources, usage)
     _maybe_summarize(conversation)
     return response
 
@@ -229,10 +235,22 @@ def history(request):
             "content": item.content,
             "blocked": item.blocked,
             "sources": item.sources,
+            "prompt_tokens": item.prompt_tokens,
+            "completion_tokens": item.completion_tokens,
         }
         for item in conversation.messages.order_by("created_at")
     ]
-    return JsonResponse({"messages": messages})
+    totals = conversation.messages.aggregate(
+        prompt=Sum("prompt_tokens"), completion=Sum("completion_tokens"),
+    )
+    return JsonResponse({
+        "messages": messages,
+        "usage": {
+            "prompt_tokens": totals["prompt"] or 0,
+            "completion_tokens": totals["completion"] or 0,
+            "total_tokens": (totals["prompt"] or 0) + (totals["completion"] or 0),
+        },
+    })
 
 
 @login_required
@@ -373,31 +391,25 @@ def knowledge_import(request):
 
 
 def _parse_table(text):
-    """把 CSV 或 TSV 文本切成三列。首行是表头就跳过。
+    """CSV / TSV 切成三列。首行是表头就跳过。
 
-    Excel 复制出来是制表符，导出 CSV 是逗号。引号包裹的字段要支持，
-    否则正文里带逗号的一条知识会被切成两半。
+    用标准库 csv 而不是自己 split：运维文档正文里带逗号、带引号、
+    甚至带换行都很常见，手写的状态机在「字段内换行」这一项上必错。
     """
-    lines = [line for line in text.splitlines() if line.strip()]
+    import csv
+
+    lines = text.splitlines()
     if not lines:
         return []
-    tabbed = "\t" in lines[0]
+    sample = "\n".join(lines[:5])
+    try:
+        dialect = csv.Sniffer().sniff(sample, delimiters=",\t;")
+    except csv.Error:
+        dialect = csv.excel_tab if "\t" in (lines[0] if lines else "") else csv.excel
     rows = []
-    for line in lines:
-        if tabbed:
-            cells = line.split("\t")
-        else:
-            cells, cell, quoted = [], "", False
-            for char in line:
-                if char == '"':
-                    quoted = not quoted
-                    continue
-                if char == "," and not quoted:
-                    cells.append(cell)
-                    cell = ""
-                    continue
-                cell += char
-            cells.append(cell)
+    for cells in csv.reader(lines, dialect):
+        if not any((cell or "").strip() for cell in cells):
+            continue
         rows.append([(cell or "").strip() for cell in cells])
     if rows and rows[0] and rows[0][0].lower() in {"title", "标题", "名称"}:
         rows = rows[1:]

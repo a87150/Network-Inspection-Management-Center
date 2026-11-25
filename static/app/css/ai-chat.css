@@ -503,3 +503,38 @@
     padding: 0 .85rem;
     white-space: nowrap;
 }
+
+/* 统计与工具条同一排，靠左；下拉和发送在右。 */
+.ai-chat__stat {
+    color: #93a4b3;
+    font-size: .74rem;
+    line-height: 1.6;
+    white-space: nowrap;
+}
+
+/* 用 auto 外边距把统计钉在左边、控件推到右边，
+   不再依赖中间那个空 span 的 flex: 1（在 grid/flex 混合下它会塌成 0 宽）。 */
+.ai-chat__composer-bar {
+    justify-content: flex-start;
+}
+
+.ai-chat__composer-bar .ai-chat__stat:first-child {
+    margin-right: auto;
+}
+
+.ai-chat__composer-bar .ai-chat__spacer {
+    display: none;
+}
+
+/* 覆盖到底：工具条必须是 flex，第一个统计吃掉全部剩余宽度，
+   后面的下拉和发送才会被推到最右。 */
+.ai-chat .ai-chat__composer .ai-chat__composer-bar {
+    display: flex !important;
+    width: 100%;
+}
+
+.ai-chat .ai-chat__composer .ai-chat__composer-bar .ai-chat__stat:first-child {
+    flex: 1 1 auto !important;
+    margin-right: 0 !important;
+    text-align: left;
+}

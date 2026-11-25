@@ -104,7 +104,7 @@ class ChatTests(TestCase):
     def test_hit_returns_answer_and_sources(self):
         hits = [{"id": "1", "title": "端口排查", "content": "先看对端", "category": "手册", "distance": 0.2}]
         with patch("ai_assistant.retrieval.retrieve", return_value=hits), \
-                patch("ai_assistant.views.call_model", return_value="先看对端光模块。"):
+                patch("ai_assistant.views.call_model", return_value=("先看对端光模块。", {"prompt_tokens": 0, "completion_tokens": 0})):
             response = self.client.post(
                 "/api/ai/chat/",
                 data='{"message": "端口不通怎么办"}',

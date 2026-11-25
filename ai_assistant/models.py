@@ -41,6 +41,9 @@ class Message(models.Model):
     blocked = models.BooleanField(default=False)
     # [{"title": ..., "distance": ...}]，只存标题，不存整段正文。
     sources = models.JSONField(default=list, blank=True)
+    # 上游返回的 usage。没配模型或上游不给就留 0，页面按 0 跳过。
+    prompt_tokens = models.IntegerField(default=0)
+    completion_tokens = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

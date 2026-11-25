@@ -43,6 +43,7 @@ export default {
     data() {
         return {
             messages: [],
+            usage: {prompt_tokens: 0, completion_tokens: 0, total_tokens: 0},
             draft: '',
             loading: false,
             sending: false,
@@ -129,6 +130,7 @@ export default {
             try {
                 const payload = await api.get(this.history_url);
                 this.messages = (payload && payload.messages) || [];
+                this.usage = (payload && payload.usage) || {prompt_tokens: 0, completion_tokens: 0, total_tokens: 0};
                 this.scrollToLatest();
             } catch (failure) {
                 this.error = failure.message || '历史消息加载失败';
@@ -434,6 +436,10 @@ export default {
                           placeholder="输入运维问题，Enter 发送，Shift+Enter 换行"
                           @keydown.enter.exact.prevent="send"></textarea>
                 <div class="ai-chat__composer-bar">
+                    <span class="ai-chat__stat">[[ messages.length ]] 条</span>
+                    <span class="ai-chat__stat" v-if="usage.total_tokens">[[ usage.total_tokens ]] tok</span>
+                    <span class="ai-chat__stat" v-if="knowledge.total">知识库 [[ knowledge.total ]]</span>
+                    <span class="ai-chat__spacer"></span>
                     <select class="ai-chat__pill" v-model="settingsForm.chat_model" title="对话模型"
                             @change="persistModelChoice">
                         <option value="">跟随默认</option>
@@ -450,11 +456,6 @@ export default {
                     <button class="ai-chat__send" type="submit" :disabled="!canSend">
                         [[ sending ? '…' : '发送' ]]
                     </button>
-                </div>
-                <div class="ai-chat__composer-meta">
-                    <span>[[ messages.length ]] 条消息</span>
-                    <span v-if="draft.length">[[ draft.length ]] 字</span>
-                    <span v-if="knowledge.total">知识库 [[ knowledge.total ]] 条</span>
                 </div>
             </form>
             </div>
