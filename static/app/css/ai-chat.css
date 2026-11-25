@@ -699,3 +699,9 @@
 .ai-chat__bubble--assistant > span:first-child {
     color: #2f7de1;
 }
+
+/* 设置弹窗里两块内容都通栏、上下排列。并排时模型服务很长、对话参数很短，
+   右边会空出一大片，看着像没加载完。 */
+#aiSettingsModal .config-modal-grid {
+    grid-template-columns: minmax(0, 1fr);
+}

@@ -253,11 +253,14 @@ export default {
             this.settingsSaving = true;
             this.settingsError = '';
             try {
+                // Chat 模型不在这里填，由输入区的下拉决定；没选过就取列表第一项。
+                const fallbackModel = (this.settingsForm.models_text || '')
+                    .split(/[,\n，]/).map((item) => item.trim()).filter(Boolean)[0] || '';
                 const payload = await api.post(this.settings_save_url, {
                     name: this.settingsForm.name,
                     base_url: this.settingsForm.base_url,
                     api_key: this.settingsForm.api_key,
-                    chat_model: this.settingsForm.chat_model,
+                    chat_model: this.settingsForm.chat_model || fallbackModel,
                     models_text: this.settingsForm.models_text,
                     embed_model: this.settingsForm.embed_model,
                     rag_backend: this.settingsForm.rag_backend,
@@ -657,69 +660,59 @@ export default {
                                             <span v-if="hasApiKey">当前已保存密钥。</span>
                                         </p>
                                     </div>
-                                    <div class="row g-3 mb-3">
-                                        <div class="col-12 col-md-6">
-                                            <label class="form-label" for="ai-chat-model">Chat 模型</label>
-                                            <input class="form-control" id="ai-chat-model" type="text" v-model.trim="settingsForm.chat_model" autocomplete="off">
-                                        </div>
-                                        <div class="col-12 col-md-6">
-                                            <label class="form-label" for="ai-embed-model">Embedding 模型</label>
-                                            <input class="form-control" id="ai-embed-model" type="text" v-model.trim="settingsForm.embed_model" autocomplete="off">
-                                        </div>
-                                    </div>
                                     <div class="mb-3">
                                         <label class="form-label" for="ai-models-text">模型名（逗号分隔）</label>
                                         <input class="form-control" id="ai-models-text" type="text"
                                                v-model="settingsForm.models_text"
                                                placeholder="deepseek-chat, deepseek-reasoner">
-                                        <p class="form-text mb-0">输入框下方的模型下拉从这里取；留空则只有上面这一个。</p>
+                                        <p class="form-text mb-0">聊天输入区的模型下拉就从这里取；选中哪个，哪个就生效。</p>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label" for="ai-embed-model">Embedding 模型</label>
+                                        <input class="form-control" id="ai-embed-model" type="text" v-model.trim="settingsForm.embed_model" autocomplete="off">
                                     </div>
                                     <button class="btn btn-sm btn-outline-secondary" type="button"
                                             :disabled="!hasApiKey" @click="clearApiKey">清除已存 Key</button>
                                 </section>
-                                <section class="config-section-card mb-3" aria-label="检索参数">
+                                <section class="config-section-card mb-3" aria-label="对话参数">
                                     <div class="config-section-heading">
                                         <span class="config-section-index">01</span>
-                                        <div><h3>检索参数</h3><p>召回方式与阈值；阈值留空沿用环境变量。</p></div>
+                                        <div><h3>对话参数</h3><p>检索方式与阈值留空沿用环境变量；上下文压缩控制长对话带多少历史。</p></div>
                                     </div>
-                                    <div class="mb-3">
-                                        <label class="form-label" for="ai-rag-backend">检索方式</label>
-                                        <select class="form-select" id="ai-rag-backend" v-model="settingsForm.rag_backend">
-                                            <option value="hybrid">混合（向量 + 关键词）</option>
-                                <option value="vector">仅向量</option>
-                                <option value="keyword">仅关键词</option>
-                                        </select>
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-12 col-md-4">
+                                            <label class="form-label" for="ai-rag-backend">检索方式</label>
+                                            <select class="form-select" id="ai-rag-backend" v-model="settingsForm.rag_backend">
+                                                <option value="hybrid">混合（向量 + 关键词）</option>
+                                                <option value="vector">仅向量</option>
+                                                <option value="keyword">仅关键词</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-12 col-md-4">
+                                            <label class="form-label" for="ai-vector-distance">向量阈值</label>
+                                            <input class="form-control" id="ai-vector-distance" type="number" step="0.01" min="0" max="2"
+                                                   v-model="settingsForm.retrieval_max_distance">
+                                        </div>
+                                        <div class="col-12 col-md-4">
+                                            <label class="form-label" for="ai-keyword-distance">关键词阈值</label>
+                                            <input class="form-control" id="ai-keyword-distance" type="number" step="0.01" min="0" max="1"
+                                                   v-model="settingsForm.keyword_max_distance">
+                                        </div>
                                     </div>
-                                    <div class="mb-3">
-                                        <label class="form-label" for="ai-vector-distance">向量阈值</label>
-                                        <input class="form-control" id="ai-vector-distance" type="number" step="0.01" min="0" max="2"
-                                               v-model="settingsForm.retrieval_max_distance">
-                                    </div>
-                                    <div class="mb-0">
-                                        <label class="form-label" for="ai-keyword-distance">关键词阈值</label>
-                                        <input class="form-control" id="ai-keyword-distance" type="number" step="0.01" min="0" max="1"
-                                               v-model="settingsForm.keyword_max_distance">
-                                    </div>
-                                </section>
-                                <section class="config-section-card mb-3" aria-label="会话与思考">
-                                <div class="config-section-heading">
-                                    <span class="config-section-index">02</span>
-                                    <div><h3>会话与思考</h3><p>上下文压缩控制长对话怎么带历史；思考模式按模型支持情况选择。</p></div>
-                                </div>
                                     <div class="row g-3">
-                                        <div class="col-md-4">
+                                        <div class="col-12 col-md-4">
                                             <label class="form-label" for="ai-max-history">保留最近消息</label>
                                             <input class="form-control" id="ai-max-history" type="number" min="2" max="50"
                                                    v-model.number="settingsForm.max_history">
                                             <p class="form-text mb-0">每次带给模型的消息条数。</p>
                                         </div>
-                                        <div class="col-md-4">
+                                        <div class="col-12 col-md-4">
                                             <label class="form-label" for="ai-summary-trigger">压缩触发条数</label>
                                             <input class="form-control" id="ai-summary-trigger" type="number" min="4" max="200"
                                                    v-model.number="settingsForm.summary_trigger">
                                             <p class="form-text mb-0">总消息超过此数才把旧消息压成摘要。</p>
                                         </div>
-                                        <div class="col-md-4">
+                                        <div class="col-12 col-md-4">
                                             <label class="form-label" for="ai-reasoning">思考模式</label>
                                             <select class="form-select" id="ai-reasoning" v-model="settingsForm.reasoning_effort">
                                                 <option value="">不传（跟随模型默认）</option>
