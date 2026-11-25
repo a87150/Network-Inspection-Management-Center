@@ -538,3 +538,64 @@
     margin-right: 0 !important;
     text-align: left;
 }
+
+/* ---------- 模型服务卡片 ---------- */
+.ai-provider-list {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+}
+
+.ai-provider-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    padding: .6rem .8rem;
+    border: 1px solid rgba(15, 40, 60, .1);
+    border-radius: .6rem;
+    background: #fff;
+}
+
+/* 当前生效的那张给一道左边色条，不用边框加粗，免得整块变重。 */
+.ai-provider-card.is-active {
+    border-color: rgba(47, 125, 225, .45);
+    box-shadow: inset 3px 0 0 #2f7de1;
+}
+
+.ai-provider-card__main {
+    min-width: 0;
+}
+
+.ai-provider-card__name {
+    margin: 0;
+    font-size: .88rem;
+    font-weight: 650;
+    color: var(--color-text);
+}
+
+.ai-provider-card__badge {
+    margin-left: .35rem;
+    padding: 0 .35rem;
+    border-radius: .25rem;
+    background: rgba(47, 125, 225, .12);
+    color: #2f7de1;
+    font-size: .7rem;
+    font-weight: 600;
+}
+
+.ai-provider-card__meta {
+    margin: .15rem 0 0;
+    font-size: .78rem;
+    color: #7d8fa0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ai-provider-card__actions {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    flex: 0 0 auto;
+}

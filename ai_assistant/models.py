@@ -107,3 +107,30 @@ class AiSetting(models.Model):
     @classmethod
     def load(cls):
         return cls.objects.order_by("id").first()
+
+
+class AiProvider(models.Model):
+    """一个可切换的模型服务配置。
+
+    端点和密钥是一组，模型名是另一层：换模型不必重填地址和密钥。
+    `is_active` 决定当前用哪一组，同时只允许一个为真。
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=64)
+    base_url = models.CharField(max_length=512, blank=True)
+    api_key_cipher = models.TextField(blank=True)
+    chat_model = models.CharField(max_length=128, blank=True)
+    embed_model = models.CharField(max_length=128, blank=True)
+    is_active = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-is_active", "name"]
+
+    def __str__(self):
+        return self.name
+
+    @classmethod
+    def active(cls):
+        return cls.objects.filter(is_active=True).first()

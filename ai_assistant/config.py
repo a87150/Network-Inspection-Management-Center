@@ -22,9 +22,22 @@ def _decrypt(value):
 
 def ai_config():
     """合并后的配置。每次读库，配置改完立刻生效，不用重启。"""
-    from .models import AiSetting
+    from .models import AiProvider, AiSetting
 
     config = dict(settings.AI_CONFIG)
+    provider = AiProvider.active()
+    if provider is not None:
+        if provider.base_url:
+            config["BASE_URL"] = provider.base_url
+        if provider.chat_model:
+            config["CHAT_MODEL"] = provider.chat_model
+        if provider.embed_model:
+            config["EMBED_MODEL"] = provider.embed_model
+        if provider.api_key_cipher:
+            try:
+                config["API_KEY"] = _decrypt(provider.api_key_cipher)
+            except Exception:
+                config["API_KEY"] = ""
     row = AiSetting.load()
     if row is None:
         return config
@@ -60,7 +73,26 @@ def ai_config():
 
 def save_settings(payload):
     """把页面提交的值落库。空字符串表示清掉覆盖，回落环境变量。"""
-    from .models import AiSetting
+    from .models import AiProvider, AiSetting
+
+    # 端点/密钥/模型落到 AiProvider（当前激活那条），其余落 AiSetting。
+    provider = AiProvider.active()
+    if provider is None:
+        provider = AiProvider(name="默认", is_active=True)
+    if payload.get("name"):
+        provider.name = str(payload["name"]).strip()[:64] or "默认"
+    if "base_url" in payload:
+        provider.base_url = (payload.get("base_url") or "").strip()
+    if "chat_model" in payload:
+        provider.chat_model = (payload.get("chat_model") or "").strip()
+    if "embed_model" in payload:
+        provider.embed_model = (payload.get("embed_model") or "").strip()
+    api_key = (payload.get("api_key") or "").strip()
+    if payload.get("clear_api_key"):
+        provider.api_key_cipher = ""
+    elif api_key:
+        provider.api_key_cipher = _encrypt(api_key)
+    provider.save()
 
     row = AiSetting.load() or AiSetting()
     row.base_url = (payload.get("base_url") or "").strip()

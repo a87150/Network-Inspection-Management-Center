@@ -65,6 +65,7 @@ export default {
             knowledgeLoading: false,
             knowledgeError: '',
             knowledgeForm: {title: '', category: '', content: ''},
+        providers: [],
         probeQuery: '',
         probing: false,
         probeDone: false,
@@ -196,6 +197,7 @@ export default {
             }
         },
         async loadSettings(options) {
+            this.loadProviders();
             const silent = Boolean(options && options.silent);
             if (!silent) this.settingsLoading = true;
             this.settingsError = '';
@@ -308,6 +310,32 @@ export default {
             }
             cells.push(cell);
             return cells;
+        },
+        async loadProviders() {
+            try {
+                const payload = await api.get('/api/ai/providers/');
+                this.providers = (payload && payload.rows) || [];
+            } catch (error) {
+                this.providers = [];
+            }
+        },
+        async activateProvider(row) {
+            try {
+                await api.post('/api/ai/providers/activate/', {id: row.id});
+                await this.loadProviders();
+                await this.loadSettings({silent: true});
+            } catch (error) {
+                this.settingsError = error.message || '切换失败';
+            }
+        },
+        async deleteProvider(row) {
+            try {
+                await api.post('/api/ai/providers/delete/', {id: row.id});
+                await this.loadProviders();
+                await this.loadSettings({silent: true});
+            } catch (error) {
+                this.settingsError = error.message || '删除失败';
+            }
         },
         async runProbe() {
             const query = this.probeQuery.trim();
@@ -498,6 +526,36 @@ export default {
                         <p v-if="settingsLoading" class="text-secondary" role="status">正在读取当前配置…</p>
                         <form id="ai-settings-form" @submit.prevent="saveSettings">
                             <div class="config-modal-grid">
+                                <section class="config-section-card mb-3" aria-label="已配置的模型服务">
+                                    <div class="config-section-heading">
+                                        <span class="config-section-index">00</span>
+                                        <div><h3>模型服务</h3><p>可存多组，点一下就切换。同时只有一组生效。</p></div>
+                                    </div>
+                                    <div class="ai-provider-list">
+                                        <div v-for="row in providers" :key="row.id"
+                                             class="ai-provider-card" :class="{'is-active': row.is_active}">
+                                            <div class="ai-provider-card__main">
+                                                <p class="ai-provider-card__name">
+                                                    [[ row.name ]]
+                                                    <span v-if="row.is_active" class="ai-provider-card__badge">当前</span>
+                                                </p>
+                                                <p class="ai-provider-card__meta">
+                                                    [[ row.base_url || '未填地址' ]] · [[ row.chat_model || '未填模型' ]]
+                                                    <span v-if="!row.has_key"> · 没有密钥</span>
+                                                </p>
+                                            </div>
+                                            <div class="ai-provider-card__actions">
+                                                <button v-if="!row.is_active" class="btn btn-sm btn-outline-primary"
+                                                        type="button" @click="activateProvider(row)">切换到此</button>
+                                                <button class="btn btn-sm btn-link text-danger" type="button"
+                                                        @click="deleteProvider(row)">删除</button>
+                                            </div>
+                                        </div>
+                                        <p v-if="!providers.length" class="text-body-secondary small mb-0">
+                                            还没有配置。下面填一组，保存后自动成为当前配置。
+                                        </p>
+                                    </div>
+                                </section>
                                 <section class="config-section-card" aria-label="服务端点">
                                     <div class="config-section-heading">
                                         <span class="config-section-index">01</span>

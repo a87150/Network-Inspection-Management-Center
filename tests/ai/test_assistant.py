@@ -2,6 +2,7 @@
 
 不打真实模型接口——所有外部调用都 mock 掉。
 """
+import json
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -330,6 +331,59 @@ class SplitChunksTests(TestCase):
 
         self.assertEqual(split_chunks(""), [])
         self.assertEqual(split_chunks("   "), [])
+
+
+@override_settings(AI_CONFIG=CONFIGURED)
+class ProviderApiTests(TestCase):
+    """多组模型服务：能建、能切、删掉当前那条要自动回退。"""
+
+    def setUp(self):
+        self.admin = get_user_model().objects.create_user(
+            "provider-admin", password="x", is_staff=True, is_superuser=True,
+        )
+        self.client.force_login(self.admin)
+
+    def _post(self, path, body):
+        return self.client.post(path, data=json.dumps(body), content_type="application/json")
+
+    def test_first_provider_becomes_active(self):
+        from ai_assistant.models import AiProvider
+
+        self._post("/api/ai/providers/save/", {"name": "A", "base_url": "https://a.example/v1"})
+        row = AiProvider.objects.get(name="A")
+        self.assertTrue(row.is_active)
+
+    def test_activate_switches_exclusive_flag(self):
+        from ai_assistant.models import AiProvider
+
+        self._post("/api/ai/providers/save/", {"name": "A"})
+        self._post("/api/ai/providers/save/", {"name": "B"})
+        target = AiProvider.objects.get(name="B")
+        self._post("/api/ai/providers/activate/", {"id": target.id.hex})
+        self.assertEqual(AiProvider.objects.filter(is_active=True).count(), 1)
+        self.assertTrue(AiProvider.objects.get(name="B").is_active)
+        self.assertFalse(AiProvider.objects.get(name="A").is_active)
+
+    def test_delete_active_falls_back(self):
+        from ai_assistant.models import AiProvider
+
+        self._post("/api/ai/providers/save/", {"name": "A", "base_url": "https://a.example/v1"})
+        self._post("/api/ai/providers/save/", {"name": "B"})
+        target = AiProvider.objects.get(name="B")
+        self._post("/api/ai/providers/activate/", {"id": target.id.hex})
+        self._post("/api/ai/providers/delete/", {"id": target.id.hex})
+        remaining = AiProvider.objects.get()
+        self.assertTrue(remaining.is_active)
+
+    def test_api_key_is_encrypted_and_never_returned(self):
+        from ai_assistant.models import AiProvider
+
+        self._post("/api/ai/providers/save/", {"name": "A", "api_key": "sk-secret"})
+        row = AiProvider.objects.get(name="A")
+        self.assertNotEqual(row.api_key_cipher, "sk-secret")
+        listed = json.loads(self.client.get("/api/ai/providers/").content)
+        self.assertTrue(listed["rows"][0]["has_key"])
+        self.assertNotIn("sk-secret", json.dumps(listed))
 
 
 @override_settings(AI_CONFIG=CONFIGURED)

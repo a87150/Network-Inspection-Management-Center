@@ -310,6 +310,115 @@ def reset(request):
 
 
 @login_required
+@require_GET
+def providers(request):
+    """列出所有模型服务配置，密钥只回有没有。"""
+    from .models import AiProvider
+
+    return JsonResponse({
+        "active": (AiProvider.active().id.hex if AiProvider.active() else ""),
+        "rows": [
+            {
+                "id": row.id.hex,
+                "name": row.name,
+                "base_url": row.base_url,
+                "chat_model": row.chat_model,
+                "embed_model": row.embed_model,
+                "has_key": bool(row.api_key_cipher),
+                "is_active": row.is_active,
+            }
+            for row in AiProvider.objects.all()
+        ],
+    })
+
+
+@login_required
+@require_POST
+@admin_required
+def provider_save(request):
+    """新增或更新一条服务配置。传 id 就是改，不传就是新建。"""
+    import json
+
+    from .config import _encrypt
+    from .models import AiProvider
+
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except ValueError:
+        return JsonResponse({"error": "请求体不是合法 JSON"}, status=400)
+    name = (payload.get("name") or "").strip()[:64]
+    if not name:
+        return JsonResponse({"error": "给这组配置起个名字"}, status=400)
+    row = None
+    if payload.get("id"):
+        row = AiProvider.objects.filter(id=payload["id"]).first()
+    if row is None:
+        row = AiProvider()
+    row.name = name
+    row.base_url = (payload.get("base_url") or "").strip()
+    row.chat_model = (payload.get("chat_model") or "").strip()
+    row.embed_model = (payload.get("embed_model") or "").strip()
+    api_key = (payload.get("api_key") or "").strip()
+    if payload.get("clear_api_key"):
+        row.api_key_cipher = ""
+    elif api_key:
+        row.api_key_cipher = _encrypt(api_key)
+    # 第一条自动激活，否则没有任何一组生效。
+    if not AiProvider.objects.exclude(pk=row.pk).exists() and not row.is_active:
+        row.is_active = True
+    row.save()
+    return JsonResponse({"ok": True, "id": row.id.hex})
+
+
+@login_required
+@require_POST
+@admin_required
+def provider_activate(request):
+    """切换当前生效的配置。同时只允许一个 is_active。"""
+    import json
+
+    from .models import AiProvider
+
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except ValueError:
+        return JsonResponse({"error": "请求体不是合法 JSON"}, status=400)
+    target = AiProvider.objects.filter(id=payload.get("id") or "").first()
+    if target is None:
+        return JsonResponse({"error": "找不到这组配置"}, status=404)
+    AiProvider.objects.update(is_active=False)
+    target.is_active = True
+    target.save(update_fields=["is_active"])
+    return JsonResponse({"ok": True, "name": target.name})
+
+
+@login_required
+@require_POST
+@admin_required
+def provider_delete(request):
+    import json
+
+    from .models import AiProvider
+
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except ValueError:
+        return JsonResponse({"error": "请求体不是合法 JSON"}, status=400)
+    row = AiProvider.objects.filter(id=payload.get("id") or "").first()
+    if row is None:
+        return JsonResponse({"error": "找不到这组配置"}, status=404)
+    was_active = row.is_active
+    row.delete()
+    if was_active:
+        # 删掉当前生效的，把第一组顶上，否则配置全空。
+        fallback = AiProvider.objects.first()
+        if fallback:
+            fallback.is_active = True
+            fallback.save(update_fields=["is_active"])
+    return JsonResponse({"ok": True})
+
+
+@login_required
 @require_POST
 @admin_required
 def retrieve_test(request):
