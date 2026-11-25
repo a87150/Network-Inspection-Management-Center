@@ -512,32 +512,9 @@
     white-space: nowrap;
 }
 
-/* 用 auto 外边距把统计钉在左边、控件推到右边，
-   不再依赖中间那个空 span 的 flex: 1（在 grid/flex 混合下它会塌成 0 宽）。 */
-.ai-chat__composer-bar {
-    justify-content: flex-start;
-}
 
-.ai-chat__composer-bar .ai-chat__stat:first-child {
-    margin-right: auto;
-}
 
-.ai-chat__composer-bar .ai-chat__spacer {
-    display: none;
-}
 
-/* 覆盖到底：工具条必须是 flex，第一个统计吃掉全部剩余宽度，
-   后面的下拉和发送才会被推到最右。 */
-.ai-chat .ai-chat__composer .ai-chat__composer-bar {
-    display: flex !important;
-    width: 100%;
-}
-
-.ai-chat .ai-chat__composer .ai-chat__composer-bar .ai-chat__stat:first-child {
-    flex: 1 1 auto !important;
-    margin-right: 0 !important;
-    text-align: left;
-}
 
 /* ---------- 模型服务卡片 ---------- */
 .ai-provider-list {
@@ -598,4 +575,34 @@
     align-items: center;
     gap: .4rem;
     flex: 0 0 auto;
+}
+
+/* 工具条：统计靠左吃掉剩余宽度，模型服务与思考模式、发送挤到右端。 */
+.ai-chat__composer .ai-chat__composer-bar {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    padding-top: .25rem;
+}
+
+
+
+/* 统计单独一行，灰字左对齐，像 DSH 底部那排。 */
+.ai-chat__composer-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .9rem;
+    padding: .35rem .15rem .1rem;
+    color: #9aa9b6;
+    font-size: .72rem;
+}
+
+/* 发送按钮做成圆形，和 DSH 一致。 */
+.ai-chat__composer .ai-chat__send {
+    width: 2.15rem;
+    min-width: 0;
+    height: 2.15rem;
+    padding: 0;
+    border-radius: 50%;
+    font-size: .72rem;
 }

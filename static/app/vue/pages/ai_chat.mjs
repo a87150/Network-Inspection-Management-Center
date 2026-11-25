@@ -65,6 +65,14 @@ export default {
             knowledgeLoading: false,
             knowledgeError: '',
             knowledgeForm: {title: '', category: '', content: ''},
+        // 内置提供方：选中就自动填地址，省得每次手打。
+        presets: [
+            {name: 'DeepSeek', url: 'https://api.deepseek.com/v1'},
+            {name: 'OpenAI', url: 'https://api.openai.com/v1'},
+            {name: '阿里百炼', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1'},
+            {name: '本地 Ollama', url: 'http://127.0.0.1:11434/v1'},
+        ],
+        preset: '',
         providers: [],
         probeQuery: '',
         probing: false,
@@ -84,10 +92,14 @@ export default {
         };
     },
     computed: {
+        activeProviderId() {
+            const current = this.providers.find((row) => row.is_active);
+            return current ? current.id : '';
+        },
         modelOptions() {
             // 优先用设置里填的可用模型；没填就退回当前这一个。
             const typed = (this.settingsForm.models_text || '')
-                .split(/\r?\n/)
+                .split(/[,\n，]/)
                 .map((line) => line.trim())
                 .filter(Boolean);
             const list = typed.length ? typed : (this.settingsForm.chat_model ? [this.settingsForm.chat_model] : []);
@@ -102,6 +114,7 @@ export default {
         this.loadHistory();
         // 输入区的模型下拉需要当前值，进页面先拉一次设置（只读，不打知识库）。
         this.loadSettings({ silent: true });
+        this.loadProviders();
         // 打开弹窗才拉配置与知识库现状：进页面不多打两个请求。
         const settingsModal = this.$refs.settingsModal;
         if (settingsModal) settingsModal.addEventListener('show.bs.modal', () => this.loadSettings());
@@ -311,6 +324,28 @@ export default {
             cells.push(cell);
             return cells;
         },
+        applyPreset() {
+            const hit = this.presets.find((item) => item.name === this.preset);
+            if (hit) this.settingsForm.base_url = hit.url;
+        },
+        async clearApiKey() {
+            try {
+                await api.post(this.settings_save_url, {clear_api_key: true});
+                this.hasApiKey = false;
+                this.settingsForm.api_key = '';
+            } catch (error) {
+                this.settingsError = error.message || '清除失败';
+            }
+        },
+        async switchProvider(id) {
+            if (!id) return;
+            try {
+                await api.post('/api/ai/providers/activate/', {id});
+                await this.loadProviders();
+            } catch (error) {
+                this.error = error.message || '切换失败';
+            }
+        },
         async loadProviders() {
             try {
                 const payload = await api.get('/api/ai/providers/');
@@ -488,14 +523,15 @@ export default {
                           placeholder="输入运维问题，Enter 发送，Shift+Enter 换行"
                           @keydown.enter.exact.prevent="send"></textarea>
                 <div class="ai-chat__composer-bar">
-                    <span class="ai-chat__stat">[[ messages.length ]] 条</span>
+                    <span class="ai-chat__stat" style="margin-right:auto">[[ messages.length ]] 条</span>
                     <span class="ai-chat__stat" v-if="usage.total_tokens">[[ usage.total_tokens ]] tok</span>
-                    <span class="ai-chat__stat" v-if="knowledge.total">知识库 [[ knowledge.total ]]</span>
-                    <span class="ai-chat__spacer"></span>
-                    <select class="ai-chat__pill" v-model="settingsForm.chat_model" title="对话模型"
-                            @change="persistModelChoice">
-                        <option value="">跟随默认</option>
-                        <option v-for="name in modelOptions" :key="name" :value="name">[[ name ]]</option>
+                    <span v-if="knowledge.total" class="ai-chat__stat">知识库 [[ knowledge.total ]]</span>
+                    <select class="ai-chat__pill" :value="activeProviderId" title="切换模型服务"
+                            @change="switchProvider($event.target.value)">
+                        <option v-if="!providers.length" value="">未配置</option>
+                        <option v-for="row in providers" :key="row.id" :value="row.id">
+                            [[ row.name ]][[ row.chat_model ? ' · ' + row.chat_model : '' ]]
+                        </option>
                     </select>
                     <select class="ai-chat__pill" v-model="settingsForm.reasoning_effort" title="思考模式"
                             @change="persistModelChoice">
@@ -559,19 +595,38 @@ export default {
                                 <section class="config-section-card" aria-label="服务端点">
                                     <div class="config-section-heading">
                                         <span class="config-section-index">01</span>
-                                        <div><h3>服务端点</h3><p>OpenAI 兼容接口的地址与密钥，保存后立即生效。</p></div>
+                                        <div><h3>服务端点</h3>
+                                            <p>任何 OpenAI 兼容接口都能接：选一个内置的，或者自己填地址。Key 只存密文，页面不回显。</p></div>
                                     </div>
                                     <div class="mb-3">
-                                        <label class="form-label" for="ai-base-url">Base URL</label>
+                                        <label class="form-label" for="ai-preset">提供方</label>
+                                        <select class="form-select" id="ai-preset" v-model="preset" @change="applyPreset">
+                                            <option value="">自定义</option>
+                                            <option v-for="item in presets" :key="item.name" :value="item.name">[[ item.name ]]</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label" for="ai-base-url">接口地址（Base URL）</label>
                                         <input class="form-control" id="ai-base-url" type="text" v-model.trim="settingsForm.base_url"
                                                placeholder="https://api.example.com/v1" autocomplete="off">
                                     </div>
-                                    <div class="mb-0">
-                                        <label class="form-label" for="ai-api-key">API Key</label>
+                                    <div class="mb-3">
+                                        <label class="form-label" for="ai-api-key">API Key（留空表示不修改）</label>
                                         <input class="form-control" id="ai-api-key" type="password" v-model="settingsForm.api_key"
-                                               placeholder="已保存，留空则不修改" autocomplete="new-password"
-                                               aria-describedby="ai-api-key-help">
-                                        <p class="form-text mb-0" id="ai-api-key-help">只存密文，不回显。<span v-if="hasApiKey">当前已保存密钥。</span></p>
+                                               :placeholder="hasApiKey ? '已保存，留空表示不修改' : '粘贴密钥'"
+                                               autocomplete="new-password">
+                                        <p class="form-text mb-0" id="ai-api-key-help">
+                                            只存密文，不回显。
+                                            <span v-if="hasApiKey">当前已保存密钥。</span>
+                                        </p>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <button class="btn btn-sm btn-outline-secondary" type="button"
+                                                :disabled="!hasApiKey" @click="clearApiKey">清除已存 Key</button>
+                                        <button class="btn btn-sm btn-primary" type="button"
+                                                :disabled="settingsSaving" @click="saveSettings">
+                                            [[ settingsSaving ? '保存中…' : '保存云端设置' ]]
+                                        </button>
                                     </div>
                                 </section>
                                 <section class="config-section-card" aria-label="模型与检索">
@@ -584,13 +639,13 @@ export default {
                                         <input class="form-control" id="ai-chat-model" type="text" v-model.trim="settingsForm.chat_model" autocomplete="off">
                                     </div>
                                         <div class="mb-3">
-                                            <label class="form-label" for="ai-models-text">可用模型</label>
-                                            <textarea class="form-control" id="ai-models-text" rows="3"
-                                                      v-model="settingsForm.models_text"
-                                                      placeholder="一行一个，例如：&#10;gpt-4o-mini&#10;deepseek-chat&#10;qwen-plus"></textarea>
-                                            <p class="form-text mb-0">输入框下方的模型下拉就从这里取；留空则只有上面这一个。</p>
+                                            <label class="form-label" for="ai-models-text">模型名（逗号分隔）</label>
+                                            <input class="form-control" id="ai-models-text" type="text"
+                                                   v-model="settingsForm.models_text"
+                                                   placeholder="deepseek-chat, deepseek-reasoner">
+                                            <p class="form-text mb-0">输入框下方的模型下拉从这里取；留空则只有上面这一个。</p>
                                         </div>
-                                    <div class="mb-3">
+                                        <div class="mb-3">
                                         <label class="form-label" for="ai-embed-model">Embedding 模型</label>
                                         <input class="form-control" id="ai-embed-model" type="text" v-model.trim="settingsForm.embed_model" autocomplete="off">
                                     </div>

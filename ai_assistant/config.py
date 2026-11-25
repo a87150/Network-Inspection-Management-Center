@@ -67,7 +67,12 @@ def ai_config():
     if row.reasoning_effort:
         config["REASONING_EFFORT"] = row.reasoning_effort
     if row.models_text:
-        config["MODELS"] = [line.strip() for line in row.models_text.splitlines() if line.strip()]
+        config["MODELS"] = [
+            part.strip()
+            for line in row.models_text.splitlines()
+            for part in line.replace("，", ",").split(",")
+            if part.strip()
+        ]
     return config
 
 
