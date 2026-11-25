@@ -71,7 +71,11 @@ def chat(messages):
     # 空串表示不传：不是每个 OpenAI 兼容端点都认这个参数，传错值直接 400。
     if config.get("REASONING_EFFORT"):
         payload["reasoning_effort"] = config["REASONING_EFFORT"]
+    import time
+
+    started = time.monotonic()
     data = _post("/chat/completions", payload)
+    latency_ms = int((time.monotonic() - started) * 1000)
     try:
         text = data["choices"][0]["message"]["content"] or ""
     except (KeyError, IndexError, TypeError) as error:
@@ -81,4 +85,5 @@ def chat(messages):
     return text, {
         "prompt_tokens": int(usage.get("prompt_tokens") or 0),
         "completion_tokens": int(usage.get("completion_tokens") or 0),
+        "latency_ms": latency_ms,
     }

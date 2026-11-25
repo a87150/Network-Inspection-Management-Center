@@ -44,6 +44,8 @@ class Message(models.Model):
     # 上游返回的 usage。没配模型或上游不给就留 0，页面按 0 跳过。
     prompt_tokens = models.IntegerField(default=0)
     completion_tokens = models.IntegerField(default=0)
+    # 上游往返毫秒数，用来算输出速度。0 表示没记。
+    latency_ms = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

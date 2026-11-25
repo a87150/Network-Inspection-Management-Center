@@ -1,3 +1,13 @@
+## 2.29（2026-11-25）
+
+### token 计数与输出速度
+- `Message` 加 `latency_ms`，`client.chat()` 用 `time.monotonic()` 记往返耗时。
+- `/api/ai/history/` 的 `usage` 多返回 `tokens_per_second`（总 completion
+  token ÷ 总耗时秒数）和 `latency_ms`。
+- 输入区信息条常驻显示累计 token（0 也显示，不再被 v-if 藏掉）和
+  输出速度。token 过千按 k/M 缩写。
+- 实测：1200 prompt + 350 completion / 4200ms → 1550 tok，83.3 tok/s。
+
 ## 2.28（2026-11-25）
 
 ### 修输入区工具条不撑满

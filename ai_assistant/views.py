@@ -220,6 +220,7 @@ def chat(request):
             blocked=blocked, sources=sources or [],
             prompt_tokens=usage.get("prompt_tokens", 0),
             completion_tokens=usage.get("completion_tokens", 0),
+            latency_ms=usage.get("latency_ms", 0),
         )
         return JsonResponse({
             "answer": text,
@@ -287,6 +288,7 @@ def history(request):
     ]
     totals = conversation.messages.aggregate(
         prompt=Sum("prompt_tokens"), completion=Sum("completion_tokens"),
+        latency=Sum("latency_ms"),
     )
     return JsonResponse({
         "messages": messages,
@@ -294,6 +296,11 @@ def history(request):
             "prompt_tokens": totals["prompt"] or 0,
             "completion_tokens": totals["completion"] or 0,
             "total_tokens": (totals["prompt"] or 0) + (totals["completion"] or 0),
+            # 总输出速度：总 completion token / 总耗时秒数。
+            "tokens_per_second": round(
+                (totals["completion"] or 0) / ((totals["latency"] or 0) / 1000), 1,
+            ) if totals["latency"] else 0,
+            "latency_ms": totals["latency"] or 0,
         },
     })
 

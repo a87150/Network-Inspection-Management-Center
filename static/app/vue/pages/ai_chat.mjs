@@ -45,7 +45,7 @@ export default {
         // 与后端 CATEGORY_CHOICES 一致；改这里要同步改 views.py。
         categories: ['设备手册', '故障案例', '模板说明', '告警规则', '巡检规范', '其他'],
             messages: [],
-            usage: {prompt_tokens: 0, completion_tokens: 0, total_tokens: 0},
+            usage: {prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, tokens_per_second: 0},
             draft: '',
             loading: false,
             sending: false,
@@ -92,6 +92,12 @@ export default {
         };
     },
     computed: {
+        fmtTokens(value) {
+            const number = Number(value) || 0;
+            if (number >= 1000000) return (number / 1000000).toFixed(1) + 'M';
+            if (number >= 1000) return (number / 1000).toFixed(1) + 'k';
+            return String(number);
+        },
         activeProviderId() {
             const current = this.providers.find((row) => row.is_active);
             return current ? current.id : '';
@@ -151,7 +157,7 @@ export default {
             try {
                 const payload = await api.get(this.history_url);
                 this.messages = (payload && payload.messages) || [];
-                this.usage = (payload && payload.usage) || {prompt_tokens: 0, completion_tokens: 0, total_tokens: 0};
+                this.usage = (payload && payload.usage) || {prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, tokens_per_second: 0};
                 this.scrollToLatest();
             } catch (failure) {
                 this.error = failure.message || '历史消息加载失败';
@@ -523,9 +529,11 @@ export default {
                           placeholder="输入运维问题，Enter 发送，Shift+Enter 换行"
                           @keydown.enter.exact.prevent="send"></textarea>
                 <div class="ai-chat__composer-bar">
-                    <span class="ai-chat__stat" style="margin-right:auto">[[ messages.length ]] 条</span>
-                    <span class="ai-chat__stat" v-if="usage.total_tokens">[[ usage.total_tokens ]] tok</span>
-                    <span v-if="knowledge.total" class="ai-chat__stat">知识库 [[ knowledge.total ]]</span>
+                    <span class="ai-chat__stat">[[ messages.length ]] 条</span>
+                    <span class="ai-chat__stat">[[ fmtTokens(usage.total_tokens) ]] tok</span>
+                    <span class="ai-chat__stat" v-if="usage.tokens_per_second">[[ usage.tokens_per_second ]] tok/s</span>
+                    <span class="ai-chat__stat" v-if="knowledge.total">知识库 [[ knowledge.total ]]</span>
+                    <span class="ai-chat__spacer-fill"></span>
                     <select class="ai-chat__pill" :value="activeProviderId" title="切换模型服务"
                             @change="switchProvider($event.target.value)">
                         <option v-if="!providers.length" value="">未配置</option>

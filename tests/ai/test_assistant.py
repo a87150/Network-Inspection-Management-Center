@@ -334,6 +334,39 @@ class SplitChunksTests(TestCase):
 
 
 @override_settings(AI_CONFIG=CONFIGURED)
+class UsageStatTests(TestCase):
+    """token 计数与输出速度要能从历史接口读出来。"""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user("usage-user", password="x")
+        self.client.force_login(self.user)
+
+    def test_history_reports_tokens_and_speed(self):
+        from ai_assistant.models import Conversation, Message
+
+        conversation = Conversation.objects.create(user=self.user)
+        Message.objects.create(
+            conversation=conversation, role="assistant", content="答",
+            prompt_tokens=100, completion_tokens=50, latency_ms=2000,
+        )
+        payload = json.loads(self.client.get("/api/ai/history/").content)
+        usage = payload["usage"]
+        self.assertEqual(usage["total_tokens"], 150)
+        self.assertEqual(usage["tokens_per_second"], 25.0)
+
+    def test_speed_is_zero_without_latency(self):
+        from ai_assistant.models import Conversation, Message
+
+        conversation = Conversation.objects.create(user=self.user)
+        Message.objects.create(
+            conversation=conversation, role="assistant", content="答",
+            prompt_tokens=10, completion_tokens=5, latency_ms=0,
+        )
+        payload = json.loads(self.client.get("/api/ai/history/").content)
+        self.assertEqual(payload["usage"]["tokens_per_second"], 0)
+
+
+@override_settings(AI_CONFIG=CONFIGURED)
 class ProviderApiTests(TestCase):
     """多组模型服务：能建、能切、删掉当前那条要自动回退。"""
 

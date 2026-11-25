@@ -617,8 +617,8 @@
     gap: .4rem;
 }
 
-.ai-chat__composer .ai-chat__composer-bar .ai-chat__stat:first-child {
-    margin-right: auto !important;
+.ai-chat__composer .ai-chat__composer-bar .ai-chat__spacer-fill {
+    flex: 1 1 auto;
 }
 
 /* 原来那个空 spacer 在末尾，留着只会抢宽度。 */
