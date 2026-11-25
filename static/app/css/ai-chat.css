@@ -606,3 +606,22 @@
     border-radius: 50%;
     font-size: .72rem;
 }
+
+/* 工具条必须撑满输入区宽度，否则整条会缩到内容宽度、贴到右边。 */
+.ai-chat__composer .ai-chat__composer-bar {
+    display: flex !important;
+    width: 100% !important;
+    align-self: stretch;
+    justify-content: flex-start !important;
+    align-items: center;
+    gap: .4rem;
+}
+
+.ai-chat__composer .ai-chat__composer-bar .ai-chat__stat:first-child {
+    margin-right: auto !important;
+}
+
+/* 原来那个空 spacer 在末尾，留着只会抢宽度。 */
+.ai-chat__composer .ai-chat__composer-bar .ai-chat__spacer {
+    display: none !important;
+}
