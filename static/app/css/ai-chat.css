@@ -150,8 +150,6 @@
 
 .ai-chat__bubble--user {
     justify-self: end;
-    border-color: rgba(49, 87, 213, .28);
-    background: rgba(49, 87, 213, .07);
 }
 
 .ai-chat__bubble--assistant {
@@ -160,8 +158,8 @@
 
 /* 被拦截/拒答的消息换弱底色，一眼和正常回答分开。 */
 .ai-chat__bubble.is-blocked {
-    border-color: rgba(183, 106, 0, .34);
-    background: rgba(183, 106, 0, .08);
+    border-color: #dc2626;
+    background: #fff;
 }
 
 .ai-chat__role {
@@ -180,7 +178,7 @@
 }
 
 .ai-chat__bubble.is-blocked .ai-chat__role {
-    color: var(--color-warning);
+    color: #dc2626;
 }
 
 .ai-chat__flag {
@@ -238,10 +236,28 @@
     font-size: var(--fs-sm);
 }
 
+/* 26px 高的原生下拉在触屏上不好点，平板竖屏（768）也算触屏。 */
+@media (max-width: 991.98px) {
+    .ai-chat__composer .ai-chat__composer-bar .ai-chat__pill {
+        min-height: 2.5rem;
+    }
+}
+
 @media (max-width: 575.98px) {
     .ai-chat__composer {
         flex-direction: column;
         align-items: stretch;
+    }
+
+    /* 窄屏工具条换行：两个下拉各占半行，发送按钮落到下一行右端，
+       不再和下拉抢同一行的宽度。 */
+    .ai-chat__composer .ai-chat__composer-bar {
+        flex-wrap: wrap;
+    }
+
+    .ai-chat__composer .ai-chat__composer-bar .ai-chat__pill {
+        flex: 1 1 8rem;
+        max-width: none;
     }
 
     .ai-chat__bubble {
@@ -262,8 +278,15 @@
     margin-bottom: 1.5rem;
 }
 
+/* dialog 只有 max-height 没有 height，content 的 max-height: 100% 参照不到，
+   会按内容撑到 796px，把 footer 顶到视口外 7px。这里直接算高度，不依赖父级。 */
 #aiKnowledgeModal .modal-content {
-    max-height: 100%;
+    max-height: calc(100vh - 3rem);
+    min-height: 0;
+}
+
+#aiKnowledgeModal .modal-body {
+    min-height: 0;
 }
 
 /* 聊天区不套卡片：去掉边框、圆角和白底，内容直接铺在页面底色上，
@@ -495,8 +518,10 @@
     font-size: .72rem;
 }
 
-/* 发送按钮：宽度自适应，不能把两个字挤成竖排。 */
+/* 发送按钮：宽度自适应，不能把两个字挤成竖排。
+   flex 必须 0 0 auto——窄屏下两个下拉会把它压成 0 宽，消息就发不出去了。 */
 .ai-chat__send {
+    flex: 0 0 auto;
     width: auto;
     min-width: 3.2rem;
     height: 2.1rem;
@@ -637,22 +662,24 @@
     box-shadow: none;
 }
 
-/* 我问的靠右，蓝边框。 */
-.ai-chat__bubble--user {
+/* 选择器要带 .ai-chat__thread >，否则被上面基类的
+   `.ai-chat__thread > .ai-chat__bubble`（0,2,0）压过，颜色不生效。 */
+.ai-chat__thread > .ai-chat__bubble--user {
     align-self: flex-end;
+    border-color: #1f2937;
+    background: #fff;
+}
+
+.ai-chat__thread > .ai-chat__bubble--assistant {
+    align-self: flex-start;
     border-color: #2f7de1;
     background: #fff;
 }
 
-/* AI 答的靠左，灰边框；被拦截时换警示色。 */
-.ai-chat__bubble--assistant {
-    align-self: flex-start;
-    border-color: #c9d4de;
+/* 被拦截（警告）的红边，同样要压过基类。 */
+.ai-chat__thread > .ai-chat__bubble.is-blocked {
+    border-color: #dc2626;
     background: #fff;
-}
-
-.ai-chat__bubble.is-blocked {
-    border-color: #d9a13b;
 }
 
 /* 说话人那行小字跟着边框走，不要单独再铺一层底。 */
@@ -666,9 +693,9 @@
 }
 
 .ai-chat__bubble--user > span:first-child {
-    color: #2f7de1;
+    color: #1f2937;
 }
 
 .ai-chat__bubble--assistant > span:first-child {
-    color: #7d8fa0;
+    color: #2f7de1;
 }

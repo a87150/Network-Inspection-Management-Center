@@ -42,7 +42,9 @@ class AdminLoginThrottleTests(TestCase):
         self.assertIn('_auth_user_id', self.client.session)
 
         self.client.logout()
-        for _ in range(3):
+        # 上限是 3，做到 3 次就被锁在门外了，测不出"清计数"。
+        # 用 2 次：计数被清掉的话累计只有 2；没清就是 1+2=3，正好触到上限。
+        for _ in range(2):
             self.attempt('wrong-password')
         response = self.attempt('right-password')
         self.assertIn('_auth_user_id', self.client.session)

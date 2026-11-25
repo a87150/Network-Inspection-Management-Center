@@ -13,7 +13,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from net.models import Domain_Account, People
 from tests.auth import login_admin
-from tests.payloads import bootstrap, payload_text, vue_component
+from tests.payloads import bootstrap, payload_text, unhashed, vue_component
 
 
 class SharedInterfaceContractTests(TestCase):
@@ -144,9 +144,9 @@ class SharedInterfaceContractTests(TestCase):
         response = self.client.get(reverse('operations_overview'))
         html = response.content.decode(response.charset)
 
-        self.assertContains(response, 'app/css/operations-overview.css')
+        self.assertIn('app/css/operations-overview.css', unhashed(html))
         self.assertContains(response, 'type="module"')
-        self.assertContains(response, 'app/js/operations-overview/app.js')
+        self.assertIn('app/js/operations-overview/app.js', unhashed(html))
         self.assertContains(response, '<h1 id="operations-overview-title">网络拓扑</h1>')
         self.assertNotContains(response, 'role="tablist"')
         self.assertNotContains(response, '运维态势')
@@ -501,8 +501,8 @@ class AdminVisualContractTests(TestCase):
         self.assertContains(response, 'name="username"')
         self.assertContains(response, 'name="password"')
         self.assertContains(response, 'href="/admin/password_reset/"')
-        self.assertContains(response, 'app/css/style.css')
-        self.assertContains(response, 'app/css/admin.css')
+        self.assertIn('app/css/style.css', unhashed(response.content.decode(response.charset)))
+        self.assertIn('app/css/admin.css', unhashed(response.content.decode(response.charset)))
         self.assertNotContains(response, '<header id="header"')
         self.assertNotContains(response, '安全访问')
         self.assertNotContains(response, '使用管理员账号管理资产、策略与后台数据。')
@@ -525,8 +525,8 @@ class AdminVisualContractTests(TestCase):
         self.assertContains(response, 'app-navbar app-header')
         self.assertContains(response, 'app-navbar__inner')
         self.assertContains(response, 'app-main')
-        self.assertContains(response, 'app/css/style.css')
-        self.assertContains(response, 'app/css/admin.css')
+        self.assertIn('app/css/style.css', unhashed(response.content.decode(response.charset)))
+        self.assertIn('app/css/admin.css', unhashed(response.content.decode(response.charset)))
         self.assertContains(response, '天枢')
         self.assertContains(response, 'navbar-collapse')
         self.assertContains(response, '返回运维总览')
@@ -536,7 +536,7 @@ class AdminVisualContractTests(TestCase):
         self.assertNotContains(response, '欢迎')
         self.assertNotContains(response, 'admin/js/theme.js')
         self.assertNotContains(response, '查看站点')
-        self.assertContains(response, 'app/js/common/form_accessibility.js')
+        self.assertIn('app/js/common/form_accessibility.js', unhashed(response.content.decode(response.charset)))
         self.assertContains(response, 'id="content-main"')
         self.assertContains(response, 'id="content-related"')
         self.assertContains(response, 'app-brand__copy')
@@ -545,8 +545,9 @@ class AdminVisualContractTests(TestCase):
         response = self.client.get(reverse('admin:index'))
         html = response.content.decode(response.charset)
 
-        self.assertLess(html.index('admin/css/dashboard.css'), html.index('app/css/admin.css'))
-        self.assertLess(html.index('admin/css/responsive.css'), html.index('app/css/admin.css'))
+        plain = unhashed(html)
+        self.assertLess(plain.index('admin/css/dashboard.css'), plain.index('app/css/admin.css'))
+        self.assertLess(plain.index('admin/css/responsive.css'), plain.index('app/css/admin.css'))
 
     def test_admin_list_and_change_pages_keep_the_shared_shell(self):
         self.client.force_login(self.admin_user)
@@ -560,14 +561,14 @@ class AdminVisualContractTests(TestCase):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, 200)
                 self.assertContains(response, 'app-navbar app-header')
-                self.assertContains(response, 'app/css/admin.css')
+                self.assertIn('app/css/admin.css', unhashed(response.content.decode(response.charset)))
                 self.assertContains(response, '返回运维总览')
 
 class ModalVisualContractTests(TestCase):
     def test_shared_shell_loads_modal_feedback_controller(self):
         response = self.client.get(reverse('asset_list', args=['networks']))
 
-        self.assertContains(response, 'app/js/common/modal_feedback.js')
+        self.assertIn('app/js/common/modal_feedback.js', unhashed(response.content.decode(response.charset)))
 
     def test_domain_redirect_marks_reopened_dialog_for_inline_feedback(self):
         response = self.client.get(reverse('domain_controller_settings') + '?modal=1')

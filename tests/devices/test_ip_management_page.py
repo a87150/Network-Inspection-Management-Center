@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from net.models import IpSubnet
+from tests.payloads import unhashed
 
 URL = "/network/ip/"
 
@@ -34,7 +35,7 @@ class IpManagementPageTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn('data-vue-page="ip-subnet-form"', html)
-        self.assertIn("app/vue/boot.mjs", html)
+        self.assertIn("app/vue/boot.mjs", unhashed(html))
         self.assertIn("csrfmiddlewaretoken", html)
 
         payload = bootstrap(response)

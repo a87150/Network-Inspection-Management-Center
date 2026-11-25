@@ -11,6 +11,8 @@ from net.models import (
     DomainMembership,
 )
 
+from tests.payloads import unhashed
+
 
 class DomainGroupMemberInterfaceTests(TestCase):
     def setUp(self):
@@ -53,7 +55,7 @@ class DomainGroupMemberInterfaceTests(TestCase):
         self.assertContains(response, 'data-candidate-count=')
         self.assertContains(response, 'data-member-target')
         self.assertContains(response, 'v-model="selected"')
-        self.assertContains(response, 'group_members_island.js')
+        self.assertIn('group_members_island.js', unhashed(response.content.decode(response.charset)))
         self.assertContains(response, 'class="table data-table table-hover')
         self.assertContains(response, 'form="domain-group-member-action"')
         self.assertContains(

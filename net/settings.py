@@ -347,6 +347,15 @@ STATIC_ROOT = Path(os.getenv('DJANGO_STATIC_ROOT', str(BASE_DIR / 'staticfiles')
 # 改完看不到效果。让 WhiteNoise 每次都回源校验（命中通常是 304，开销可忽略）。
 WHITENOISE_MAX_AGE = 0
 
+# 走 {% static %} 引用的资源在 collectstatic 时生成带 hash 的副本（bootstrap 227KB 那条
+# 一次下载后就不该再请求）。WhiteNoise 对带 hash 的文件自动设一年缓存，不受
+# WHITENOISE_MAX_AGE 影响；ES module 里相对路径 import 的文件没有 hash，仍然每次校验，
+# 改完立刻生效。
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+}
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/6.1/ref/settings/#default-auto-field
 

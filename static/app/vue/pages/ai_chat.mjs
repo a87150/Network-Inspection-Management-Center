@@ -6,6 +6,7 @@ import { api, csrfToken } from '../api.mjs';
 function settingsFields(source) {
     const payload = source || {};
     return {
+        name: payload.name || '',
         base_url: payload.base_url || '',
         api_key: '',
         chat_model: payload.chat_model || '',
@@ -72,7 +73,7 @@ export default {
             {name: '阿里百炼', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1'},
             {name: '本地 Ollama', url: 'http://127.0.0.1:11434/v1'},
         ],
-        preset: '',
+        providerChoice: '',
         providers: [],
         probeQuery: '',
         probing: false,
@@ -108,6 +109,23 @@ export default {
         },
         canSend() {
             return this.draft.trim().length > 0 && !this.sending;
+        },
+        providerOptions() {
+            // 已保存的几组排前面，内置预设单独一组，最后是自定义。
+            return {
+                saved: this.providers.map((row) => ({
+                    value: 'saved:' + row.id,
+                    label: row.name + (row.is_active ? '（当前生效）' : ''),
+                })),
+                builtin: this.presets.map((item) => ({
+                    value: 'preset:' + item.name,
+                    label: item.name,
+                })),
+            };
+        },
+        selectedSaved() {
+            if (!this.providerChoice.startsWith('saved:')) return null;
+            return this.providers.find((row) => 'saved:' + row.id === this.providerChoice) || null;
         },
     },
     mounted() {
@@ -236,6 +254,7 @@ export default {
             this.settingsError = '';
             try {
                 const payload = await api.post(this.settings_save_url, {
+                    name: this.settingsForm.name,
                     base_url: this.settingsForm.base_url,
                     api_key: this.settingsForm.api_key,
                     chat_model: this.settingsForm.chat_model,
@@ -247,6 +266,9 @@ export default {
                 });
                 this.settingsForm.api_key = '';
                 this.hasApiKey = Boolean(payload && payload.has_api_key);
+                await this.loadProviders();
+                const active = this.providers.find((row) => row.is_active);
+                this.providerChoice = active ? 'saved:' + active.id : '';
                 this.closeModal('settingsModal');
                 this.flash('已保存，立即生效');
             } catch (failure) {
@@ -330,9 +352,32 @@ export default {
             cells.push(cell);
             return cells;
         },
-        applyPreset() {
-            const hit = this.presets.find((item) => item.name === this.preset);
-            if (hit) this.settingsForm.base_url = hit.url;
+        async applyProviderChoice() {
+            const value = this.providerChoice;
+            if (value.startsWith('saved:')) {
+                const row = this.providers.find((item) => 'saved:' + item.id === value);
+                if (!row) return;
+                this.settingsForm.name = row.name;
+                this.settingsForm.base_url = row.base_url;
+                this.settingsForm.chat_model = row.chat_model;
+                if (row.embed_model) this.settingsForm.embed_model = row.embed_model;
+                this.hasApiKey = Boolean(row.has_key);
+                // 保存写的是"当前生效那条"，不先激活会改到别人头上。
+                if (!row.is_active) await this.activateProvider(row);
+                return;
+            }
+            if (value.startsWith('preset:')) {
+                const hit = this.presets.find((item) => item.name === value.slice(7));
+                if (hit) this.settingsForm.base_url = hit.url;
+                return;
+            }
+            this.settingsForm.base_url = '';
+        },
+        async removeSelectedProvider() {
+            const row = this.selectedSaved;
+            if (!row) return;
+            await this.deleteProvider(row);
+            this.providerChoice = '';
         },
         async clearApiKey() {
             try {
@@ -570,48 +615,32 @@ export default {
                         <p v-if="settingsLoading" class="text-secondary" role="status">正在读取当前配置…</p>
                         <form id="ai-settings-form" @submit.prevent="saveSettings">
                             <div class="config-modal-grid">
-                                <section class="config-section-card mb-3" aria-label="已配置的模型服务">
+                                <section class="config-section-card mb-3" aria-label="模型服务">
                                     <div class="config-section-heading">
                                         <span class="config-section-index">00</span>
-                                        <div><h3>模型服务</h3><p>可存多组，点一下就切换。同时只有一组生效。</p></div>
-                                    </div>
-                                    <div class="ai-provider-list">
-                                        <div v-for="row in providers" :key="row.id"
-                                             class="ai-provider-card" :class="{'is-active': row.is_active}">
-                                            <div class="ai-provider-card__main">
-                                                <p class="ai-provider-card__name">
-                                                    [[ row.name ]]
-                                                    <span v-if="row.is_active" class="ai-provider-card__badge">当前</span>
-                                                </p>
-                                                <p class="ai-provider-card__meta">
-                                                    [[ row.base_url || '未填地址' ]] · [[ row.chat_model || '未填模型' ]]
-                                                    <span v-if="!row.has_key"> · 没有密钥</span>
-                                                </p>
-                                            </div>
-                                            <div class="ai-provider-card__actions">
-                                                <button v-if="!row.is_active" class="btn btn-sm btn-outline-primary"
-                                                        type="button" @click="activateProvider(row)">切换到此</button>
-                                                <button class="btn btn-sm btn-link text-danger" type="button"
-                                                        @click="deleteProvider(row)">删除</button>
-                                            </div>
-                                        </div>
-                                        <p v-if="!providers.length" class="text-body-secondary small mb-0">
-                                            还没有配置。下面填一组，保存后自动成为当前配置。
-                                        </p>
-                                    </div>
-                                </section>
-                                <section class="config-section-card" aria-label="服务端点">
-                                    <div class="config-section-heading">
-                                        <span class="config-section-index">01</span>
-                                        <div><h3>服务端点</h3>
-                                            <p>任何 OpenAI 兼容接口都能接：选一个内置的，或者自己填地址。Key 只存密文，页面不回显。</p></div>
+                                        <div><h3>模型服务</h3><p>选一组已保存的，或选内置预设自动填地址。改完点底部保存。</p></div>
                                     </div>
                                     <div class="mb-3">
-                                        <label class="form-label" for="ai-preset">提供方</label>
-                                        <select class="form-select" id="ai-preset" v-model="preset" @change="applyPreset">
+                                        <label class="form-label" for="ai-provider">提供方</label>
+                                        <select class="form-select" id="ai-provider" v-model="providerChoice" @change="applyProviderChoice">
                                             <option value="">自定义</option>
-                                            <option v-for="item in presets" :key="item.name" :value="item.name">[[ item.name ]]</option>
+                                            <optgroup label="已保存的" v-if="providerOptions.saved.length">
+                                                <option v-for="item in providerOptions.saved" :key="item.value" :value="item.value">[[ item.label ]]</option>
+                                            </optgroup>
+                                            <optgroup label="内置">
+                                                <option v-for="item in providerOptions.builtin" :key="item.value" :value="item.value">[[ item.label ]]</option>
+                                            </optgroup>
                                         </select>
+                                        <p class="form-text mb-0">
+                                            选中已保存的一组会直接切到它。
+                                            <button v-if="selectedSaved" class="btn btn-sm btn-link text-danger p-0 align-baseline"
+                                                    type="button" @click="removeSelectedProvider">删除这一组</button>
+                                        </p>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label" for="ai-provider-name">服务名称</label>
+                                        <input class="form-control" id="ai-provider-name" type="text" v-model.trim="settingsForm.name"
+                                               placeholder="DeepSeek" autocomplete="off">
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label" for="ai-base-url">接口地址（Base URL）</label>
@@ -628,34 +657,30 @@ export default {
                                             <span v-if="hasApiKey">当前已保存密钥。</span>
                                         </p>
                                     </div>
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <button class="btn btn-sm btn-outline-secondary" type="button"
-                                                :disabled="!hasApiKey" @click="clearApiKey">清除已存 Key</button>
-                                        <button class="btn btn-sm btn-primary" type="button"
-                                                :disabled="settingsSaving" @click="saveSettings">
-                                            [[ settingsSaving ? '保存中…' : '保存云端设置' ]]
-                                        </button>
-                                    </div>
-                                </section>
-                                <section class="config-section-card" aria-label="模型与检索">
-                                    <div class="config-section-heading">
-                                        <span class="config-section-index">02</span>
-                                        <div><h3>模型与检索</h3><p>问答模型、向量模型与召回阈值；阈值留空沿用环境变量。</p></div>
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-12 col-md-6">
+                                            <label class="form-label" for="ai-chat-model">Chat 模型</label>
+                                            <input class="form-control" id="ai-chat-model" type="text" v-model.trim="settingsForm.chat_model" autocomplete="off">
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <label class="form-label" for="ai-embed-model">Embedding 模型</label>
+                                            <input class="form-control" id="ai-embed-model" type="text" v-model.trim="settingsForm.embed_model" autocomplete="off">
+                                        </div>
                                     </div>
                                     <div class="mb-3">
-                                        <label class="form-label" for="ai-chat-model">Chat 模型</label>
-                                        <input class="form-control" id="ai-chat-model" type="text" v-model.trim="settingsForm.chat_model" autocomplete="off">
+                                        <label class="form-label" for="ai-models-text">模型名（逗号分隔）</label>
+                                        <input class="form-control" id="ai-models-text" type="text"
+                                               v-model="settingsForm.models_text"
+                                               placeholder="deepseek-chat, deepseek-reasoner">
+                                        <p class="form-text mb-0">输入框下方的模型下拉从这里取；留空则只有上面这一个。</p>
                                     </div>
-                                        <div class="mb-3">
-                                            <label class="form-label" for="ai-models-text">模型名（逗号分隔）</label>
-                                            <input class="form-control" id="ai-models-text" type="text"
-                                                   v-model="settingsForm.models_text"
-                                                   placeholder="deepseek-chat, deepseek-reasoner">
-                                            <p class="form-text mb-0">输入框下方的模型下拉从这里取；留空则只有上面这一个。</p>
-                                        </div>
-                                        <div class="mb-3">
-                                        <label class="form-label" for="ai-embed-model">Embedding 模型</label>
-                                        <input class="form-control" id="ai-embed-model" type="text" v-model.trim="settingsForm.embed_model" autocomplete="off">
+                                    <button class="btn btn-sm btn-outline-secondary" type="button"
+                                            :disabled="!hasApiKey" @click="clearApiKey">清除已存 Key</button>
+                                </section>
+                                <section class="config-section-card mb-3" aria-label="检索参数">
+                                    <div class="config-section-heading">
+                                        <span class="config-section-index">01</span>
+                                        <div><h3>检索参数</h3><p>召回方式与阈值；阈值留空沿用环境变量。</p></div>
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label" for="ai-rag-backend">检索方式</label>
@@ -678,7 +703,7 @@ export default {
                                 </section>
                                 <section class="config-section-card mb-3" aria-label="会话与思考">
                                 <div class="config-section-heading">
-                                    <span class="config-section-index">03</span>
+                                    <span class="config-section-index">02</span>
                                     <div><h3>会话与思考</h3><p>上下文压缩控制长对话怎么带历史；思考模式按模型支持情况选择。</p></div>
                                 </div>
                                     <div class="row g-3">
@@ -729,38 +754,6 @@ export default {
                     </div>
                     <div class="modal-body modal-body--scroll">
                         <p v-if="knowledgeError" class="alert alert-danger" role="alert">[[ knowledgeError ]]</p>
-                        <section class="config-section-card mb-3" aria-label="测试检索">
-                        <div class="config-section-heading">
-                            <span class="config-section-index">03</span>
-                            <div><h3>测试检索</h3><p>直接跑一遍 retrieve()，看每条为什么进、为什么没进。调阈值别靠猜。</p></div>
-                        </div>
-                        <div class="d-flex gap-2 mb-2">
-                            <input class="form-control" type="text" v-model="probeQuery"
-                                   placeholder="输入一句运维问题，例如：S5735 端口不通"
-                                   @keydown.enter.prevent="runProbe">
-                            <button class="btn btn-outline-primary text-nowrap" type="button"
-                                    :disabled="probing || !probeQuery.trim()" @click="runProbe">
-                                [[ probing ? '检索中…' : '试一下' ]]
-                            </button>
-                        </div>
-                        <p v-if="probeError" class="text-danger small mb-2">[[ probeError ]]</p>
-                        <p v-if="probeDone" class="small mb-2">
-                            命中 [[ probeHits.length ]] 条
-                            <span v-if="!probeHits.length">—— 说明这条问题在知识库里找不到依据，会被拒答。</span>
-                        </p>
-                        <table v-if="probeHits.length" class="table table-sm small mb-0">
-                            <thead><tr><th>标题</th><th>分类</th><th>距离</th><th>得分</th><th>来源</th></tr></thead>
-                            <tbody>
-                                <tr v-for="hit in probeHits" :key="hit.title">
-                                    <td>[[ hit.title ]]</td>
-                                    <td>[[ hit.category ]]</td>
-                                    <td>[[ hit.distance ]]</td>
-                                    <td>[[ hit.score === null ? '—' : hit.score ]]</td>
-                                    <td>[[ hit.via ]]</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </section>
                     <section class="config-section-card mb-3" aria-label="知识库现状">
                             <div class="config-section-heading">
                                 <span class="config-section-index">00</span>
@@ -801,7 +794,7 @@ export default {
                                 <button type="submit" class="btn btn-primary mt-3" :disabled="adding">[[ adding ? '保存中…' : '保存这一条' ]]</button>
                             </form>
                         </section>
-                        <section class="config-section-card mb-0" aria-label="表格导入">
+                        <section class="config-section-card mb-3" aria-label="表格导入">
                             <div class="config-section-heading">
                                 <span class="config-section-index">02</span>
                                 <div><h3>表格导入</h3><p>从 Excel 直接粘贴或粘 CSV；列顺序：标题、内容、分类。</p></div>
@@ -837,6 +830,38 @@ export default {
                             <button type="button" class="btn btn-primary mt-2" :disabled="importing" @click="runImport">
                                 [[ importing ? '导入中…' : '导入' ]]
                             </button>
+                        </section>
+                        <section class="config-section-card mb-0" aria-label="测试检索">
+                            <div class="config-section-heading">
+                                <span class="config-section-index">03</span>
+                                <div><h3>测试检索</h3><p>直接跑一遍 retrieve()，看每条为什么进、为什么没进。调阈值别靠猜。</p></div>
+                            </div>
+                            <div class="d-flex gap-2 mb-2">
+                                <input class="form-control" type="text" v-model="probeQuery"
+                                       placeholder="输入一句运维问题，例如：S5735 端口不通"
+                                       @keydown.enter.prevent="runProbe">
+                                <button class="btn btn-outline-primary text-nowrap" type="button"
+                                        :disabled="probing || !probeQuery.trim()" @click="runProbe">
+                                    [[ probing ? '检索中…' : '试一下' ]]
+                                </button>
+                            </div>
+                            <p v-if="probeError" class="text-danger small mb-2">[[ probeError ]]</p>
+                            <p v-if="probeDone" class="small mb-2">
+                                命中 [[ probeHits.length ]] 条
+                                <span v-if="!probeHits.length">—— 说明这条问题在知识库里找不到依据，会被拒答。</span>
+                            </p>
+                            <table v-if="probeHits.length" class="table table-sm small mb-0">
+                                <thead><tr><th>标题</th><th>分类</th><th>距离</th><th>得分</th><th>来源</th></tr></thead>
+                                <tbody>
+                                    <tr v-for="hit in probeHits" :key="hit.title">
+                                        <td>[[ hit.title ]]</td>
+                                        <td>[[ hit.category ]]</td>
+                                        <td>[[ hit.distance ]]</td>
+                                        <td>[[ hit.score === null ? '—' : hit.score ]]</td>
+                                        <td>[[ hit.via ]]</td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </section>
                     </div>
                     <div class="modal-footer modal-footer--sticky">

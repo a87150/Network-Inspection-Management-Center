@@ -10,6 +10,15 @@ def bootstrap(response, script_id):
     return json.loads(match.group(1)) if match else {}
 
 
+def unhashed(html):
+    """去掉 ManifestStaticFilesStorage 加的指纹，只留文件名。
+
+    style.4f2a1b3c9d8e.css -> style.css
+    断言关心加载了哪个文件，不是指纹本身。
+    """
+    return re.sub(r"\.[0-9a-f]{12}(\.[a-z0-9]+)", r"\1", html)
+
+
 def rows(response, script_id):
     return bootstrap(response, script_id).get("rows") or []
 

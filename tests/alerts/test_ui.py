@@ -10,7 +10,7 @@ import json
 import re
 
 from tests import response_body
-from tests.payloads import payload_text
+from tests.payloads import unhashed, payload_text
 from urllib.parse import parse_qs, urlsplit
 
 from django.test import Client, TestCase
@@ -111,7 +111,7 @@ class AlertUiTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, '告警配置')
-        self.assertContains(response, 'app/js/inspections/task_ui.js')
+        self.assertIn('app/js/inspections/task_ui.js', unhashed(response.content.decode(response.charset)))
         self.assertContains(response, 'primary disabled channel')
         self.assertContains(response, 'name="channels"')
         content = response.content.decode()

@@ -1394,13 +1394,19 @@ code {
         display: grid;
         grid-template-columns: minmax(0, 1fr);
     }
+    /* 一行三个。原来是单列 grid，7 个筛选按钮各占一行，首屏全被它们吃掉。 */
     .table-filter-bar .table-filter-actions {
         display: grid;
-        grid-template-columns: minmax(0, 1fr);
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: .5rem;
     }
     .table-filter-bar .table-filter-actions > *,
     .table-filter-bar .table-filter-actions .btn {
         width: 100%;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     .page-pagination,
     .page-pagination__links {
