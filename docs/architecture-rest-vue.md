@@ -51,6 +51,10 @@ assets/       四类资产共享的列表/详情/创建/配置备份（原 index
 index/        外壳与共享层：common、api、dashboard、templatetags、公共视图
 ```
 
+另有一个不在 `index/` 下的独立 app：`ai_assistant/`（AI 问答）。它自成一套
+（会话、知识库、模型调用、原生 SQL 检索），接口挂在 `api/ai/` 而不是 `/api/v1/`，
+前端是 `pages/ai_chat.mjs`。
+
 每个 app 自带 `templates/<前缀>/`，模板路径（`{% include 'alerts/event_row.html' %}`）不因搬迁而变。
 
 ```
@@ -77,7 +81,7 @@ static/app/vue/
 
 ## 迁移状态
 
-已迁（3）：维护记录 `/maintenance/`（整页 Vue + REST 读写）、IP 管理 `/network/ip/`（台账仍服务端渲染，新增网段走本页弹窗 + `POST /api/v1/ip-subnets/`，不再跳后台 admin）、B1 全部 9 个列表页（见下）。
+已迁（4）：维护记录 `/maintenance/`（整页 Vue + REST 读写）、IP 管理 `/network/ip/`（台账仍服务端渲染，新增网段走本页弹窗 + `POST /api/v1/ip-subnets/`，不再跳后台 admin）、B1 全部 9 个列表页（见下）、AI 问答 `/ai/`（整页 Vue，接口在 `api/ai/`，不走 `/api/v1/`）。
 
 待迁，按形状分四批。
 
@@ -88,6 +92,7 @@ static/app/vue/
 | ~~B3 写操作~~ 已迁 | 资产新增/编辑、巡检配置、问题等级、告警渠道/策略/模板、导入、批量执行、维护窗口、PC 采集配置、人员平台与同步计划、门禁来源 | 模态框表单带 `data-form-ajax` 时用 fetch 提交，服务端按 `X-Form-Ajax` 决定回 JSON 还是重定向：失败 400 + `errors[]` 留在框里，成功 200 + `message/redirect` 就地提示。表单本身没改，禁用 JS 时照旧 POST + 重定向 |
 | ~~B4 拓扑~~ 已改 | 网络拓扑 | 拓扑本来就是 Vue（`operations-overview/*.js`），这轮只改布局：后端按「摘掉出口之间的链路后剩下的连通分量」切场地，每块场地内部再按出口→核心→汇聚→接入分层，前端一个场地一列并排展开，场地之间的链路按 VPN 隧道单独上色。效果见 [topology-preview.png](topology-preview.png) |
 | B4 其余 | 首页仪表盘、人员统计、IP 管理台账、登录页 | 均为只读汇总或单表单页，服务端渲染首屏更快、无 JS 依赖。首页卡片数据已经是 `items` 列表结构，需要自动刷新时再挂 Vue 岛即可 |
+| AI 问答 | AI 助手 `/ai/` | 不在原批次里，是新增页：整页 Vue（`pages/ai_chat.mjs`），接口挂在 `api/ai/` 而不是 `/api/v1/`（问答不是资源 CRUD）。页面内自带服务配置、知识库维护、检索自检三块抽屉 |
 
 B1 已完成：一个通用组件 + `RecordTableViewSet` 子类吃掉了 9 个页面。行内的「查看详情 / 结束任务 / 成员管理 / BitLocker」由 payload 的 `actions` 描述（`link` / `form` / `modal` 三种），所以表单 POST 与模态框脚本照旧工作；域列表的分批选择列复用原 `data-domain-target-checkbox` 属性，`operation_modal.js` 无需改动。
 
