@@ -389,7 +389,11 @@
                 workspace.replaceWith(replacement);
                 initializeWorkspace(replacement, storage, browserWindow.location);
                 // 换进来的是新 DOM，Vue 岛必须重挂，否则只剩表头没有行。
-                window.mountPages?.(replacement);
+                // 用传进来的 browserWindow 而不是裸的全局 window：这个函数在
+                // 非浏览器环境（测试、SSR）里没有 window，裸引用会直接抛
+                // ReferenceError，被下面的 catch 吞掉后走整页跳转兜底，
+                // 顺带把后面的焦点恢复也一起跳过了。
+                browserWindow.mountPages?.(replacement);
             });
             announceTableUpdate(documentRoot, pairs.map(({replacement}) => replacement));
             if (options.focusTableKey && options.focusSortKey) {
