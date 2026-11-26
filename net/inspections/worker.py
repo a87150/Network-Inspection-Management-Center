@@ -14,7 +14,7 @@ from concurrent.futures import FIRST_COMPLETED, CancelledError, ThreadPoolExecut
 from django.core.exceptions import ValidationError
 from django.db import OperationalError, connection, connections
 
-from net.models import TaskHistoryConfig, TaskRun
+from net.models import TaskHistoryConfig, TaskRun, TaskTargetRun
 
 
 def close_stale_connections():
@@ -146,6 +146,18 @@ class TaskWorker:
                         'task=%s target=%s: 等待命令行并发配额超时，本次未执行，等租约重排',
                         target.task_id, target.pk,
                     )
+                    # 只写日志的话，DB 里完全看不出这台设备是「没排上队」而不是
+                    # 「连不上」——最终会被记成「租约过期」。把这句落到 error_message，
+                    # 至少界面上能看出真实原因。
+                    try:
+                        # 直接 update：这里不该触发 full_clean，也不能因为校验失败
+                        # 把「没排上队」变成另一个异常。
+                        TaskTargetRun.objects.filter(pk=target.pk).update(
+                            error_message='等待命令行并发配额超时，本次未执行；'
+                                          '租约到期后会自动重排。')
+                    except Exception:
+                        logging.getLogger(__name__).exception(
+                            '记录配额超时原因失败 target=%s', target.pk)
                 return None
             except Exception as exc:
                 database_message = ''
@@ -400,15 +412,26 @@ class TaskWorker:
             close_stale_connections()
             if stop_event.is_set():
                 return False
+            handoffs = 0
+            task = None
             with _database_guard():
-                recover_expired_tasks()
-                handoffs = cleanup_retained_logs(limit=self.threads * 4)
-                cleanup_inspection_records(limit=self.threads * 10)
-                cleanup_task_history(TaskHistoryConfig.current_days(),
-                                     limit=self.threads * 10)
+                # 维护作业是尽力而为：清理/对账/排计划里任何一条抛错都不能连累
+                # 认领任务。以前这里没有边界，一条 ValidationError 或 IntegrityError
+                # 就会冒到 run_forever 之外把整个 worker 打死，队列和告警一起停。
+                try:
+                    recover_expired_tasks()
+                    handoffs = cleanup_retained_logs(limit=self.threads * 4)
+                    cleanup_inspection_records(limit=self.threads * 10)
+                    cleanup_task_history(TaskHistoryConfig.current_days(),
+                                         limit=self.threads * 10)
+                except Exception:
+                    logging.getLogger(__name__).exception('后台清理失败，本轮跳过')
                 if stop_event.is_set():
                     return False
-                enqueue_due_schedules()
+                try:
+                    enqueue_due_schedules()
+                except Exception:
+                    logging.getLogger(__name__).exception('到期计划入队失败，本轮跳过')
                 if stop_event.is_set():
                     return False
                 task = claim_next_task(self.worker_id, self.lease_seconds)
@@ -446,14 +469,17 @@ class TaskWorker:
         while not stop_event.is_set():
             try:
                 handled = self.run_once(stop_event)
-            except OperationalError as exc:
-                if not is_sqlite_busy(exc):
-                    raise
-                # _execute_claimed_task fences targets before propagating;
-                # run_once closes connections. Expired work is recovered later.
-                logging.getLogger(__name__).warning(
-                    'SQLite 数据库正忙，Worker 将稍后重试；未完成任务按租约机制恢复。'
-                )
+            except Exception as exc:
+                logger = logging.getLogger(__name__)
+                if isinstance(exc, OperationalError) and is_sqlite_busy(exc):
+                    # _execute_claimed_task fences targets before propagating;
+                    # run_once closes connections. Expired work is recovered later.
+                    logger.warning(
+                        'SQLite 数据库正忙，Worker 将稍后重试；未完成任务按租约机制恢复。')
+                else:
+                    # 单轮失败不该带走整个进程：记录后按 poll 间隔继续。
+                    # 只有 KeyboardInterrupt/SystemExit 这类 BaseException 会穿出去。
+                    logger.exception('Worker 单轮执行失败，稍后重试')
                 handled = False
             if not handled:
                 stop_event.wait(self.poll_seconds)

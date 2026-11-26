@@ -2,7 +2,7 @@ from .pc_upload import PCUploadConfig
 from .access import AccessRecordSource, AccessRecord
 from .collection_profiles import DeviceCollectionTemplate, DeviceCollectionBinding
 from .alerts import AlertChannel, AlertDelivery, AlertEvent, AlertPolicy, AlertState, AlertTestSend
-from .alerts import AlertNotificationTemplate, MaintenanceWindow
+from .alerts import AlertNotificationTemplate, AlertPolicyRoute, MaintenanceWindow
 from .devices import Computer, Network_Device, WeakCurrentDevice, Server
 from .configuration_backups import DeviceConfigurationBackup
 from .domain import (
@@ -33,7 +33,7 @@ __all__ = [
     "PCUploadConfig",
     "AccessRecordSource", "AccessRecord",
     "DeviceCollectionTemplate", "DeviceCollectionBinding",
-    'AlertNotificationTemplate', 'DomainOU', 'DomainMembership',
+    'AlertPolicyRoute', 'AlertNotificationTemplate', 'DomainOU', 'DomainMembership',
     'MaintenanceWindow',
     'IpSubnet', 'IpAddress',
     'DeviceConfigurationBackup',

@@ -7,7 +7,7 @@
 356 行就要扫 200ms，任务越多越慢。这里交给数据库一次算好、存下来、建索引，
 查询直接走列。
 """
-from django.db import migrations, models
+from django.db import migrations
 
 
 def _ddl_state():

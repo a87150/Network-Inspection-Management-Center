@@ -399,6 +399,20 @@ def backbone_parents(backbone_nodes, physical_edges):
     return parent
 
 
+def _orphan_parent(endpoint, backbone_nodes):
+    """孤儿终端的兜底父节点：优先同场地、tier 最小的主干节点。"""
+    site = endpoint.get('site') or ''
+    pool = [node for node in backbone_nodes if not site or node.get('site') == site]
+    if not pool:
+        pool = list(backbone_nodes)
+    if not pool:
+        return None
+    return min(pool, key=lambda node: (
+        node.get('tier') if isinstance(node.get('tier'), int) else 99,
+        str(node.get('id')),
+    ))
+
+
 def attach_endpoints(backbone_nodes, endpoint_nodes, physical_edges):
     backbone_by_id = {node['id']: node for node in backbone_nodes}
     edges = []
@@ -408,6 +422,13 @@ def attach_endpoints(backbone_nodes, endpoint_nodes, physical_edges):
         if parent is None:
             parent = _subnet_parent(endpoint['_networks'], backbone_nodes)
             source = 'inferred_subnet' if parent is not None else ''
+        if parent is None:
+            # 既没有物理发现、IP 也落不进任何主干设备的 /24（比如没填 IP 的 PC），
+            # 原来直接跳过 —— 终端就这么静默消失了，而顶部「另有 N 个设备未绘制」
+            # 只统计被截断的资产，对不上。兜底挂到本场地 tier 最小的主干节点上，
+            # 前端用虚线区分。
+            parent = _orphan_parent(endpoint, backbone_nodes)
+            source = 'orphan' if parent is not None else ''
         if parent is None:
             continue
         endpoint['parent_id'] = parent['id']

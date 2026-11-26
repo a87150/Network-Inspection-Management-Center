@@ -119,6 +119,13 @@ class VirtualLoop(asyncio.SelectorEventLoop):
         raise AssertionError('native capture must not leave blocking executor work')
 
 
+def _body(response):
+    """FileResponse 走 streaming_content，普通 HttpResponse 才有 content。"""
+    if hasattr(response, 'streaming_content'):
+        return b''.join(response.streaming_content)
+    return response.content
+
+
 class ConfigurationTests(TestCase):
     def setUp(self):
         from tests.auth import login_admin
@@ -297,7 +304,7 @@ class ConfigurationTests(TestCase):
         self.assertEqual(result.status_code, 404)
         self.assertIn('完整备份'.encode(), result.content)
         archive = self.client.get('/assets/weakcurrent/configurations.zip')
-        with ZipFile(BytesIO(archive.content)) as bundle:
+        with ZipFile(BytesIO(_body(archive))) as bundle:
             self.assertEqual(bundle.namelist(), ['manifest.csv'])
 
     def test_config_only_dahua_uses_only_named_read_endpoint(self):
@@ -381,7 +388,7 @@ class ConfigurationTests(TestCase):
         })
         self.assertEqual(multiple.status_code, 200)
         self.assertEqual(multiple['Content-Type'], 'application/zip')
-        with ZipFile(BytesIO(multiple.content)) as bundle:
+        with ZipFile(BytesIO(_body(multiple))) as bundle:
             rows = list(csv.DictReader(StringIO(bundle.read('manifest.csv').decode('utf-8-sig'))))
             self.assertEqual({row['asset_id'] for row in rows}, {str(self.device.pk), str(selected.pk)})
             self.assertNotIn(str(unselected.pk), {row['asset_id'] for row in rows})
@@ -419,7 +426,7 @@ class ConfigurationTests(TestCase):
             'filter_vendor': 'Cisco', 'page': 2, 'page_size': 1,
             'sort': 'password', 'filter_password': 'do-not-filter'})
         self.assertEqual(result.status_code, 200)
-        with ZipFile(BytesIO(result.content)) as bundle:
+        with ZipFile(BytesIO(_body(result))) as bundle:
             rows = list(csv.DictReader(StringIO(bundle.read('manifest.csv').decode('utf-8-sig'))))
             self.assertEqual(len(rows), 5)
             self.assertEqual({row['status'] for row in rows}, {'success', 'missing', 'failed'})
@@ -671,7 +678,7 @@ class ConfigurationTests(TestCase):
         result = self.client.get('/assets/networks/configurations.zip',
                                  {'filter_device_name': 'no matching assets'})
         self.assertEqual(result.status_code, 200)
-        with ZipFile(BytesIO(result.content)) as bundle:
+        with ZipFile(BytesIO(_body(result))) as bundle:
             self.assertEqual(bundle.namelist(), ['manifest.csv'])
             self.assertEqual(len(bundle.read('manifest.csv').decode('utf-8-sig').splitlines()), 1)
         self.assertEqual(self.client.post(f'/assets/networks/{self.device.pk}/configuration/').status_code, 405)

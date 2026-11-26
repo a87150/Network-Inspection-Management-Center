@@ -49,6 +49,15 @@ class IssueSettingsTests(RemoteRuleFixture, TestCase):
         analysis = self.analyze(['cpu_health'])
         task = enqueue_task(profile, [analysis.log_file_id], 'manual')
         analyze_log(analysis.log_file, ['cpu_health'], task_target=task.target_runs.get())
+        # 目标级互斥：同一份日志同一时刻只能有一个活动分析任务，先让前者收尾。
+        from django.utils import timezone
+        from net.models import TaskRun, TaskTargetRun
+        finished = timezone.now()
+        TaskRun.objects.filter(pk=task.pk).update(
+            status=TaskRun.Status.CANCELLED, active_scope_key=None,
+            finished_at=finished, lease_expires_at=None)
+        TaskTargetRun.objects.filter(task=task).update(
+            status=TaskRun.Status.CANCELLED, execution_scope_key=None, finished_at=finished)
         newer_profile = ComputerAnalysisProfile.objects.create(name='newer-table', analysis_items=['patches'])
         newer_task = enqueue_task(newer_profile, [analysis.log_file_id], 'manual')
         analyze_log(analysis.log_file, ['patches'], task_target=newer_task.target_runs.get())

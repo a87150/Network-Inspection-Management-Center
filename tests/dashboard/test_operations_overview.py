@@ -160,7 +160,12 @@ class OperationsSnapshotTests(TestCase):
         access_node = next(node for node in first['nodes'] if node['id'] == f'networks:{access.pk}')
         self.assertEqual(access_node['child_count'], 1)
 
-    def test_invalid_endpoint_address_remains_unattached(self):
+    def test_invalid_endpoint_address_falls_back_to_orphan_attachment(self):
+        """地址解析不出网段时不再静默消失，兜底挂到本场地的主干节点上。
+
+        原来这种终端直接被跳过：节点没有 parent_id，前端就不画它，而顶部
+        「另有 N 个设备未绘制」只统计被截断的资产，数字对不上。
+        """
         from topology.operations import build_operations_snapshot
 
         Network_Device.objects.create(
@@ -175,9 +180,10 @@ class OperationsSnapshotTests(TestCase):
             node for node in topology['nodes'] if node['id'] == f'weakcurrent:{camera.pk}'
         )
 
-        self.assertIsNone(camera_node['parent_id'])
-        self.assertEqual(camera_node['attachment_source'], '')
-        self.assertEqual(topology['attachment_edges'], [])
+        self.assertIsNotNone(camera_node['parent_id'])
+        self.assertEqual(camera_node['attachment_source'], 'orphan')
+        self.assertEqual(len(topology['attachment_edges']), 1)
+        self.assertEqual(topology['attachment_edges'][0]['attachment_source'], 'orphan')
 
     def test_ap_physical_relationship_beats_subnet_inference_and_stays_physical(self):
         from topology.operations import build_operations_snapshot

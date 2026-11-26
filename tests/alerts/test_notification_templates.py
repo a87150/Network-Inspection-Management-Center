@@ -114,28 +114,38 @@ class TemplateSettingsTests(TestCase):
         from net.models import AlertNotificationTemplate
         from net.alerts.templates import render_task_summary
         response = self.client.get(self.url)
-        self.assertContains(response, 'data-modal-form')
+        self.assertContains(response, 'data-modal-navigate')
         self.assertContains(response, 'csrfmiddlewaretoken')
         self.assertIn('no-store', response['Cache-Control'])
         self.assertIn('巡检', render_task_summary({'task_name': '巡检'})['title'])
-        self.assertFalse(AlertNotificationTemplate.objects.exists())
+        # 迁移已经建了一行默认汇总模板；GET 不该再新增。
+        self.assertEqual(AlertNotificationTemplate.objects.count(), 1)
 
     def test_preview_neither_saves_nor_sends_and_save_stays_in_modal(self):
         from unittest.mock import patch
         from net.models import AlertNotificationTemplate
+        # POST 不带 template_id 现在是「新建」，会撞 name 唯一约束；这里要改现有那条。
+        existing = AlertNotificationTemplate.objects.get(trigger='summary', is_default=True)
         with patch('requests.sessions.Session.request', side_effect=AssertionError('External HTTP forbidden')), \
                 patch('smtplib.SMTP', side_effect=AssertionError('External SMTP forbidden')):
-            response = self.client.post(self.url, {'mode': 'detailed', 'action': 'preview',
+            response = self.client.post(self.url, {
+                'template_id': str(existing.pk),
+                'name': '默认任务汇总', 'trigger': 'summary',
+                'mode': 'detailed', 'action': 'preview',
                 'title_template': '预览 {task_name}'})
             self.assertContains(response, '预览 示例服务器巡检')
-            self.assertFalse(AlertNotificationTemplate.objects.exists())
-            response = self.client.post(self.url, {'mode': 'compact', 'action': 'save',
+            self.assertEqual(AlertNotificationTemplate.objects.count(), 1)
+            response = self.client.post(self.url, {
+                'template_id': str(existing.pk),
+                'name': '默认任务汇总', 'trigger': 'summary',
+                'mode': 'compact', 'action': 'save',
                 'title_template': '已保存 {task_name}'})
             self.assertContains(response, '已保存')
             self.assertContains(response, 'id="alertTemplateModal"')
             self.assertNotIn('Location', response)
-        self.assertEqual(AlertNotificationTemplate.objects.get(key='task_summary').title_template,
-                         '已保存 {task_name}')
+        saved = AlertNotificationTemplate.objects.get(trigger='summary', is_default=True)
+        self.assertEqual(saved.title_template, '已保存 {task_name}')
+        self.assertEqual(saved.name, '默认任务汇总')
 
     def test_invalid_input_visible_without_write(self):
         from net.models import AlertNotificationTemplate
@@ -144,7 +154,7 @@ class TemplateSettingsTests(TestCase):
             response = self.client.post(self.url, data)
             self.assertEqual(response.status_code, 400)
             self.assertContains(response, 'errorlist', status_code=400)
-        self.assertFalse(AlertNotificationTemplate.objects.exists())
+        self.assertEqual(AlertNotificationTemplate.objects.count(), 1)
 
     def test_permissions_methods_and_csrf(self):
         from tests.auth import login_reader
@@ -161,8 +171,10 @@ class TemplateSettingsTests(TestCase):
     def test_live_configuration_only_affects_new_render(self):
         from net.models import AlertNotificationTemplate
         from net.alerts.templates import render_task_summary
-        template = AlertNotificationTemplate.objects.create(key='task_summary',
-            mode='compact', title_template='第一版 {task_name}')
+        template = AlertNotificationTemplate.objects.get(trigger='summary', is_default=True)
+        template.mode = 'compact'
+        template.title_template = '第一版 {task_name}'
+        template.save()
         frozen = render_task_summary({'task_name': '巡检'})
         template.title_template = '第二版 {task_name}'
         template.save()

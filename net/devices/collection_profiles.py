@@ -270,6 +270,11 @@ def template_settings(template, *, templates=None):
     while template is not None:
         if template.pk in seen:
             raise ValidationError('模板继承关系存在循环。')
+        if not template.is_enabled:
+            # 停用的模板不该继续往下游供配置：叶子在 rows 里已被过滤掉，父链以前
+            # 不检查，导致停用父模板后子模板照样继承它的阈值和命令。
+            raise ValidationError({
+                'parent': f'父模板「{template.name}」已停用，请先启用或改绑其他模板。'})
         seen.add(template.pk)
         chain.append(template)
         template = (available.get(template.parent_id) if available is not None else template.parent) if template.parent_id else None
@@ -293,7 +298,11 @@ def resolve_collection_settings(kind, asset, *, templates=None, bindings=None):
     templates = list(templates) if templates is not None else list(DeviceCollectionTemplate.objects.filter(kind=kind))
     rows = {(r.vendor,r.subtype):r for r in templates if r.is_enabled and not r.version_match}
     binding = bindings.get(str(asset.pk)) if bindings is not None else DeviceCollectionBinding.objects.filter(kind=kind,target_id=asset.pk).select_related('template').first()
-    leaf = rows.get((vendor,subtype)) or rows.get((vendor,''))
+    # 逐级放宽：精确 → 同厂商任意类型 → 任意厂商同类型 → 通配。
+    # 弱电种子模板一律 vendor=''（「全部厂商」），只回退 (vendor,'') 会让填了
+    # 海康/大华的设备拿不到种子的 item_enabled/thresholds/snmp_oids。
+    leaf = (rows.get((vendor, subtype)) or rows.get((vendor, ''))
+            or rows.get(('', subtype)) or rows.get(('', '')))
     version_match = None
     if kind == 'networks':
         leaf, version_match = _version_template(leaf, templates, getattr(asset, 'os_version', '') or '')
@@ -314,8 +323,10 @@ def resolve_collection_settings(kind, asset, *, templates=None, bindings=None):
         result['_credentials_identity'] = hashlib.sha256(binding.encrypted_credentials.encode()).hexdigest()
     if kind == 'weakcurrent':
         result.setdefault('_credentials_identity', hashlib.sha256(b'').hexdigest())
-    result.pop('selected_items',None)
-    result.pop('alert_items',None)
+    # selected_items 要用 supported_collection_items 按设备能力重算，所以清掉。
+    # alert_items 不同：它是「这台设备关掉哪些告警项」的显式配置，没有重算来源，
+    # 以前一起 pop 掉，executor 里读 device_alert_items 的分支成了死代码。
+    result.pop('selected_items', None)
     if kind=='weakcurrent' or (kind=='networks' and getattr(asset,'connection_type','')=='snmp') or result.get('item_enabled'):
         result['selected_items'] = supported_collection_items(kind,asset,result)
     return result

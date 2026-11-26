@@ -71,11 +71,13 @@ def evaluate_device_issues(project, selected, data, *, reachable, status, overri
             interfaces = evidence.get('interfaces', []) if isinstance(evidence, dict) else []
             valid = [row for row in interfaces if isinstance(row, dict) and row.get('data_state') == 'known']
             utilizations = [value for row in valid if (value := _metric_value(row.get('utilization_percent'))) is not None]
-            if not interfaces or len(valid) != len(interfaces) or len(utilizations) != len(valid):
+            # 没有端口带宽的接口（Vlan/Null0 之类）算不出利用率是正常的，不该
+            # 让整项永远停在「数据不足」：只要还有接口能判且没超阈，这一项就算正常。
+            if not interfaces or not utilizations:
                 issue(item, '部分接口缺少有效速率采样或端口带宽，无法完整判断带宽使用率。', True)
-            if utilizations and max(utilizations) > limits[item]:
+            elif max(utilizations) > limits[item]:
                 issue(item, f'最高接口带宽使用率 {max(utilizations):g}% 超过阈值 {limits[item]:g}%')
-            elif interfaces and len(utilizations) == len(interfaces):
+            else:
                 normal.append(item)
             continue
         if project == 'servers' and not is_linux and item == 'services' and isinstance(evidence, list):

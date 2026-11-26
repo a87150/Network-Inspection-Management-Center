@@ -184,11 +184,14 @@ def collect_security_api(device, timeout=12, selected_items=None):
         remaining = deadline - monotonic()
         config = (collect_native_configuration(device, remaining) if remaining > 0 else
                   {'status': 'failed', 'message': 'API 采集时限已到，未读取原生配置。'})
+        # 未注册原生配置接口的厂商返回 unsupported，那是「本就不适用」而不是
+        # 「采失败了」——算成失败会让这类设备每轮都 partial 并触发采集告警。
+        config_settled = config['status'] in {'success', 'unsupported'}
         result.reachable = result.reachable or config['status'] == 'success'
         result.data['config_info'] = config
         result.raw['config_info'] = config
-        successes = (1 if config['status'] == 'success' else 0) + len([key for key in result.data if key != 'config_info'])
-        result.status = 'success' if config['status'] == 'success' and result.status == 'success' else ('partial' if successes else 'failed')
+        successes = (1 if config_settled else 0) + len([key for key in result.data if key != 'config_info'])
+        result.status = 'success' if config_settled and result.status == 'success' else ('partial' if successes else 'failed')
         result.message = '' if result.status == 'success' else '部分巡检项未成功；请查看各项证据。'
         return result
     vendor = (device.vendor or '').lower()

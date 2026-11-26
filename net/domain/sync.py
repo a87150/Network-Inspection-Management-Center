@@ -151,7 +151,7 @@ def _update_or_create_domain_object(model, identity_field, identity, object_guid
 
 
 def sync_domain(config):
-    return apply_domain_snapshot(fetch_domain_snapshot(config))
+    return apply_domain_snapshot(fetch_domain_snapshot(config), base_dn=config.base_dn)
 
 
 def _check_search_result(connection):
@@ -248,7 +248,7 @@ def fetch_domain_snapshot(config):
     return users, computers, groups, ous
 
 
-def apply_domain_snapshot(snapshot):
+def apply_domain_snapshot(snapshot, base_dn=''):
     users, computers, groups = snapshot[:3]
     seen_accounts = set()
     seen_computers = set()
@@ -346,9 +346,23 @@ def apply_domain_snapshot(snapshot):
         if len(snapshot) > 3:
             publish_ous(snapshot[3])
 
+        # 只停用「本次搜索范围内没再见到」的对象。搜索起点是 config.base_dn，
+        # 把范围收窄到某个 OU 之后，范围内是有人的、范围外一个人都见不到；
+        # 原来不带范围的全表 exclude 会把范围外的账号整批标成停用。
+        # 不知道自己在看哪（DN 为空）的行一律不动。
         if seen_accounts:
-            Domain_Account.objects.exclude(login_name__in=seen_accounts).update(is_active=False)
+            stale_accounts = Domain_Account.objects.exclude(login_name__in=seen_accounts)
+            if base_dn:
+                stale_accounts = stale_accounts.filter(distinguished_name__iendswith=base_dn)
+            else:
+                stale_accounts = stale_accounts.none()
+            stale_accounts.update(is_active=False)
         if seen_computers:
-            Domain_Computer.objects.exclude(computer_name__in=seen_computers).update(is_active=False)
+            stale_computers = Domain_Computer.objects.exclude(computer_name__in=seen_computers)
+            if base_dn:
+                stale_computers = stale_computers.filter(distinguished_name__iendswith=base_dn)
+            else:
+                stale_computers = stale_computers.none()
+            stale_computers.update(is_active=False)
 
     return len(reported_accounts), len(reported_computers), len(reported_groups)

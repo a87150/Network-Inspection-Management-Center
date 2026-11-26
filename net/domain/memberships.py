@@ -32,10 +32,16 @@ def refresh_group_names(objects):
         for membership in memberships:
             names[getattr(membership, field + '_id')].append(
                 membership.group.group_name + ('（主组）' if membership.is_primary else ''))
+        # 全量 bulk_update 每次同步都重写整张表的这一列。只有内容真的变了才写，
+        # 组关系没变时这一列本来就是对的，重写只是白发热。
+        changed = []
         for row in rows:
-            row.group_names = '；'.join(names[row.pk])
-        if rows:
-            model.objects.bulk_update(rows, ['group_names'], batch_size=500)
+            value = '；'.join(names[row.pk])
+            if row.group_names != value:
+                row.group_names = value
+                changed.append(row)
+        if changed:
+            model.objects.bulk_update(changed, ['group_names'], batch_size=500)
 
 
 def publish_memberships(users, computers, groups):

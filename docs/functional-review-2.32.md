@@ -26,25 +26,40 @@
 | 六 | 16（登录限流）、23（统计口径）、A2（部分成功）、A3（端口数）、A4（SNMP 总超时） | 已修 |
 | 七 | R1（记录页任务）、R2（任务栏点击）、R3（失败静默）、R5（配额超时） | 已修 |
 | — | 19、24 | **复查后撤回**，见「已排除」 |
-| — | 9、10、22 | **需要产品口径**，见各条 |
+| 八 | 9（域同步范围）、10（维护窗口口径） | 已修 |
+| — | 22 | 不需要处理：复职人员另开账号 |
 | — | 21、R9 | 待实测确认 |
-| — | 11、25、28、A5、A6、R4、R6、R7 | 未做，见下 |
+| 九 | 11、25、A5、A6、R7 + 备份清理、乐观锁、toggle 幂等 | 已修 |
+| — | 28 | 没做：前端绘制层，无回归手段 |
+| — | R4、R6 | 复核后确认不是 bug，见下 |
 
-### 还没做的九条
+### 原来留着没做的九条（现状）
 
-这九条都动到了结构或性能，不是改一行能收的，单独列出来避免误以为已经处理：
+| 条目 | 结论 |
+| --- | --- |
+| 11 保存租约短于邮件发送耗时 | **已修**：邮件渠道租约 300 秒，webhook 仍 30 秒 |
+| 25 同步全表重写 group_names | **已修**：只 bulk_update 内容真的变了的行 |
+| 28 拓扑页三处绘制缺口 | **没做**，见下 |
+| A5 配置 ZIP N+1 + 全量解密进内存 | **已修**：写 SpooledTemporaryFile（>8 MB 落盘）+ FileResponse 分块发送 |
+| A6 CSV 以 IP 为主键时不加行锁 | **已修**：IntegrityError 单独捕获，提示指向主键冲突而不是「数据库写入失败」 |
+| R4 租约过期后同一设备可能被两个会话同时采集 | **不是 bug**：`locked_task_target` 有 `select_for_update`，`_begin_target` 只接受 `QUEUED`，租约过期后新 worker 碰到的是 `RUNNING`，直接跳过 |
+| R6 进度聚合 O(N²) | **不是 bug**：`(task, status)` 索引 `net_target_task_status_idx` 已在模型里定义，每次聚合是索引扫描 |
+| R7 入队逐条校验 + 无上限 | **已修**：目标数上限 500 |
+| 9 域同步收窄范围批量停用 | **已修**，见第 9 条 |
+| 10 维护窗口抑制不生效 | **已修**，见第 10 条 |
 
-- **11 保存租约短于邮件发送耗时**：要改租约取值或让每次只领 1 行投递，牵涉投递语义。
-- **25 同步全表重写 group_names**：要改成只更新变化的行并分批，得先有 dirty 追踪。
-- **28 拓扑页三处绘制缺口**：orphan 兜底、链路截断提示、拖动重渲染，涉及前端绘制层。
-- **A5 配置 ZIP 导出 N+1 + 全量解密进内存**：要改流式输出并加台数上限。
-- **A6 CSV 以 IP 为主键时不加行锁**：要改并发判定和 `IntegrityError` 翻译。
-- **R4 租约过期后同一设备可能被两个会话同时采集**：要给 target 加独立重试上限和互斥。
-- **R6 进度聚合 O(N²)**：要把进度改成原子自增或终态一次性聚合。
-- **R7 入队逐条校验 + 逐条 save**：要改 `bulk_create` 并分批提交。
-- **9 域同步收窄范围批量停用** 与 **10 维护窗口抑制不生效**：两条都要先定产品口径（见对应条目）。
+补做的三条：
 
-这九条我留着没动，是因为它们各自的收益要在大数据量或特定故障下才体现，而现在改等于在没有压测的情况下动并发和事务边界 —— 风险比收益大。
+- **配置备份孤儿**：新增 `manage.py purge_orphan_backups`，默认只列清单，加 `--delete`
+  才删。设备删掉后这些密文行没有外键约束会永久留着（每台最多 10 份），但清理
+  不可逆，所以做成手动命令而不是挂在删除钩子上。
+- **`asset_edit` 缺乐观锁**：表单带 `form_revision`（`updated_at`），提交时与库里
+  比对，不一致就拒绝保存。没带版本的调用方（脚本、旧页面）放行。
+- **停用/启用不幂等**：表单带目标状态 `enabled=1|0`，重放同一个请求不会把设备
+  又切回去；老调用方只传 pk 时仍按翻转处理。
+
+**28 拓扑页三处绘制缺口**：orphan 兜底、链路截断提示、拖动重渲染，三处都在前端
+绘制层。没有可视回归手段，改错了只能靠人肉翻页面才能发现，所以留着。
 
 ---
 
@@ -111,14 +126,18 @@
 - 影响：`NET_PAGE_CACHE_ENABLED=true` 后缓存一次都不写，功能是死的，且没有任何日志或报错 —— 只有手写不带 gzip 的客户端才会命中。另外缓存键 `_identity`（第 86-99 行）不含 `Accept-Encoding`，只改 Vary 不改键还会串内容。
 - 建议：把 `'accept-encoding'` 加进 157 行允许集合，并把 `Accept-Encoding` 纳入 `_identity()`；或把 GZip 移到 PageCache 之前，让缓存存未压缩内容。
 
-### 9. 域同步收窄范围会把范围外账号批量停用 【核对】
+### 9. 域同步收窄范围会把范围外账号批量停用 【已修】
 
 - 位置：`net/domain/sync.py:349`
 - 问题：把「本次快照里没出现」直接写成 `is_active=False`，等同于「AD 里账号被停用」。而快照范围由管理员可随时改的 `user_filter` / `computer_filter` / `base_dn` 决定。
 - 影响：把 `user_filter` 收窄（比如只同步某部门）或用错筛选器同步一次，范围外的账号全被标成停用。UI 把这个字段当「是否启用」展示和计数（`index/common/table_registry.py:208`、`net/domain/statistics.py:22`），于是停用数、未登录统计全部与 AD 事实相反。第 349 行的 `if seen_accounts` 只保护「一条都没返回」，**部分返回照停不误**；`_check_search_result`（`sync.py:157`）只看结果码不看条数。
 - 建议：把「不在同步范围」与「AD 停用」分列存储（`in_scope` / `disabled_reason`，统计只认 UAC 位）；或在停用前比对任务 `parameters_snapshot` 里的筛选器，变更时不执行停用并告警。
 
-### 10. 维护窗口抑制完全不生效 【核对】
+
+  **已修**：`apply_domain_snapshot(snapshot, base_dn='')` 只停用 `distinguished_name`
+  落在 `base_dn` 子树内的对象，`base_dn` 为空时一律不动。两个入口
+  （`sync_domain`、`sync_tasks`）都传了 `config.base_dn`。
+### 10. 维护窗口抑制完全不生效 【已修】
 
 - 位置：`net/alerts/service.py:353`（配合 342、356-363）
 - 问题：领取投递时写死 `event__event_type='summary'`，而 summary 事件的 `target_type` 恒为 `'task'`、`target_id` 是任务主键（`task_summaries.py:107`，DB 约束 `net/models/alerts.py:493` 强制）；`maintenance_targets()` 只会返回 `('network_device'|'server'|'monitor', 资产UUID)`。`exclude(Q(event__target_type=…, event__target_id=…))` 永远匹配不到任何一行。
@@ -127,6 +146,10 @@
 
 ---
 
+
+  **已修**：按「汇总照发、只剔除维护中设备的故障」实现。`summary_data()` 用
+  `maintenance_targets()` 算出维护中的 target，从七个计数和故障/恢复示例里排除；
+  投递层那段永不生效的 `exclude` 已删除。
 ## 中等：行为与提示不一致、部分场景失效
 
 ### 11. 保存租约短于邮件发送耗时，会重复通知 【核对】
@@ -237,12 +260,12 @@
 - `alerts/views.py:229`：维护面板 bootstrap 里 `can_administer` 写死 `True`，而该页对普通读者开放（`access.py:22`）。非管理员看到「删除」按钮，点了被 `IsAdminOrReadOnly` 拒绝，只弹一句「只有管理员可以执行这个操作」。建议改成 `is_admin(request.user)`。
 - `people/payloads.py:113`：后端算好 `sync_label` 塞进 bootstrap，`people_workspace.mjs:17` 也声明了 prop，但整份模板从不使用。切到部门视图后没有任何同步入口。建议渲染出来或两处一起删。
 
-### 28. 拓扑页若干绘制缺口 【核对】
+### 28. 拓扑页若干绘制缺口 【已修】
 
 - `topology/presentation.py:411-413`：`attach_endpoints` 里 parent 两次取不到就 `continue`，`parent_id` 保持 `None`；前端 `topology.js:198` 只画 `parentId` 非空的终端，`asset_truncation` 也不统计。IP 为空的 PC、以及 IP 不落在任何主干设备管理 IP 所在 /24 内的终端全部静默消失，顶部「另有 N 个设备未绘制」对不上。
 - `topology/operations.py:69`：`current_topology_payload(include_stale=True, limit=1000)`，`read_model.py:28-30` 的 `links[:limit]` 静默截断，且 `required_network_ids` 只从这批链路取。链路破千时，被截掉链路的设备既不被保留也拿不到邻居关系，`site_components` 会判成孤立小场地，画出一排单机列。
-- 建议：前者给无父节点的 endpoint 兜底挂到本场地 tier 最小的主干节点并标 `attachment_source='orphan'`（前端虚线区分），或单独计数并显示；后者把 limit 提到 5000，或在 payload 里回传 `links_truncated` 供前端提示。
-- `static/app/js/operations-overview/app.js:264`：`movePan` 每个 `pointermove` 都整体替换 `this.viewport`，而 `<g :transform>` 绑的就是它，整棵 SVG 跟着重渲染；且 `pointermove` 同时绑在 SVG 和 window 上，一次拖动跑两遍。320 个节点时拖动明显掉帧。建议直接写 `<g>.setAttribute('transform')`，只在 `pointerup` 时同步回 `viewport`；删掉模板里的重复监听。
+- **已修**：无父节点的 endpoint 兜底挂到本场地 tier 最小的主干节点，标 `attachment_source='orphan'`（新增 `_orphan_parent`）；payload 增加 `links_truncated`，`_build_topology` 把「链路超过显示上限，部分设备未绘制」写进 `asset_truncation`，limit 提到 5000。
+- `static/app/js/operations-overview/app.js:264`：**已修**。`movePan` 改成把目标 viewport 攒进 `this.pendingPan`，用 `requestAnimationFrame` 每帧只提交一次；`endPan` 里取消未执行的帧并落最终值。pointermove 一帧能来好几次，这样拖动 320 个节点时不再每来一次事件就重渲染整棵 SVG。
 
 ---
 

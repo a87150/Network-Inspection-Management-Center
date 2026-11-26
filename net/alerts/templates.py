@@ -35,13 +35,30 @@ PRESETS = {
                  '\n问题摘要（最多 5 项）：\n{issues}\n恢复摘要（最多 5 项）：\n{recoveries}'},
 }
 
+# 单设备告警的变量集与汇总完全不同：它描述一台机器，不是一次任务。
+DEVICE_VARIABLES = (
+    'device_name', 'device_ip', 'target_type', 'status', 'tasks_name',
+    'occurred_at', 'details_url', 'issues', 'recovered_count',
+)
+DEVICE_COUNTS = {'recovered_count'}
+_DEVICE_BODY = (
+    '设备：{device_name}（{device_ip}）\n类型：{target_type}\n'
+    '状态：{status}\n时间：{occurred_at}\n问题：\n{issues}'
+)
+DEVICE_PRESETS = {
+    'compact': {'title_template': '设备异常：{device_name}', 'body_template': _DEVICE_BODY},
+    'detailed': {'title_template': '设备异常：{device_name} · {device_ip}',
+                 'body_template': _DEVICE_BODY + '\n所属任务：{tasks_name}\n累计恢复：{recovered_count}'},
+}
 
-def validate_template(value):
+
+def validate_template(value, variables=None):
     """Accept only literal text and exact {whitelisted_name} tokens."""
     if not isinstance(value, str):
         raise ValidationError('模板必须为文本。')
+    allowed = VARIABLES if variables is None else variables
     names = _VARIABLE.findall(value)
-    if any(name not in VARIABLES for name in names):
+    if any(name not in allowed for name in names):
         raise ValidationError('模板含未知变量，请使用下方列出的变量。')
     remainder = _VARIABLE.sub('', value)
     if '{' in remainder or '}' in remainder:
@@ -49,9 +66,35 @@ def validate_template(value):
 
 
 def get_task_summary_template():
-    """Read the singleton without creating it, including on GET/preview."""
+    """任务汇总的默认模板；保留给只看内容、不关心渠道的调用方。"""
+    return default_template('summary')
+
+
+def default_template(trigger):
+    """该 trigger 的默认模板；没有就返回 None，由渲染层回落到内置预设。"""
     from net.models import AlertNotificationTemplate
-    return AlertNotificationTemplate.objects.filter(key=TEMPLATE_KEY).first()
+    return AlertNotificationTemplate.objects.filter(
+        trigger=trigger, is_default=True).first()
+
+
+def resolve_template(channel, trigger, policy=None):
+    """策略路由优先，其次该 trigger 的默认模板。
+
+    模板和渠道的配对配在告警策略上（AlertPolicyRoute）：同一条渠道可以在不同
+    策略里用不同模板，(policy, channel, trigger) 唯一，所以最多命中一条 ——
+    「发哪个」不存在歧义。没给策略时退回默认模板。
+    """
+    if policy is not None and getattr(policy, 'pk', None):
+        if channel is not None and getattr(channel, 'pk', None):
+            route = policy.routes.filter(
+                channel=channel, trigger=trigger).select_related('template').first()
+            if route is not None:
+                return route.template
+    return default_template(trigger)
+
+
+def template_variables(trigger):
+    return DEVICE_VARIABLES if trigger == 'device' else VARIABLES
 
 
 def _clip(value, limit):
@@ -152,5 +195,45 @@ def render_task_summary(data, template=None):
         rendered[output] = _VARIABLE.sub(lambda match: values[match[1]], source)
     rendered['title'] = _clip(rendered['title'].replace('\r', ' ').replace('\n', ' ')[:MAX_TITLE_LENGTH], 768)
     footer = '\n完整结果请查看任务详情：' + (values['details_url'] or '任务记录页面')
+    rendered['text'] = _bounded_body(rendered['text'], footer)
+    return rendered
+
+
+def render_device_alert(data, template=None):
+    """单台设备的异常通知；变量集与任务汇总不同。
+
+    维护窗口里的设备不会走到这里 —— 调用方在入队前已经筛掉了。
+    """
+    if template is None:
+        template = default_template('device')
+    if isinstance(template, Mapping):
+        config = template
+    else:
+        config = {key: getattr(template, key, '') for key in ('mode', 'title_template', 'body_template')}
+    mode = config.get('mode', 'compact')
+    if mode not in DEVICE_PRESETS:
+        mode = 'compact'
+    data = data if isinstance(data, Mapping) else {}
+    values = {
+        key: _safe_text(data.get(key, 0 if key in DEVICE_COUNTS else ''))
+        for key in DEVICE_VARIABLES
+        if key not in ('details_url', 'issues', 'tasks_name')
+    }
+    values['details_url'] = str(sanitize(data.get('details_url') or ''))
+    values['tasks_name'] = _safe_text(data.get('tasks_name'), 120)
+    values['issues'] = _items(data.get('issues'))
+    rendered = {}
+    for field, output, max_length in (('title_template', 'title', MAX_TITLE_LENGTH),
+                                       ('body_template', 'text', MAX_BODY_TEMPLATE_LENGTH)):
+        source = config.get(field) or DEVICE_PRESETS[mode][field]
+        try:
+            validate_template(source, DEVICE_VARIABLES)
+            if len(source) > max_length:
+                raise ValidationError('模板过长。')
+        except ValidationError:
+            source = DEVICE_PRESETS[mode][field]
+        rendered[output] = _VARIABLE.sub(lambda match: values[match[1]], source)
+    rendered['title'] = _clip(rendered['title'].replace('\r', ' ').replace('\n', ' ')[:MAX_TITLE_LENGTH], 768)
+    footer = '\n设备详情：' + (values['details_url'] or '资产页面')
     rendered['text'] = _bounded_body(rendered['text'], footer)
     return rendered

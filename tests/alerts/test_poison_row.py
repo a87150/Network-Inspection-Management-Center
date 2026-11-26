@@ -50,7 +50,7 @@ class PoisonRowIsolationTests(TestCase):
         """
         calls = {'build': 0}
 
-        def build(event):
+        def build(event, channel=None, template=None):
             calls['build'] += 1
             if calls['build'] == 1:
                 raise ValueError('模板数据形状不对')

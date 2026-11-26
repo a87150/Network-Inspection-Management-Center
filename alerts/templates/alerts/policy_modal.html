@@ -56,19 +56,41 @@
                 {% endif %}
                 <fieldset class="modal-section alert-policy-modal__section" data-alert-override-channels data-bulk-choice-group{% if alert_policy_scope != 'default' and alert_policy_mode == 'inherit' %} hidden disabled{% endif %}>
 <div class="bulk-choice-group__heading">
-<legend class="fs-6">渠道（可多选）</legend>
+<legend class="fs-6">渠道与模板（勾选启用，每个渠道各配一套）</legend>
 <div class="bulk-choice-group__actions">
 <button class="btn btn-outline-primary btn-sm" type="button" data-bulk-select-all>全选</button>
 <button class="btn btn-outline-secondary btn-sm" type="button" data-bulk-invert>反选</button>
 </div>
 </div>
-<div class="row row-cols-1 row-cols-md-2 g-2">
-{% for channel in alert_channels %}
-<label class="col form-check">
-<input class="form-check-input" type="checkbox" data-bulk-choice name="channels" value="{{ channel.pk }}"{% if channel.pk in alert_policy_channel_ids %} checked{% endif %}>
-<span class="form-check-label">{{ channel.name }} · {{ channel.get_channel_type_display }}{% if not channel.is_enabled %}（已停用）{% endif %}
+<div class="alert-policy-channels d-flex flex-column gap-2">
+{% for row in alert_policy_channel_rows %}
+<div class="alert-policy-channel border rounded-3 px-3 py-2">
+<label class="form-check mb-0">
+<input class="form-check-input" type="checkbox" data-bulk-choice name="channels" value="{{ row.channel.pk }}"{% if row.channel.pk in alert_policy_channel_ids %} checked{% endif %}>
+<span class="form-check-label">{{ row.channel.name }} · {{ row.channel.get_channel_type_display }}{% if not row.channel.is_enabled %}（已停用）{% endif %}
 </span>
 </label>
+<div class="row g-2 mt-2 pt-2 border-top">
+<div class="col-md-6">
+<label class="form-label form-label-sm mb-1" for="id_tpl_summary_{{ row.channel.pk }}">任务汇总模板</label>
+<select class="form-select form-select-sm" name="template_summary_{{ row.channel.pk }}" id="id_tpl_summary_{{ row.channel.pk }}">
+<option value="">用默认模板</option>
+{% for tpl in alert_template_choices.summary %}
+<option value="{{ tpl.pk }}"{% if row.summary_template_id == tpl.pk|stringformat:'s' %} selected{% endif %}>{{ tpl.name }}{% if tpl.is_default %} · 默认{% endif %}</option>
+{% endfor %}
+</select>
+</div>
+<div class="col-md-6">
+<label class="form-label form-label-sm mb-1" for="id_tpl_device_{{ row.channel.pk }}">单设备告警模板</label>
+<select class="form-select form-select-sm" name="template_device_{{ row.channel.pk }}" id="id_tpl_device_{{ row.channel.pk }}">
+<option value="">不发单设备告警</option>
+{% for tpl in alert_template_choices.device %}
+<option value="{{ tpl.pk }}"{% if row.device_template_id == tpl.pk|stringformat:'s' %} selected{% endif %}>{{ tpl.name }}{% if tpl.is_default %} · 默认{% endif %}</option>
+{% endfor %}
+</select>
+</div>
+</div>
+</div>
 {% empty %}
 <p class="text-secondary">请先新增至少一个渠道。</p>
 {% endfor %}

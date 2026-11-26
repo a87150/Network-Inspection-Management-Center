@@ -268,14 +268,29 @@ if (mountElement && bootstrapElement) {
         // 超过阈值才算拖动，否则一次抖动就把点击吃掉了。
         if (Math.abs(dx) > 3 || Math.abs(dy) > 3) this.panMoved = true;
         if (!this.panMoved) return;
-        this.viewport = {
+        this.pendingPan = {
           ...this.viewport,
           x: this.panStart.originX + dx,
           y: this.panStart.originY + dy,
         };
+        // pointermove 一帧能来好几次，每次整体替换 viewport 都会让整棵 SVG
+        // 跟着重渲染。压到每帧一次，拖动 320 个节点时不再掉帧。
+        if (this.panFrame) return;
+        this.panFrame = requestAnimationFrame(() => {
+          this.panFrame = null;
+          if (this.pendingPan) this.viewport = this.pendingPan;
+        });
       },
       endPan(event) {
         if (!this.panStart || this.panStart.pointerId !== event.pointerId) return;
+        if (this.panFrame) {
+          cancelAnimationFrame(this.panFrame);
+          this.panFrame = null;
+        }
+        if (this.pendingPan) {
+          this.viewport = this.pendingPan;
+          this.pendingPan = null;
+        }
         this.panStart = null;
         this.controller?.updateUiState({ viewport: this.viewport });
       },

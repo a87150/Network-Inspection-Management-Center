@@ -79,11 +79,14 @@ def cleanup_inspection_records(limit=200):
 
 # Reverse PROTECT links that pin a finished task or one of its targets. A task's own
 # TaskTargetRun children are handled first, so they are not listed as task blockers.
+# AlertEvent 不在此列：它跟任务同寿命，过期任务连同它的告警一起删（投递行是
+# CASCADE）。把它留在这里的后果是——每个终态巡检任务都会建一条 summary 事件，
+# 于是所有任务都删不掉，历史无限增长，清理每轮空转。
 TASK_HISTORY_TASK_BLOCKERS = frozenset({
-    'AlertEvent', 'DomainOperation', 'TopologyDiscoveryBatch',
+    'DomainOperation', 'TopologyDiscoveryBatch',
 })
 TASK_HISTORY_TARGET_BLOCKERS = frozenset({
-    'AlertEvent', 'ComputerAnalysis', 'Network_Device_Inspection',
+    'ComputerAnalysis', 'Network_Device_Inspection',
     'Server_Inspection', 'Monitor_Inspection', 'TopologyDiscoveryBatch',
     'NetworkTopologyObservation',
 })
@@ -129,6 +132,8 @@ def cleanup_task_history(retention_days, limit=200):
             if any(_strongly_referenced(target, TASK_HISTORY_TARGET_BLOCKERS)
                    for target in targets):
                 continue
+            from net.models import AlertEvent
+            AlertEvent.objects.filter(task=task).delete()
             TaskTargetRun.objects.filter(task=task).delete()
             task.delete()
         removed += 1

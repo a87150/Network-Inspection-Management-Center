@@ -601,30 +601,114 @@ class AlertEvent(models.Model):
 
 
 class AlertNotificationTemplate(models.Model):
+    """A named message template. 一条模板只描述「内容长什么样」。
+
+    模板本身不绑定渠道：同一个 webhook 想发两种内容时，应该配一次渠道、
+    在策略里配两条路由（见 AlertPolicyRoute），而不是把地址和密钥抄两遍。
+    """
+
     class Mode(models.TextChoices):
         COMPACT = 'compact', '简洁'
         DETAILED = 'detailed', '详细'
 
-    key = models.CharField(max_length=32, primary_key=True, default='task_summary')
+    class Trigger(models.TextChoices):
+        SUMMARY = 'summary', '任务汇总'
+        DEVICE = 'device', '单设备告警'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=64, unique=True)
+    trigger = models.CharField(max_length=16, choices=Trigger.choices, default=Trigger.SUMMARY)
     mode = models.CharField(max_length=16, choices=Mode.choices, default=Mode.COMPACT)
     title_template = models.CharField(max_length=255, blank=True)
     body_template = models.TextField(blank=True)
+    is_default = models.BooleanField(default=False)
+    # 每种 trigger 最多一个默认。MySQL 不支持条件唯一约束，沿用 AlertPolicy
+    # 的 default_slot 写法（可空唯一列），由 save() 保持同步。
+    default_slot = models.CharField(
+        max_length=16, null=True, blank=True, unique=True, editable=False,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         constraints = [
-            models.CheckConstraint(condition=models.Q(key='task_summary'), name='net_alert_template_key_ck'),
-            models.CheckConstraint(condition=models.Q(mode__in=('compact', 'detailed')), name='net_alert_template_mode_ck'),
+            models.CheckConstraint(
+                condition=models.Q(trigger__in=('summary', 'device')),
+                name='net_alert_template_trigger_ck',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(mode__in=('compact', 'detailed')),
+                name='net_alert_template_mode_ck',
+            ),
         ]
 
     def clean(self):
         super().clean()
-        if self.key != 'task_summary':
-            raise ValidationError({'key': '仅支持任务总结模板。'})
+        if self.trigger not in self.Trigger.values:
+            raise ValidationError({'trigger': '不支持的通知时机。'})
         if self.mode not in self.Mode.values:
-            raise ValidationError({'mode': '不支持的总结模板模式。'})
+            raise ValidationError({'mode': '不支持的模板模式。'})
 
     def save(self, *args, **kwargs):
+        self.clean()
+        self.default_slot = (
+            self.trigger
+            if self.is_default and self.trigger in self.Trigger.values
+            else None
+        )
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+
+class AlertPolicyRoute(models.Model):
+    """策略里的一条「模板 × 渠道」配对。
+
+    告警策略决定「谁收到、用什么内容」：同一条渠道可以在不同策略里配不同
+    模板，同一策略里同一渠道同一时机只有一条路由，所以不会出现同时发两种
+    内容的歧义。任务冻结策略时连带把路由快照下来。
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    policy = models.ForeignKey(
+        AlertPolicy, on_delete=models.CASCADE, related_name='routes',
+    )
+    channel = models.ForeignKey(
+        AlertChannel, on_delete=models.CASCADE, related_name='routes',
+    )
+    template = models.ForeignKey(
+        AlertNotificationTemplate, on_delete=models.PROTECT,
+        related_name='routes',
+    )
+    trigger = models.CharField(
+        max_length=16, choices=AlertNotificationTemplate.Trigger.choices,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=('policy', 'channel', 'trigger'), name='net_alert_policy_route_uniq',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(trigger__in=('summary', 'device')),
+                name='net_alert_policy_route_trigger_ck',
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.template_id:
+            template_trigger = self.template.trigger
+            if self.trigger and template_trigger != self.trigger:
+                raise ValidationError(
+                    {'trigger': '绑定的模板属于「%s」，与这里的通知时机不一致。'
+                                % self.template.get_trigger_display()})
+
+    def save(self, *args, **kwargs):
+        if not self.trigger and self.template_id:
+            self.trigger = self.template.trigger
         self.clean()
         super().save(*args, **kwargs)
 
@@ -640,6 +724,12 @@ class AlertDelivery(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     event = models.ForeignKey(AlertEvent, on_delete=models.CASCADE, related_name='deliveries')
     channel = models.ForeignKey(AlertChannel, on_delete=models.PROTECT, related_name='deliveries')
+    # 建行时就定下用哪套模板，之后改策略不影响已经排队的通知。
+    # 空表示用该时机的默认模板。
+    template = models.ForeignKey(
+        AlertNotificationTemplate, on_delete=models.PROTECT,
+        related_name='deliveries', null=True, blank=True,
+    )
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
     attempt_count = models.PositiveSmallIntegerField(default=0)
     max_attempts = models.PositiveSmallIntegerField(

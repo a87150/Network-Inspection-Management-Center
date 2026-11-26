@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 
 from django.contrib import admin
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import IntegrityError
+from django.db import IntegrityError, DatabaseError
 from django.test import TestCase
 from django.urls import reverse
 from tests.auth import login_admin, login_reader
@@ -580,7 +580,7 @@ class CsvModelValidationTests(TestCase):
         self.assertContains(response, '导入失败：第 3 行')
         self.assertEqual(Server.objects.count(), 0)
 
-    @patch('net.models.devices.Server.save', side_effect=IntegrityError('race'))
+    @patch('net.models.devices.Server.save', side_effect=DatabaseError('boom'))
     def test_database_error_rolls_back_and_returns_controlled_feedback(self, _save):
         self.client.raise_request_exception = False
         response = self._post(
@@ -590,6 +590,19 @@ class CsvModelValidationTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, '导入失败：数据库写入失败')
+        self.assertEqual(Server.objects.count(), 0)
+
+    @patch('net.models.devices.Server.save', side_effect=IntegrityError('race'))
+    def test_unique_race_gets_its_own_message(self, _save):
+        """两人同时导入同一批数据时撞唯一约束，提示要指向主键冲突而不是笼统的写入失败。"""
+        self.client.raise_request_exception = False
+        response = self._post(
+            '服务器名称,IP地址,服务器类型\n'
+            '新服务器,192.0.2.67,Linux\n'
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '主键与已有记录冲突')
         self.assertEqual(Server.objects.count(), 0)
 
 

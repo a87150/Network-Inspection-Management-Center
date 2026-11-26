@@ -1,6 +1,9 @@
-# 天枢 AI 助手：实现方案（v2）
+# 天枢 AI 助手：实现说明
 
-> 目标：在现有巡检平台里加一个 AI 问答页，一次做成可用原型——建表、建知识库、检索、接模型、出页面。
+> 状态：**已实现并上线**（2.35）。本文档记录的是实际落地的结构与取值，
+> 不再是待施工的计划。原始方案在实施中做过两处扩充，见文末「与方案的差异」。
+>
+> 目标：在现有巡检平台里加一个 AI 问答页——建表、建知识库、检索、接模型、出页面。
 > 本文档替换 v1.2。v1.2 假设的 PostgreSQL / pgvector / Vue SFC / Bearer token 都与本仓库不符，已按实际技术栈重写。
 
 ---
@@ -471,19 +474,27 @@ index/templates/common/base.html                   导航加一项
 
 ---
 
-## 11. 落地清单
+## 11. 实现清单（全部完成）
 
-- [ ] `ai_assistant/` app：models / migrations（含 VECTOR 列的 RunSQL）
-- [ ] `net/settings.py` 注册 app + `AI_CONFIG`
-- [ ] `client.py`（embeddings / chat 两个端点）
-- [ ] `retrieval.py` 两条路径：vector + keyword 降级
-- [ ] `retrieval.py`（VEC_DISTANCE_COSINE）
-- [ ] `views.py` + `urls.py`（chat / history / reset / 页面）
-- [ ] `build_knowledge` 管理命令 + 种子抽取
-- [ ] `calibrate_retrieval` 管理命令
-- [ ] 前端页面 + 导航入口
-- [ ] 测试：预检、注入、空检索拒答、压缩、reset、未配置时降级
-- [ ] `.env.example` 补 AI_* 四项
+| 项 | 落地位置 |
+|---|---|
+| app 与建表 | `ai_assistant/`，迁移 `0001`–`0007`；VECTOR 列用 `RunSQL` 建，ORM 不映射 |
+| 注册与配置 | `net/settings.py:121` 注册 app，`:89` 起 `AI_CONFIG` |
+| 模型调用 | `client.py`（chat + embeddings 两个端点） |
+| 检索 | `retrieval.py`，向量走 `VEC_DISTANCE_COSINE`，关键词路独立，混合用 RRF 融合 |
+| 接口 | `views.py` + `ai_assistant/urls.py`，挂在 `index/urls.py:35` 的 `api/ai/` |
+| 知识入库 | `build_knowledge`（种子抽取 + 分块 + 向量化）、`calibrate_retrieval`（阈值标定） |
+| 前端 | `static/app/vue/pages/ai_chat.mjs`（单页，无打包步骤），导航入口已加 |
+| 测试 | `tests/ai/` 四个文件：`test_assistant`（主流程）、`test_build_knowledge`、`test_config_merge`、`test_knowledge_retrieval` |
+| 环境变量 | `.env.example` 的 `AI_BASE_URL` 等，未配置时页面降级不报错 |
+
+实施中额外增加的（方案里没写）：
+
+- **多服务切换**：`AiProvider` 表，端点+密钥一组、模型名一层，可在页面上增删改和切换当前服务，不必改环境变量重启。
+- **用量观测**：`Message` 记 `prompt_tokens` / `completion_tokens` / `latency_ms`，页面按 0 跳过不显示。
+- **思考开关**：`AiSetting.reasoning_effort`，空串表示不传这个参数（部分模型传错直接 400）。
+- **检索自检**：`retrieve_test` 接口，可以在页面上直接看某句话命中了哪些条目、距离多少，用来判断阈值合不合适。
+- **知识库维护**：列表 / 新增 / 表格导入 / 删除四个接口，分类限定在六个枚举内。
 
 ### 验收用例
 

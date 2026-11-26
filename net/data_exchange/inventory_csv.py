@@ -6,7 +6,7 @@ from decimal import Decimal, InvalidOperation
 from datetime import datetime
 
 from django.core.exceptions import ValidationError
-from django.db import DatabaseError, transaction
+from django.db import DatabaseError, IntegrityError, transaction
 
 from net.models import Computer, Domain_Account, Domain_Computer, Network_Device, People, WeakCurrentDevice, Server
 from net.data_exchange.xlsx import build_xlsx, read_xlsx_rows
@@ -566,6 +566,13 @@ def import_csv(entity, uploaded_file):
             candidates = _validated_candidates(spec, prepared)
             for candidate, _created in candidates:
                 candidate.save()
+    except IntegrityError as exc:
+        # 以 IP（或工号）为主键时是「先查后插」，没有行锁：两个人同时导入同一批
+        # 数据，两边都查不到就都去插，其中一个撞唯一约束。原来一律报「数据库
+        # 写入失败」，用户会反复重试同一个文件。
+        raise ValueError(
+            '导入的主键与已有记录冲突（可能有人在同时导入，或数据刚被其他操作修改）；'
+            '请重新导入一次。') from exc
     except DatabaseError as exc:
         raise ValueError('数据库写入失败，请检查数据后重试') from exc
     created_count = sum(int(created) for _candidate, created in candidates)

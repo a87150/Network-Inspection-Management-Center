@@ -5,6 +5,7 @@ from copy import copy, deepcopy
 
 from dataclasses import dataclass
 from contextlib import nullcontext
+import logging
 from types import SimpleNamespace
 import threading
 
@@ -161,7 +162,8 @@ def _device_task(target, task):
         ]
     for key, source in [('issue_severity_overrides','severity_overrides'),('issue_thresholds','thresholds')]:
         result.profile_snapshot[key] = {**result.profile_snapshot.get(key,{}), **effective.get(source,{})}
-    if 'alert_items' in effective:
+    # 空列表等同于「没配」：写进去会让快照里多一个空的白名单。只在真有配置时写。
+    if effective.get('alert_items'):
         result.profile_snapshot['device_alert_items'] = effective['alert_items']
     return result
 
@@ -364,7 +366,9 @@ def _collection_report(target, task, collection, secrets):
             thresholds=task.profile_snapshot.get('issue_thresholds', {}), message=collection.message,
             server_type=target.target_snapshot.get('server_type') if target.target_type == TaskTargetRun.TargetType.SERVER else None)
         enabled_alerts = task.profile_snapshot.get('device_alert_items')
-        if enabled_alerts is not None:
+        # 空列表等于「没配」：模板默认就是 []，按 is not None 判断会把所有告警项
+        # 一起过滤掉，表现为设备从此再也不报警。
+        if enabled_alerts:
             findings = [finding for finding in findings if finding.get('analysis_item') in enabled_alerts]
             normal_items = [item for item in normal_items if item in enabled_alerts]
         details['issue_findings'] = scrub_items(findings, secrets=secrets)
@@ -465,14 +469,25 @@ def _persist_collection(target_run_id, worker_id, collection, lease_guard=None, 
                     TaskTargetRun.TargetType.WEAK_CURRENT: WeakCurrentDevice,
                 }.get(target.target_type)
                 if asset_model is not None:
-                    asset = asset_model.objects.select_for_update().filter(pk=target.target_id).first()
-                    if asset is not None:
-                        from net.devices.inventory import refresh_asset_inventory
+                    # 库存回写是采集的副作用，不是采集本身：它失败不能把已经拿到的
+                    # 记录、Error_* 行和 target 终态一起回滚掉，否则 target 会停在
+                    # RUNNING，重试三次后只留下一条「租约过期」。与上面的配置备份
+                    # 用同一层隔离。
+                    try:
+                        with transaction.atomic():
+                            asset = asset_model.objects.select_for_update().filter(pk=target.target_id).first()
+                            if asset is not None:
+                                from net.devices.inventory import refresh_asset_inventory
 
-                        inventory_data = collection.data
-                        if isinstance(asset, Network_Device):
-                            inventory_data = {**collection.data, 'device_info': details.get('device_info', {})}
-                        refresh_asset_inventory(asset, inventory_data)
+                                inventory_data = collection.data
+                                if isinstance(asset, Network_Device):
+                                    inventory_data = {**collection.data,
+                                                      'device_info': details.get('device_info', {})}
+                                refresh_asset_inventory(asset, inventory_data)
+                    except Exception:
+                        logger = logging.getLogger(__name__)
+                        logger.exception(
+                            '库存回写失败 target=%s，采集结果照常保存', target.pk)
             if ((lease_guard is not None and lease_guard.is_set())
                     or not _has_live_lease(task, worker_id, timezone.now())):
                 transaction.set_rollback(True)

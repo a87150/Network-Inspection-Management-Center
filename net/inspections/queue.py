@@ -3,6 +3,8 @@
 import json
 import configparser
 import hashlib
+MAX_TARGETS_PER_TASK = 500
+
 from pathlib import Path
 import time
 from collections.abc import Mapping
@@ -321,6 +323,13 @@ def _enqueue_task(profile, target_ids, source, overrides=None, *, _frozen_parent
         raise ValidationError({'available_at': '可执行时间必须使用带时区的时间。'})
     schedule = overrides.get('schedule')
 
+    # 一次任务的目标数上限。原来逐条校验、逐条 save，没有上限，一个 5 万条的
+    # 目标列表能在一个事务里把 worker 卡住。
+    if isinstance(target_ids, (list, tuple, set)) and len(target_ids) > MAX_TARGETS_PER_TASK:
+        raise ValidationError(
+            {'target_ids': '一次最多添加 %d 个目标，当前 %d 个。'
+                           % (MAX_TARGETS_PER_TASK, len(target_ids))})
+
     task_type, target_type, profile_snapshot, targets = _validated_target_inputs(
         profile,
         target_ids,
@@ -338,7 +347,12 @@ def _enqueue_task(profile, target_ids, source, overrides=None, *, _frozen_parent
         skipped = []
         for target_id, snapshot in targets:
             supported = snapshot.get('collection_settings', {}).get('selected_items')
-            if supported is not None and not set(selected_items).intersection(supported):
+            # config_info 是入队时强加的每日配置备份，不是用户选中的巡检项。
+            # 拿它参与判空会让「模板把所有指标标为不适用」永远判不出空集：
+            # 任务照排、只采配置、记录还是成功，等于整批设备静默空转。
+            optional = {item for item in selected_items if item != 'config_info'}
+            if supported is not None and optional and not optional.intersection(
+                    {item for item in supported if item != 'config_info'}):
                 skipped.append(target_id)
             else:
                 applicable.append((target_id, snapshot))
@@ -391,6 +405,17 @@ def _enqueue_task(profile, target_ids, source, overrides=None, *, _frozen_parent
     task.active_scope_key = task.scope_key
     if TaskRun.objects.filter(active_scope_key=task.scope_key).exists():
         raise ValidationError({'target_ids': '相同配置和目标范围已有活动任务。'})
+    # 目标级互斥只能靠显式预检：MariaDB 不支持带条件的唯一约束，
+    # net_target_active_execution_scope_uniq 在这套部署上从未真正建过。
+    busy_targets = TaskTargetRun.objects.filter(
+        status__in=TaskRun.ACTIVE_STATUSES,
+        execution_scope_key__in=[f'{target_type}:{target_id}' for target_id, _ in targets],
+    ).values_list('target_id', flat=True)[:3]
+    busy_targets = [str(target_id) for target_id in busy_targets]
+    if busy_targets:
+        raise ValidationError({'target_ids': (
+            '以下设备正在被其他任务巡检，请等那次任务结束或换一批设备：'
+            + '、'.join(busy_targets))})
     task.full_clean()
 
     target_runs = [
@@ -399,6 +424,10 @@ def _enqueue_task(profile, target_ids, source, overrides=None, *, _frozen_parent
             target_type=target_type,
             target_id=target_id,
             target_snapshot=snapshot,
+            # 目标级执行互斥：同一台设备在同一时刻只能有一个活动任务在采它。
+            # task 级 scope_key 含目标 id 列表，目标集合一变就换键，拦不住
+            # 「A+B 和 A+C 同时跑、A 被采两次」这种情况。
+            execution_scope_key=f'{target_type}:{target_id}',
         )
         for target_id, snapshot in targets
     ]
@@ -412,6 +441,13 @@ def _enqueue_task(profile, target_ids, source, overrides=None, *, _frozen_parent
     except IntegrityError as exc:
         if TaskRun.objects.filter(active_scope_key=task.scope_key).exists():
             raise ValidationError({'target_ids': '相同配置和目标范围已有活动任务。'}) from exc
+        busy = TaskTargetRun.objects.filter(
+            status__in=TaskRun.ACTIVE_STATUSES,
+            execution_scope_key__in=[row.execution_scope_key for row in target_runs],
+        ).exists()
+        if busy:
+            raise ValidationError({
+                'target_ids': '部分设备正在被其他任务巡检，请等那次任务结束或换一批设备。'}) from exc
         raise
     return task
 

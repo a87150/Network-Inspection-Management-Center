@@ -89,18 +89,23 @@ class SummaryDeliveryLeaseTests(TestCase):
         self.assertIsNone(self.delivery.lease_expires_at)
         self.assertEqual(self.delivery.lease_token, '')
 
-    def test_claim_skips_legacy_device_delivery_even_when_explicitly_requested(self):
+    def test_claim_includes_device_delivery_since_single_device_alerts_are_supported(self):
+        """单设备告警上线后 abnormal 事件的投递行也要被领取。
+
+        存量行由迁移 0076 停掉，所以升级不会把历史积压一次性发出去；这里新建的
+        行是「升级之后新产生的」，应当正常领取。
+        """
         from net.alerts.service import _claim_deliveries
 
-        legacy = AlertDelivery.objects.create(event=self.audit, channel=self.channel)
-        self.assertEqual(_claim_deliveries(event=self.audit), [])
-        claimed = _claim_deliveries(limit=100)
-        self.assertEqual([delivery_id for delivery_id, _ in claimed], [self.delivery.pk])
-        legacy.refresh_from_db()
-        self.audit.refresh_from_db()
-        self.assertEqual(legacy.status, 'pending')
-        self.assertEqual(legacy.attempt_count, 0)
-        self.assertEqual(self.audit.status, 'recorded')
+        device_delivery = AlertDelivery.objects.create(event=self.audit, channel=self.channel)
+        claimed = _claim_deliveries(event=self.audit)
+        self.assertEqual([delivery_id for delivery_id, _ in claimed], [device_delivery.pk])
+        device_delivery.refresh_from_db()
+        self.assertEqual(device_delivery.status, AlertDelivery.Status.SENDING)
+
+        both = _claim_deliveries(limit=100)
+        self.assertEqual(len(both), 1, '汇总那条应当还在队列里')
+        self.assertEqual(both[0][0], self.delivery.pk)
 
 
 class WebhookCredentialTests(TestCase):

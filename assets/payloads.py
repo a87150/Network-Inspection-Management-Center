@@ -44,7 +44,9 @@ def asset_row_actions(kind, admin):
             entries.append({
                 'kind': 'form', 'label': '停用' if obj.is_enabled else '启用',
                 'url': reverse('asset_toggle_enabled', args=[kind]),
-                'fields': {'pk': str(obj.pk)},
+                # 带上目标状态而不是让服务端「反过来」：重放同一个请求（刷新、
+                # 双击、浏览器重发）不该把设备又切回去。
+                'fields': {'pk': str(obj.pk), 'enabled': '0' if obj.is_enabled else '1'},
             })
         return entries
 

@@ -27,6 +27,8 @@ def current_topology_payload(*, include_stale=False, limit=1000):
     interfaces=NetworkTopologyInterface.objects.select_related('device').order_by('device_id','stable_key')[:limit]
     links=NetworkTopologyLink.objects.select_related('local_interface').order_by('-last_seen_at','id')
     if not include_stale:links=links.filter(status='current')
+    total_links=links.count()
     links=links[:limit]
     return {'interfaces':[interface_payload(row) for row in interfaces],
-            'links':[link_payload(row) for row in links]}
+            'links':[link_payload(row) for row in links],
+            'links_truncated':total_links>limit}

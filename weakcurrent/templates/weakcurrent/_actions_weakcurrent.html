@@ -1,9 +1,10 @@
 {% comment %}
-弱电（门禁设备）页头：没有采集模板入口（弱电设备走 SNMP 轮询，采集项在巡检配置里），
-门禁平台配置 / 报表配置留在门禁页签里，不在这条 bar 上重复一份。
+弱电（门禁设备）页头：采集模板入口放在这里 —— 模板决定厂商/类型怎么采、
+阈值和报警级别怎么算，是「新增设备之后要配的东西」，不该只藏在巡检配置里。
+门禁平台配置 / 报表配置仍留在门禁页签里，不在这条 bar 上重复一份。
 {% endcomment %}
 {% if can_administer %}
-{% if task_project_kind %}<button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#profileConfigModal">{{ task_config_label }}</button><button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#alertPolicyModal">告警配置</button>{% endif %}
+<a class="btn btn-outline-primary" href="{% url 'collection_templates' item_key %}" data-modal-load="collectionTemplateModal">配置模板</a>{% if task_project_kind %}<button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#profileConfigModal">{{ task_config_label }}</button><button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#alertPolicyModal">告警配置</button>{% endif %}
 {% if device_form %}<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#deviceFormModal">添加设备</button>{% endif %}
 {% if import_enabled %}<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#importModal">导入设备</button>{% endif %}
 {% if task_project_kind %}<button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#runTaskModal">{{ task_action_label }}</button>{% endif %}

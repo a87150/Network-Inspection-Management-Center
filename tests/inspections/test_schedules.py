@@ -307,6 +307,7 @@ class ScheduleEnqueueTests(TestCase):
         self.assertEqual(valid_schedule.last_enqueued_at, self.now)
         self.assertIsNone(invalid_schedule.last_enqueued_at)
         self.assertEqual(invalid_schedule.next_run_at, self.now - timedelta(seconds=1))
+        self.assertEqual(invalid_schedule.last_schedule_status, 'error')
 
     def test_malformed_filter_value_does_not_stop_a_later_due_schedule(self):
         invalid_profile = InspectionProfile.objects.create(
@@ -337,6 +338,7 @@ class ScheduleEnqueueTests(TestCase):
         valid_schedule.refresh_from_db()
         self.assertIsNone(invalid_schedule.last_enqueued_at)
         self.assertEqual(invalid_schedule.next_run_at, invalid_due_at)
+        self.assertEqual(invalid_schedule.last_schedule_status, 'error')
         self.assertEqual(valid_schedule.last_enqueued_at, self.now)
         self.assertEqual(
             valid_schedule.next_run_at,

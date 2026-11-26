@@ -56,7 +56,7 @@ def _publish(started, worker_id, snapshot=None, error='', lease_guard=None):
         if not error:
             try:
                 with transaction.atomic():
-                    counts = apply_domain_snapshot(snapshot)
+                    counts = apply_domain_snapshot(snapshot, base_dn=config.base_dn)
                 result = dict(zip(('accounts', 'computers', 'groups'), counts))
                 result['message'] = '同步完成：{} 个账号，{} 台计算机，{} 个分组。'.format(*counts)
                 if len(snapshot) > 3:

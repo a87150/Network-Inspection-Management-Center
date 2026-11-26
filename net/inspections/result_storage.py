@@ -5,10 +5,16 @@ def compact_result_snapshot(record, *, result_type, health_status=None):
     details = record.details if isinstance(record.details, dict) else {}
     if health_status is None:
         health_status = details.get('health_status')
-    if health_status not in {'normal', 'abnormal'}:
-        health_status = 'abnormal' if record.status != 'success' or any(
-            issue.get('severity') != 'info' for issue in details.get('issue_findings', [])
-            if isinstance(issue, dict)) else 'normal'
+    if health_status not in {'normal', 'abnormal', 'incomplete'}:
+        issues = [issue for issue in details.get('issue_findings', []) if isinstance(issue, dict)]
+        if record.status != 'success' or any(issue.get('severity') != 'info' for issue in issues):
+            health_status = 'abnormal'
+        elif issues:
+            # 采到了回显但算不出结论（unknown/info）：既不是正常，也够不上告警。
+            # 归到 normal 会让「数据不足」在首页显示成绿色，永远没人发现采集退化。
+            health_status = 'incomplete'
+        else:
+            health_status = 'normal'
     value = {'snapshot_version': 2, 'result_type': result_type, 'result_id': str(record.pk),
              'status': record.status, 'health_status': health_status, 'summary': record.summary}
     for key in ('is_reachable', 'duration_ms'):

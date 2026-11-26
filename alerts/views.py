@@ -125,6 +125,12 @@ def alert_modal_context(request, *, profile=None):
     if channel_type not in CHANNEL_FORMS:
         channel_type = AlertChannel.ChannelType.FEISHU
 
+    from net.models import AlertNotificationTemplate
+    template_choices = {
+        trigger: list(AlertNotificationTemplate.objects.filter(trigger=trigger).order_by('-is_default', 'name'))
+        for trigger, _field in BINDING_FIELDS
+    }
+
     default_policy = AlertPolicy.objects.filter(default_slot=AlertPolicy.DEFAULT_SLOT).first()
     policy = _policy_for_profile(profile) if profile is not None else default_policy
     scope = 'default'
@@ -141,12 +147,25 @@ def alert_modal_context(request, *, profile=None):
     channel_form = _channel_form(channel_type, instance=channel)
     if failure.get('modal') == 'channel':
         channel_form.initial.update(failure['values'])
+    # 策略里配的「模板 × 渠道」配对，摊平成每个渠道一行，模板直接遍历。
+    policy_routes = {}
+    if policy is not None:
+        for route in policy.routes.all():
+            policy_routes.setdefault(str(route.channel_id), {})[route.trigger] = str(route.template_id)
+    policy_channel_rows = [
+        {'channel': row,
+         'summary_template_id': policy_routes.get(str(row.pk), {}).get('summary', ''),
+         'device_template_id': policy_routes.get(str(row.pk), {}).get('device', '')}
+        for row in AlertChannel.objects.order_by('name', 'pk')
+    ]
     context = {
         'alert_channels': AlertChannel.objects.order_by('name', 'pk'),
         'alert_channel_form': channel_form,
         'alert_channel_errors': failure.get('errors', []) if failure.get('modal') == 'channel' else [],
         'alert_channel_type': channel_type,
         'alert_edit_channel': channel,
+        'alert_template_choices': template_choices,
+        'alert_policy_channel_rows': policy_channel_rows,
         'alert_policy': policy,
         'alert_policy_name': policy.name if policy else '默认告警策略',
         'alert_policy_errors': failure.get('errors', []) if failure.get('modal') == 'policy' else [],
@@ -282,6 +301,34 @@ def alert_channel_save(request):
                              alert_channel_type=saved.channel_type, alert_channel_id=str(saved.pk))
 
 
+BINDING_FIELDS = (('summary', 'template_summary'), ('device', 'template_device'))
+
+
+def _sync_policy_routes(policy, data, channel_ids):
+    """按策略弹窗里的下拉同步「模板 × 渠道」配对。
+
+    表单里每个渠道带两个下拉：`template_summary_<pk>` 和 `template_device_<pk>`。
+    留空表示这个时机不给这条渠道配模板 —— 汇总会退回默认模板，单设备则不发。
+    """
+    from net.models import AlertNotificationTemplate, AlertPolicyRoute
+    keep = {str(pk) for pk in channel_ids}
+    AlertPolicyRoute.objects.filter(policy=policy).exclude(channel_id__in=keep).delete()
+    for channel_id in keep:
+        for trigger, _field in BINDING_FIELDS:
+            value = (data.get(f'template_{trigger}_{channel_id}') or '').strip()
+            if not value:
+                AlertPolicyRoute.objects.filter(
+                    policy=policy, channel_id=channel_id, trigger=trigger).delete()
+                continue
+            template = AlertNotificationTemplate.objects.filter(
+                pk=value, trigger=trigger).first()
+            if template is None:
+                continue
+            AlertPolicyRoute.objects.update_or_create(
+                policy=policy, channel_id=channel_id, trigger=trigger,
+                defaults={'template': template})
+
+
 def _policy_scope_from_post(request):
     scope = request.POST.get('scope', '')
     profile_id = request.POST.get('profile_id', '').strip()
@@ -337,6 +384,11 @@ def alert_policy_save(request):
                 policy.mode = mode
             policy.save()
             policy.channels.set(channels if policy.mode == AlertPolicy.Mode.OVERRIDE else [])
+            _sync_policy_routes(
+                policy, request.POST,
+                [str(channel.pk) for channel in channels]
+                if policy.mode == AlertPolicy.Mode.OVERRIDE else [],
+            )
             policy.full_clean()
             policy.save()
     except ValidationError as exc:

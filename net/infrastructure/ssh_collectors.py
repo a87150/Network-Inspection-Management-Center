@@ -335,7 +335,13 @@ def collect_network_ssh(device, timeout=12, selected_items=None):
         if wants_config:
             data['config_info'] = raw['config_info'] = config
         requested = set(selected_items if selected_items is not None else NETWORK_FIELDS[:-1])
-        completed = {key for key in data if (key != 'config_info' or config['status'] == 'success') and not (isinstance(data[key],dict) and data[key].get('status') in {'failed','partial','missing'})}
+        # 「本厂商没有可读的原生配置」不是「没采到」：把 unsupported 也算完成，
+        # 否则华为/锐捷这类设备每轮都被判 partial，还会白写一条 critical 采集告警。
+        completed = {
+            key for key in data
+            if (key != 'config_info' or config['status'] in {'success', 'unsupported'})
+            and not (isinstance(data[key], dict) and data[key].get('status') in {'failed', 'partial', 'missing'})
+        }
         missing = requested - completed
         status = 'partial' if missing and completed else 'failed' if missing else 'success'
         messages = (['缺少有效采集证据：' + ', '.join(sorted(missing))] if missing else [])

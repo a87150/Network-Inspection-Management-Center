@@ -16,6 +16,7 @@ def _outcome_expression(prefix='', task_prefix='task__'):
         When(match(status='success'), then=Case(
             When(match(result_snapshot__health_status='normal'), then=Value('normal')),
             When(match(result_snapshot__health_status='abnormal'), then=Value('abnormal')),
+            When(match(result_snapshot__health_status='incomplete'), then=Value('incomplete')),
             When(match(result_snapshot__status='success'), then=Value('normal')),
             default=Value('abnormal'), output_field=CharField())),
         default=Value('pending'), output_field=CharField())
@@ -285,14 +286,18 @@ def _missing_people_without_logs(tasks):
     return sum(_missing_people_counts(tasks).values())
 
 
-def _finish_metrics(*, task_count, latest_task_at, normal_count, abnormal_count):
-    completed_count = normal_count + abnormal_count
-    abnormal_rate = round(abnormal_count * 100 / completed_count, 1) if completed_count else 0.0
+def _finish_metrics(*, task_count, latest_task_at, normal_count, abnormal_count,
+                    incomplete_count=0):
+    # 数据不足单列一栏：算进正常会让退化被掩盖，算进异常会造出假告警。
+    completed_count = normal_count + abnormal_count + incomplete_count
+    diagnosed = normal_count + abnormal_count
+    abnormal_rate = round(abnormal_count * 100 / diagnosed, 1) if diagnosed else 0.0
     return {
         'task_count': task_count,
         'completed_count': completed_count,
         'normal_count': normal_count,
         'abnormal_count': abnormal_count,
+        'incomplete_count': incomplete_count,
         'abnormal_rate': abnormal_rate,
         'failure_rate': abnormal_rate,
         'latest_task_at': latest_task_at,
@@ -318,9 +323,11 @@ def build_project_task_metrics(tasks):
             _legacy_orphan_targets(task_ids, rosters)).annotate(
             outcome=_outcome_expression())
         counts = rows.aggregate(normal_count=Count('pk', filter=Q(outcome='normal')),
-                                abnormal_count=Count('pk', filter=Q(outcome='abnormal')))
+                                abnormal_count=Count('pk', filter=Q(outcome='abnormal')),
+                                incomplete_count=Count('pk', filter=Q(outcome='incomplete')))
         return _finish_metrics(**summary, normal_count=counts['normal_count'],
-                               abnormal_count=counts['abnormal_count'] + missing_people)
+                               abnormal_count=counts['abnormal_count'] + missing_people,
+                               incomplete_count=counts['incomplete_count'])
     normal_count = 0
     abnormal_count = missing_people
     rosters = {

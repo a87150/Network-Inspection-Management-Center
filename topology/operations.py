@@ -66,7 +66,10 @@ def _load_assets(required_network_ids=()):
 
 
 def _build_topology():
-    physical = current_topology_payload(include_stale=True, limit=1000)
+    # 破千条链路时，被截掉的链路对应的设备既不被保留、也拿不到邻居关系，
+    # site_components 会把它判成孤立小场地。提高到 5000，并把是否截断回传给前端。
+    physical = current_topology_payload(include_stale=True, limit=5000)
+    links_truncated = bool(physical.get('links_truncated'))
     physical_edges = physical['links']
     required_network_ids = {
         value
@@ -75,6 +78,8 @@ def _build_topology():
         if value
     }
     assets, truncation = _load_assets(required_network_ids)
+    if links_truncated:
+        truncation['links'] = '链路超过显示上限，部分设备未绘制。'
     return build_enterprise_topology(
         network_devices=assets['networks'],
         computers=assets['computers'],

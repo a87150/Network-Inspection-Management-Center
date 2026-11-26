@@ -8,6 +8,17 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 from net.models import TaskRun, TaskTargetRun
 
+def _stale_revision(asset, revision):
+    """表单版本与库里不一致时视为并发覆盖。没带版本的调用方（脚本、旧页面）放行。"""
+    if not revision:
+        return False
+    current = asset.__class__.objects.filter(pk=asset.pk).values_list(
+        'updated_at', flat=True).first()
+    if current is None:
+        return True
+    return current.isoformat() != str(revision)
+
+
 def _integrity_message(exc):
     """把数据库约束失败翻译成用户能照做的提示。
 
@@ -87,7 +98,11 @@ def asset_edit(request, kind, pk):
         try:
             with transaction.atomic():
                 preserve_empty_secrets(form)
-                if _connection_changes_during_active_task(kind, form, asset):
+                if _stale_revision(asset, request.POST.get('form_revision')):
+                    # 两个人同时改同一台设备时，后保存的那次会把前者整体覆盖，
+                    # 还会把巡检刚刷新的 os_version 改回旧值。
+                    form.add_error(None, '这台设备在你编辑期间被其他人保存过，请刷新后重新编辑。')
+                elif _connection_changes_during_active_task(kind, form, asset):
                     form.add_error(None, '该设备存在活动巡检任务，任务结束后才能修改连接配置。')
                 else:
                     form.save()

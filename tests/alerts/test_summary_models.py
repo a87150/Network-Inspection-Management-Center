@@ -105,18 +105,29 @@ class SummaryModelTests(TestCase):
         self.assertEqual(self.task.alert_summary_attempted_at, now)
         self.assertEqual(self.task.alert_summary_error, 'error')
 
-    def test_template_singleton_and_mode_are_enforced(self):
+    def test_templates_are_named_rows_with_validated_trigger_and_mode(self):
+        """模板可以有多条（原来被锁成一行），trigger 与 mode 仍受约束。"""
         template_model = getattr(contracts, 'AlertNotificationTemplate', None)
         self.assertIsNotNone(template_model)
-        template = template_model.objects.create()
-        self.assertEqual((template.pk, template.mode), ('task_summary', 'compact'))
-        template.title_template = '{{ arbitrary_template_module_syntax }}'
-        template.save()
-        for values in ({'key': 'other'}, {'mode': 'other'}):
+        summary = template_model.objects.create(name='汇总', trigger='summary')
+        device = template_model.objects.create(name='设备', trigger='device', mode='detailed')
+        self.assertNotEqual(summary.pk, device.pk)
+        self.assertEqual((summary.mode, device.mode), ('compact', 'detailed'))
+        summary.title_template = '{{ arbitrary_template_module_syntax }}'
+        summary.save()
+        for values in ({'name': 'x', 'trigger': 'other'}, {'name': 'y', 'mode': 'other'}):
             with self.subTest(values=values), self.assertRaises(ValidationError):
                 template_model(**values).save()
+        with self.assertRaises(ValidationError):
+            template_model(name='z', trigger='other').save()
+        # 迁移已建了一行 summary 默认；再建第二个默认会被 default_slot 唯一列挡下。
+        self.assertTrue(template_model.objects.filter(trigger='summary', is_default=True).exists())
         with self.assertRaises(IntegrityError), transaction.atomic():
-            template_model.objects.filter(pk=template.pk).update(key='other')
+            template_model.objects.create(name='另一个默认', trigger='summary', is_default=True)
+        # 另一种 trigger 可以有自己的默认。
+        device_default = template_model.objects.create(
+            name='默认设备告警', trigger='device', is_default=True)
+        self.assertEqual(device_default.default_slot, 'device')
 
     def test_migration_retires_pending_delivery_and_marks_historical_tasks(self):
         from django.db import connection

@@ -38,22 +38,33 @@ def _examples(events):
 
 def summary_data(task):
     targets = task.target_runs.all()
+    # 维护窗口的作用范围是「这台设备」，不是「这次任务」：汇总通知照发，
+    # 但维护中的设备不该出现在故障计数和故障列表里。
+    from net.alerts.service import maintenance_targets
+    muted = maintenance_targets()
+    muted_pks = [
+        target.pk for target in targets
+        if (target.target_type, str(target.target_id)) in muted
+    ] if muted else []
     ignored = Q(result_snapshot__has_key='ignored') & Q(result_snapshot__ignored=True)
     failed = Q(status__in=('failed', 'partial'))
     abnormal = failed | (Q(result_snapshot__has_key='alert_observation') & Q(result_snapshot__alert_observation__abnormal=True))
     legacy_abnormal = (Q(result_snapshot__has_key='health_status') & Q(result_snapshot__health_status='abnormal')) | Q(
         pk__in=task.alert_events.filter(event_type='abnormal').values('target_run_id'))
     abnormal |= ~Q(result_snapshot__has_key='alert_observation') & legacy_abnormal
+    in_scope = ~Q(pk__in=muted_pks) if muted_pks else Q()
     counts = targets.aggregate(
-        total=Count('pk'),
-        normal=Count('pk', filter=Q(status='success') & ~ignored & ~abnormal),
-        abnormal=Count('pk', filter=abnormal & ~ignored),
-        failed=Count('pk', filter=failed & ~ignored),
-        cancelled=Count('pk', filter=Q(status='cancelled')),
-        skipped=Count('pk', filter=ignored),
-        info=Count('pk', filter=Q(result_snapshot__alert_observation__info=True) & ~ignored),
+        total=Count('pk', filter=in_scope),
+        normal=Count('pk', filter=Q(status='success') & ~ignored & ~abnormal & in_scope),
+        abnormal=Count('pk', filter=abnormal & ~ignored & in_scope),
+        failed=Count('pk', filter=failed & ~ignored & in_scope),
+        cancelled=Count('pk', filter=Q(status='cancelled') & in_scope),
+        skipped=Count('pk', filter=ignored & in_scope),
+        info=Count('pk', filter=Q(result_snapshot__alert_observation__info=True) & ~ignored & in_scope),
     )
     events = task.alert_events.exclude(event_type='summary')
+    if muted_pks:
+        events = events.exclude(target_run_id__in=muted_pks)
     if task.task_type == 'computer_analysis':
         # Match the task page's personnel-first/log-first scope, including
         # personnel without logs and legacy out-of-scope evidence exclusions.
@@ -103,20 +114,32 @@ def process_task_summary(task_run):
                 policy = (_policy_for_scope(profile_type, profile_id) if routing is None else
                           AlertPolicy.objects.filter(pk=routing.get('effective_policy_id')).first())
                 data = summary_data(task)
-                rendered = render_task_summary(data)
-                data.update(message_title=rendered['title'], message_text=rendered['text'])
+                # 渲染推迟到按渠道分发时做：每个渠道可能绑了不同模板。
+                default_rendered = render_task_summary(data)
+                data.update(message_title=default_rendered['title'],
+                            message_text=default_rendered['text'])
                 event, created = AlertEvent.objects.get_or_create(summary_task=task, defaults={
                     'task': task, 'target_run': None, 'event_type': 'summary',
                     'profile_type': profile_type, 'profile_id': profile_id,
                     'target_type': 'task', 'target_id': str(task.pk), 'policy': policy,
-                    'summary_data': data, 'summary': rendered['title'], 'findings': [],
+                    'summary_data': data, 'summary': default_rendered['title'], 'findings': [],
                     'severity': 'warning' if data['abnormal'] else 'info', 'occurred_at': now,
                 })
                 if created:
+                    # 每个渠道用策略里给它配的那套模板；没配的走该时机的默认模板。
+                    from net.alerts.service import _routes_for_task
+                    from net.alerts.templates import resolve_template
+                    by_channel = {}
+                    for channel, template in _routes_for_task(task, policy, 'summary'):
+                        by_channel[channel.pk] = (channel, template)
                     channels = (AlertChannel.objects.filter(pk__in=routing.get('channel_ids', []), is_enabled=True)
                                 if routing is not None else policy.effective_channels() if policy else [])
                     for channel in channels:
-                        AlertDelivery.objects.get_or_create(event=event, channel=channel)
+                        template = by_channel[channel.pk][1] if channel.pk in by_channel else None
+                        if template is None:
+                            template = resolve_template(channel, 'summary', policy)
+                        AlertDelivery.objects.get_or_create(
+                            event=event, channel=channel, defaults={'template': template})
                     if not event.deliveries.exists():
                         event.status = AlertEvent.Status.FAILED
                         event.summary += '（未配置可用告警渠道）'

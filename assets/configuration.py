@@ -1,8 +1,9 @@
 """GET-only exports over saved snapshots and the asset table's query allowlist."""
+from tempfile import SpooledTemporaryFile
 from urllib.parse import quote
 from uuid import UUID
 
-from django.http import Http404, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET
@@ -84,4 +85,13 @@ def configuration_zip(request, kind):
     else:
         assets, _ = apply_table_filters(request, model.objects.all(),
                                         get_table_definition(kind), include_legacy_status=False)
-    return _response(build_configuration_zip(assets), 'application/zip', f'{kind}-configurations.zip')
+    # 几百台设备的压缩包可能有上百 MB；写进 SpooledTemporaryFile（超过 8 MB
+    # 自动落盘），再由 FileResponse 分块发送。
+    archive = SpooledTemporaryFile(max_size=8 * 1024 * 1024, mode='w+b')
+    build_configuration_zip(assets, sink=archive)
+    response = FileResponse(archive, as_attachment=True,
+                            filename=f'{kind}-configurations.zip',
+                            content_type='application/zip')
+    response['Cache-Control'] = 'no-store'
+    response['X-Content-Type-Options'] = 'nosniff'
+    return response

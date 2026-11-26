@@ -142,9 +142,16 @@ def _selected_target_ids(profile):
         except (TypeError, ValueError, ValidationError) as exc:
             raise ValidationError({'target_selector': '指定目标 ID 格式无效。'}) from exc
         queryset = queryset.filter(pk__in=normalized_ids)
-        resolved_ids = {str(primary_key) for primary_key in queryset.values_list('pk', flat=True)}
-        if resolved_ids != {str(primary_key) for primary_key in normalized_ids}:
+        # 只把「真的不存在」当配置错误；设备被停用是运维常态，应该从这一轮的范围
+        # 里安静地剔除，而不是让整个计划永远抛错、再也不过 next_run_at。
+        existing_ids = {str(primary_key) for primary_key in
+                        model.objects.filter(pk__in=normalized_ids)
+                        .values_list('pk', flat=True)}
+        if existing_ids != {str(primary_key) for primary_key in normalized_ids}:
             raise ValidationError({'target_selector': '指定目标不存在。'})
+        if not queryset.exists():
+            # 全部停用时这一轮无目标可跑，返回空集交给入队侧跳过，不要报错。
+            return []
     elif mode == 'filtered':
         filters = selector.get('filters')
         if filters is None:
@@ -256,6 +263,8 @@ def _record_schedule_failure(schedule, now, exc):
         'last_schedule_error': '等待活动任务结束。' if blocked else (message or '计划配置无效。'),
         'updated_at': now,
     }
+    # 不推进 next_run_at：这里的失败既有「配置写错了」，也有「源刚改过、等重测
+    # 完再跑」——后者必须保持 due，推进就会白等一整个周期。''
     # The transaction that raised has rolled back.  Do not use its stale model
     # instance: another poll may already have enqueued this schedule and moved
     # next_run_at forward.

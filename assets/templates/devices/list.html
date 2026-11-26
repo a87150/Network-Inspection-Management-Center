@@ -10,7 +10,7 @@
         <p class="page-heading__description">{% if data_source_note %}{{ data_source_note }}{% elif item_key == 'people' %}姓名、工号、部门与启用状态。{% else %}名称、地址、型号与系统版本。{% endif %}</p>
     </div>
     <div class="page-heading__actions">
-        {% include 'devices/_actions_list.html' %}
+                {% include 'devices/_actions_list.html' %}
     </div>
 </header>
 {% if pc_tab %}{% include 'pc/tabs.html' %}{% endif %}

@@ -17,7 +17,11 @@ from net.models import AlertDelivery, AlertEvent, AlertPolicy, AlertState, TaskR
 
 
 RETRY_DELAY_SECONDS = 30
+# webhook 一次往返通常 <1s，30 秒足够；SMTP 握手 + TLS + 大附件可能几十秒，
+# 30 秒的租约会在发送还没结束时过期，另一个 worker 把同一条重新领走，
+# 用户就收到两封一样的邮件。
 DELIVERY_LEASE_SECONDS = 30
+EMAIL_DELIVERY_LEASE_SECONDS = 300
 
 
 @dataclass(frozen=True)
@@ -167,6 +171,64 @@ def _locked_state(scope, finding_key):
         ), False
 
 
+def _channels_for_task(task, policy):
+    """本次任务该发哪些渠道：快照里的 channel_ids 优先，其次策略的启用渠道。"""
+    from net.models import AlertChannel
+    routing = (task.profile_snapshot or {}).get('alert_routing')
+    if routing is not None:
+        return list(AlertChannel.objects.filter(
+            pk__in=routing.get('channel_ids', []), is_enabled=True).order_by('pk'))
+    return list(policy.effective_channels()) if policy else []
+
+
+def _routes_for_task(task, policy, trigger):
+    """本次任务在某个时机下要发的「渠道 × 模板」配对。
+
+    快照里的 routes 是入队时冻结的；没有快照（老任务或直接调用）就退回
+    策略当前的路由，再退回该时机的默认模板。
+    """
+    from net.models import AlertChannel, AlertNotificationTemplate
+
+    routing = (task.profile_snapshot or {}).get('alert_routing') or {}
+    frozen = routing.get('routes')
+    if frozen:
+        wanted = [row for row in frozen if row.get('trigger') == trigger]
+        if not wanted:
+            return []
+        channels = {
+            str(row.pk): row
+            for row in AlertChannel.objects.filter(
+                pk__in=[row['channel_id'] for row in wanted], is_enabled=True)
+        }
+        templates = {
+            str(row.pk): row
+            for row in AlertNotificationTemplate.objects.filter(
+                pk__in=[row['template_id'] for row in wanted])
+        }
+        return [
+            (channels[row['channel_id']], templates[row['template_id']])
+            for row in wanted
+            if row['channel_id'] in channels and row['template_id'] in templates
+        ]
+    if policy is None:
+        return []
+    return [
+        (route.channel, route.template)
+        for route in policy.routes.filter(trigger=trigger, channel__is_enabled=True)
+        .select_related('channel', 'template').order_by('channel_id')
+    ]
+
+
+def _in_maintenance(target, now=None):
+    """这台设备是否正在维护窗口内。维护窗口只管「设备」，不管「任务」。
+
+    走 maintenance_targets 的集合而不是直接 filter：MaintenanceWindow.target_id
+    是 UUIDField，测试和域同步路径里存在非 UUID 的目标标识，直接拿字符串查会
+    抛 ValidationError。
+    """
+    return (target.target_type, str(target.target_id)) in maintenance_targets(now)
+
+
 def process_target_findings(target_run, findings) -> list[AlertEvent]:
     """Persist station-local abnormal/recovery evidence without delivery rows.
 
@@ -230,6 +292,12 @@ def process_target_findings(target_run, findings) -> list[AlertEvent]:
             for state in state_groups['abnormal' if event_type == AlertEvent.EventType.ABNORMAL else 'recovery']:
                 state.last_event = event
                 state.save(update_fields={'last_event', 'updated_at'})
+            # 单设备通知：只有策略里配了 device 路由才发。没配就是不发，
+            # 不能因为渠道在策略里就把每台设备的异常都推一遍。
+            if not _in_maintenance(target):
+                for channel, template in _routes_for_task(target.task, policy, 'device'):
+                    AlertDelivery.objects.get_or_create(
+                        event=event, channel=channel, defaults={'template': template})
             event.status = 'recorded'
             event.save(update_fields={'status', 'updated_at'})
             events.append(event)
@@ -349,18 +417,16 @@ def _claim_deliveries(*, event=None, limit=1, now=None):
         due = Q(status=AlertDelivery.Status.PENDING)
         due |= Q(status=AlertDelivery.Status.RETRY, next_attempt_at__lte=now)
         due |= Q(status=AlertDelivery.Status.SENDING, lease_expires_at__lte=now)
+        # 原来这里只领 summary —— 因为当时只有汇总会建投递行。单设备告警
+        # （abnormal / recovery）现在也建投递行，写死 summary 会让那些行永远
+        # 停在 PENDING。
         rows = AlertDelivery.objects.select_for_update().select_related('event', 'channel').filter(
-            due, event__event_type='summary')
+            due, event__event_type__in=('summary', 'abnormal', 'recovery'))
         if event_id is not None:
             rows = rows.filter(event_id=event_id)
-        muted = maintenance_targets(now)
-        if muted:
-            # Hold, do not discard: the row stays pending and the history keeps
-            # the evidence that this alert fired inside a planned change.
-            planned = Q()
-            for target_type, target_id in muted:
-                planned |= Q(event__target_type=target_type, event__target_id=target_id)
-            rows = rows.exclude(planned)
+        # 维护窗口不拦汇总通知：summary 事件的 target_type 恒为 'task'，
+        # 与 MaintenanceWindow 的三个资产类型永不相交，这段 exclude 从来没生效过。
+        # 真正该做的是在生成汇总内容时把维护中的设备剔除（见 summary_data）。
         claimed = []
         for delivery in rows.order_by('created_at', 'pk')[:max(1, limit)]:
             if delivery.status == AlertDelivery.Status.SENDING and delivery.attempt_count >= delivery.max_attempts:
@@ -374,7 +440,10 @@ def _claim_deliveries(*, event=None, limit=1, now=None):
             delivery.status = AlertDelivery.Status.SENDING
             delivery.attempt_count += 1
             delivery.attempted_at = now
-            delivery.lease_expires_at = now + timedelta(seconds=DELIVERY_LEASE_SECONDS)
+            lease = (EMAIL_DELIVERY_LEASE_SECONDS
+                     if delivery.channel.channel_type == 'email'
+                     else DELIVERY_LEASE_SECONDS)
+            delivery.lease_expires_at = now + timedelta(seconds=lease)
             delivery.lease_token = uuid4().hex
             delivery.next_attempt_at = None
             delivery.save(update_fields={
@@ -404,7 +473,8 @@ def _event_status(event_id):
 def _finish_delivery(delivery_id, token, result):
     now = timezone.now()
     with transaction.atomic():
-        delivery = AlertDelivery.objects.select_for_update().select_related('event').get(pk=delivery_id)
+        delivery = (AlertDelivery.objects.select_for_update()
+                    .select_related('event', 'channel').get(pk=delivery_id))
         if delivery.status != AlertDelivery.Status.SENDING or delivery.lease_token != token:
             return delivery
         delivery.response_summary = summarize(result.response_summary, *delivery.channel.settings.values())
@@ -440,8 +510,11 @@ def deliver_due_alerts(*, event=None, limit=1):
         # 而 claim 按 created_at 排序，坏行每轮都在队头 —— 一行坏数据就能让整个
         # 告警队列停摆到 attempt 耗尽。
         try:
-            delivery = AlertDelivery.objects.select_related('event', 'channel').get(pk=delivery_id)
-            result = send_alert(delivery.channel, build_alert_message(delivery.event))
+            delivery = AlertDelivery.objects.select_related(
+                'event', 'channel', 'template').get(pk=delivery_id)
+            result = send_alert(
+                delivery.channel,
+                build_alert_message(delivery.event, delivery.channel, delivery.template))
         except Exception as exc:  # The durable row records an unexpected adapter failure.
             from net.alerts.base import DeliveryResult
 
@@ -502,9 +575,11 @@ def process_persisted_target(target_run):
             # The failed transaction rolled back all alert/state writes. Audit
             # separately without reserving an event's unique slot with a fake
             # finding, which would otherwise prevent a later successful retry.
+            # 只记类名会让界面上的错误完全查不动；带上消息，但先脱敏。
+            message = summarize(f'{type(exc).__name__}: {exc}')
             TaskTargetRun.objects.filter(pk=target_id, alert_processed_at__isnull=True).update(
                 alert_attempted_at=timezone.now(),
-                alert_processing_error=f'Alert processing failed ({type(exc).__name__}).',
+                alert_processing_error=f'Alert processing failed ({message}).',
             )
             # reconcile_terminal_targets retries this every cycle, so a reproducible bug
             # failed silently forever. Logged after the audit write is committed.

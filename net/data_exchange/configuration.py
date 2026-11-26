@@ -61,9 +61,14 @@ def latest_configuration(asset) -> ConfigurationResult:
     return _latest_configuration(asset, configuration_secrets())
 
 
-def build_configuration_zip(assets) -> bytes:
+def build_configuration_zip(assets, sink=None):
+    """把配置打包成 ZIP。
+
+    ``sink`` 传可写文件对象时写进去并返回 None —— 视图走这条路径，500 台设备
+    也不会把整个压缩包留在内存里；不传则返回 bytes，供测试和小批量调用方使用。
+    """
     secrets = configuration_secrets()
-    archive = BytesIO()
+    archive = sink if sink is not None else BytesIO()
     manifest = StringIO(newline='')
     writer = csv.writer(manifest, lineterminator='\r\n')
     # 一列装两种语义是错的：成功行写 scope（running-config），失败行写错误文案。
@@ -91,4 +96,7 @@ def build_configuration_zip(assets) -> bytes:
                       result.status, filename, getattr(result, 'scope', '') or '', result.message)
             writer.writerow([_spreadsheet_safe(value) for value in values])
         bundle.writestr('manifest.csv', '\ufeff' + manifest.getvalue())
+    if sink is not None:
+        sink.seek(0)
+        return None
     return archive.getvalue()

@@ -314,7 +314,12 @@ def asset_toggle_enabled(request, kind):
     except (TypeError, ValueError):
         raise Http404('设备标识无效')
     asset = get_object_or_404(page.model, pk=pk)
-    asset.is_enabled = not asset.is_enabled
+    wanted = str(request.POST.get('enabled') or '').strip()
+    if wanted in ('1', '0'):
+        asset.is_enabled = wanted == '1'
+    else:
+        # 老调用方只传 pk；保留翻转语义，但优先用显式目标值。
+        asset.is_enabled = not asset.is_enabled
     asset.save(update_fields=['is_enabled'])
     messages.success(request, ('%s 已启用' if asset.is_enabled else '%s 已停用') % asset)
     return redirect(query_without_page(request) and

@@ -20,6 +20,7 @@ from net.models import (
     Schedule,
     Server,
     TaskRun,
+    TaskTargetRun,
 )
 from net.inspections.queue import enqueue_task
 
@@ -169,6 +170,13 @@ class TaskUiTestCase(TestCase):
             'selected_items': ['cpu'],
             'next': reverse('asset_list', args=['servers']),
         })
+        # 目标级互斥：同一台设备同一时刻只能有一个活动任务在采它，
+        # 所以先让第一次任务收尾，再验证第二次的快照。
+        finished = timezone.now()
+        TaskRun.objects.update(status=TaskRun.Status.CANCELLED, active_scope_key=None,
+                               finished_at=finished, lease_expires_at=None)
+        TaskTargetRun.objects.update(status=TaskRun.Status.CANCELLED,
+                                     execution_scope_key=None, finished_at=finished)
         filtered_response = self.post_manual({
             'profile_id': str(self.server_profile.pk),
             'target_mode': 'filtered',
