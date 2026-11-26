@@ -1,0 +1,56 @@
+导入链路 + 外部 API 连接链路 代码审查结果（只读，未修改任何仓库文件；验证库均为新建后销毁，已清空 net_lcs_probe_* ）
+
+本范围无 P0。
+
+net/data_exchange/xlsx.py:136 | P1 | Excel 模板里的日期单元格被当成序列号原文，整份 xlsx 导入必定失败
+触发条件：用「下载 Excel 模板」填写人员表，在“入职日期/离职日期”列输入 2026-01-15（Excel 自动存成日期型：<c r="C2" s="1"><v>46037</v></c>），再导入。
+实际后果：实测报 「第 2 行“入职日期”：time data '46037' does not match format '%Y-%m-%d'」，整份文件被拒、一条不写；xlsx 模板对人员实际上不可用，用户只会怀疑自己的日期格式。
+现有防御为什么无效：_cell_value 只取 <v> 文本，完全不看 cell/@s 样式与 numFmt，也不处理 t="d"；import_file 把 xlsx 行重写成 CSV 文本再交给 import_csv，转换层丢失全部类型信息；_date（inventory_csv.py:45）只认 %Y-%m-%d 无备用格式；模板行由 build_xlsx 用 inlineStr 生成，所以 tests/devices/test_import_templates.py 里“模板样例可直接导入”的用例恰好绕过了这个类型差。
+
+net/data_exchange/inventory_csv.py:523 | P1 | 同一份空单元格，文本列保留旧值、日期/数值列却被清空，更新导入静默删数据
+触发条件：对已存在记录做更新式导入，CSV 里包含“入职日期/离职日期/内存总量/磁盘总量/CPU 核心数”等列但单元格为空（典型场景：从别的系统导出的表没有这些列值，手工补了姓名/工号/部门）。
+实际后果：实测 hire_date 由 2026-02-02 变成 NULL，而同一行的 department 正常写入；界面仍提示「导入完成：更新 1 条」。memory_total_gb/disk_total_gb/cpu_*_count 同理，会自动采集来的硬件事实被抹掉且无任何提示。
+现有防御为什么无效：第 523-525 行特意把 _date/_non_negative_integer/_gib 排除在“空单元格跳过”之外（这三类走 converter('')→None 并写入），其余转换器一律 continue 保留；代码注释只解释了手机号的空值语义，没说明日期/数值列是“空=清空”，用户无从预期，也没有任何二次确认或变更提示。
+
+net/domain/user_import.py:74 | P2 | 表头校验用 strip 后的名字、取数却用原始名字，表头多一个空格就整列读空
+触发条件：域账户 CSV 的表头写成 “登录名 ”（手改 CSV、或从别处粘表头时带了尾随空格）。
+实际后果：实测解析出 {'登录名': ''}（第 74-76 行 strip 后能通过必填列检查），随后 validate_account_rows 报「第 2 行存在空的必填字段。」——用户盯着一个填满的登录名列，永远找不到问题；500 行整表报废。
+现有防御为什么无效：set(...) <= {name.strip()} 与第 79 行 row.get(header) 用的不是同一个键集合，strip 只发生在校验侧；xlsx 分支（_rows_from_values）用位置索引所以没这个问题，两边口径不一致。
+
+net/data_exchange/inventory_csv.py:494 | P2 | 报错行号不是文件真实行号，空行与 Excel 稀疏行都会让行号偏小
+触发条件：CSV 中间有空行（Excel 导出范围里留空行），或 xlsx 里数据不在连续行（Excel 只写有内容的 <row>，比如数据在 r="5"）。
+实际后果：实测 CSV 第 5 物理行的“列数超过表头”被报成「第 4 行」；xlsx 里 Excel 第 5 行的空工号被报成「第 2 行」。用户按行号去改，改的是无关的行。
+现有防御为什么无效：enumerate(reader, start=2) 数的是 csv 记录数，而 DictReader 会静默跳过空行（stdlib 行为）；xlsx.py:83 只按出现顺序索引 <row>，从不读 row/@r，两处都假设“记录序号 == 文件行号”。
+
+net/data_exchange/inventory_csv.py:361 | P2 | 编码回退链退到 gb18030，非 UTF-8/GBK 的文件会被静默解成乱码写库
+触发条件：文件既不是 UTF-8 也不是 GBK/GB18030（Big5、Shift-JIS、Latin-1、部分 UTF-16 字节），且表头能用 ASCII 字段名命中别名（name/employee_id/department/ip…）。
+实际后果：实测 Big5 编码的“王小明”被存成 ''，导入返回 (1, 0) 并提示「导入完成：新增 1 条」，乱码直接进库并流到导出、统计、人员匹配。
+现有防御为什么无效：_decode_upload 只把 UnicodeDecodeError 当失败，而 gb18030 几乎接受任意字节对，几乎不抛错；表头是中文时会退化成「列…不属于模板」的误报，两头都没有“编码不确定”的中间态，也没有 BOM/字符集探测。
+
+domain/operations.py:103 | P2 | 域账户批量导入把行级错误全部吞成一句话，用户拿不到任何可定位信息
+触发条件：任意一行不合格（DN 越界、登录名重复、必填为空、与活动域控任务冲突）。
+实际后果：解析失败、逐行校验失败、入队冲突三种完全不同的原因都返回同一句「域账户表格校验失败，未创建任务。」；user_import.py 精心拼的「第 N 行的登录名已存在」永远到不了页面，500 行的表只能人工二分。
+现有防御为什么无效：except ValidationError 没有取 exc.messages / str(exc)，与资产导入（index/common/imports.py:68-69 把 ValueError 文本回显）不一致；表单层的 clean_file 也只报体积/后缀。
+
+index/common/imports.py:62 | P2 | 上传体积上限在文件已完整落盘之后才生效，框架层与部署层都没有请求体上限
+触发条件：管理员会话来一次远超 2 MB 的 multipart 上传（误选大文件、或脚本批量提交）。
+实际后果：request.FILES 一被访问，Django 就把整个 body 解析完（超过 FILE_UPLOAD_MAX_MEMORY_SIZE 默认 2.5 MB 后全部落临时目录），之后才在 inventory_csv.py:350 拿到 size 报「文件不能超过 2 MB」；仓库里 DATA_UPLOAD_MAX_MEMORY_SIZE、client_max_body_size、waitress max_request_body_size 三处全无设置（grep 零命中），服务由 waitress serve 默认 1 GiB 上限承载（deploy/service.py:74），等于可被写入 1 GB 临时文件再拒绝。
+现有防御为什么无效：限额只写在视图里（MAX_CSV_UPLOAD_BYTES 的检查），位于 multipart 解析之后；MAX_CSV_UPLOAD_BYTES+1 的 read 只防内存放大，不防落盘。
+
+net/infrastructure/http_collectors.py:26 | P2 | 外部设备 API 的响应没有字节上限，误配的 api_url 能把整包响应读进巡检进程
+触发条件：弱电设备/服务器 Agent 的 api_url 填成一个会返回大文件的地址（配置规则只校验 scheme/主机，模板与帮助反而鼓励“按实际接口任意填写”），或设备/中间件异常返回超大 JSON。
+实际后果：_response_data 先 response.text（整包解码成 str）再 response.json()（再解析一份），单次采集可把 worker 内存顶到响应体数倍，巡检队列里其它设备一起卡在 OOM/超时上。
+现有防御为什么无效：只设了 timeout=12（限时间不限字节），requests.get 未用 stream，raise_for_status 也不拦截体积；同项目的配置采集路径明确设了 MAX_CONFIG_BYTES 并逐块累加校验（native_http.py:63-69），这条路径没有对应上限，属于同一类风险的两套口径。
+
+已确认无问题的点（避免重复挖）
+- 部分失败回滚：import_csv 全流程单事务、先校验后写；tests.common.test_table_exports 的 test_one_invalid_row_rolls_back_all_rows / test_late_row_validation_failure_writes_nothing 已覆盖并通过，我另用 5000 行混合错误文件复跑确认库内无残留。
+- 文件内重复主键/等价 IP：seen_keys 去重 + _existing_objects_by_key 归一化，重复行整表拒绝（test_duplicate_keys_reject_whole_file_instead_of_last_row_winning、test_equivalent_ipv6_rows_are_rejected_as_duplicate_business_keys 通过）。
+- 大小写不同的主键：实测导入 'h10001' 命中已存的 'H10001' 时，full_clean 按数据库 collation（utf8mb4_uca1400_ai_ci）拦下并给出「工号：具有 Employee id 的 People 已存在」，不会走到 IntegrityError 的“可能有人在同时导入”误导分支。
+- 表头缺失/多余列/列数超表头/未知列/缺主键列：inventory 导入逐项硬拒（多余列→“列数超过表头”，未知列→“不属于模板”），我在源码里核对过 469-510 行的判定顺序，无绕过路径。
+- 行/列/单元格上限：CSV 与 xlsx 两条路径都生效；实测 5001 行 xlsx → 「Excel 最多允许 5000 行数据」，64 列上限与 10000 字符上限都有对应分支。
+- 并发与重入：people/域账户走 select_for_update；IP 主键虽无行锁但 ip/employee_id 唯一索引 + IntegrityError 专分支（test_unique_race_gets_its_own_message）；域账户重复提交被 _reject_active_domain_dn_overlap（tasks.py:239）与 TaskRun.active_scope_key 唯一约束挡住，不会产生重复 AD 建号任务。
+- 权限与 CSRF：import_inventory/下载模板没有显式装饰器，但 AccessMiddleware 默认“非白名单即管理员”，READER_VIEWS 不含它们；CsrfViewMiddleware 开启，@require_POST 只在 import 上。
+- 导入后列表/本地视图同步：PageCacheMiddleware 只缓存 index/people_statistics/asset_detail/person_detail，且非安全方法轮换 session epoch，asset_list 不在白名单，导入后跳转看到的是实时数据；people 导入对目录来源记录有 sync_source/source 拦截，不会覆盖飞书/钉钉同步来的人员。
+- 导出侧：普通导出排除 secret_fields（networks 的 password/api_shared_secret/snmp_community/snmp_auth_password/snmp_priv_password、servers 的 password/api_token、weakcurrent 的 api_password/api_token），_spreadsheet_safe 处理公式前缀，模板下载按 IMPORTABLE_ENTITIES 白名单 404。
+- 外部 API 采集链其余部分逐行看过无可复现缺陷：sangfor.py（每项独立剩余预算、allow_redirects=False、decorator 签名/重定向拒绝）、native_http.py（asyncio.timeout_at + MAX_CONFIG_BYTES 逐块校验 + 拒绝非 text/plain + abort_ssl）、access/adapters.py（urljoin 同源校验、allow_redirects=False、分页 100/10000 双上限）、alerts/dingtalk.py（签名 URL、超时、errcode 判定）。access 的 direction/result 恒为 unknown 是 changelog 已登记的已知取舍，不作为 bug 上报。
+- 未覆盖：人员平台（飞书/钉钉）目录同步与域控 LDAP 主体逻辑属他人范围，我只扫了它们的适配器入口与测试连接路径。

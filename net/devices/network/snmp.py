@@ -361,7 +361,14 @@ def _parse_interfaces(snapshot):
                 "mac": _mac(tables[IF_MAC].get(index)),
                 "admin_status": _status(tables[IF_ADMIN_STATUS].get(index)),
                 "oper_status": _status(tables[IF_OPER_STATUS].get(index), operational=True),
-                "speed_mbps": high_speed if high_speed is not None else (speed / 1_000_000 if speed is not None else None),
+                # RFC 2863 允许 ifHighSpeed 返回 0 表示「未知」或「小于 1Mbps」。
+                # 把 0 当成有效读数会让带宽显示成 0，并连带把 traffic 的利用率
+                # 退化成 None；traffic.py 对同一对 OID 用的是「0 就回退到 ifSpeed」，
+                # 两处语义必须一致。
+                "speed_mbps": (
+                    high_speed if high_speed
+                    else (speed / 1_000_000 if speed else None)
+                ),
                 "in_octets": _number(tables[IF_HC_IN].get(index, tables[IF_IN_OCTETS].get(index))),
                 "out_octets": _number(tables[IF_HC_OUT].get(index, tables[IF_OUT_OCTETS].get(index))),
                 "in_errors": _number(tables[IF_IN_ERRORS].get(index)),
@@ -826,8 +833,14 @@ def collect_network_snmp(device, timeout=12, selected_items=None, session_factor
             snapshot = asyncio.run(collect())
         data, raw, completed = parse_snmp_snapshot(snapshot, selected_items, device.vendor)
         missing = requested - completed
-        status = "partial" if missing and completed else "failed" if missing else "success"
-        message = "缺少有效采集证据：" + ", ".join(sorted(missing)) if missing else ""
+        if not requested:
+            # 没有请求项就没有证据，不能记成功——否则巡检台的成功台数会虚高，
+            # 而 devices/network/collector.py 对同一情形明确写了「空请求不能记 success」。
+            status = "failed"
+            message = "未选择任何采集项。"
+        else:
+            status = "partial" if missing and completed else "failed" if missing else "success"
+            message = "缺少有效采集证据：" + ", ".join(sorted(missing)) if missing else ""
         return CollectionResult(True, status, message, data, raw, timer.duration_ms)
     except SnmpQueryError as exc:
         category = exc.category if exc.category in _ERROR_MESSAGES else "response"

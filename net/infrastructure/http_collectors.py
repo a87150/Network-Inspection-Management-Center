@@ -214,7 +214,13 @@ def collect_security_api(device, timeout=12, selected_items=None):
             raw = selected_fields(raw, selected_items, SECURITY_FIELDS)
         missing = [item for item in (selected_items or []) if item not in data]
         status, message = 'success', ''
-        if missing or (selected_items is None and not data):
+        if selected_items is not None and not selected_items:
+            # 显式传入空列表：没请求项就没证据，不能记成功。之前这条从 missing
+            # （空列表 → 空集）和 (is None and not data) 两个条件里同时漏过，
+            # 会真的发一次 '?fields=' 然后记一次成功。
+            status = 'failed'
+            message = '未选择任何巡检项。'
+        elif missing or (selected_items is None and not data):
             status = 'partial' if data else 'failed'
             message = '弱电设备 API 无法映射请求的巡检项：' + ', '.join(missing or ['status_data'])
         return CollectionResult(True, status, message, data=data, raw=raw, duration_ms=timer.duration_ms)

@@ -535,11 +535,15 @@ class NetworkSnmpCollectionTests(SimpleTestCase):
         )
 
     def test_empty_selection_performs_no_queries(self):
+        """没有请求项就没有证据：不发查询，也不能记成功。"""
         session = MemorySession(scalars={SYS_NAME: "must-not-be-read"})
 
         result = self.collect(session, [])
 
-        self.assertEqual(result.status, "success")
+        # 记 success 会让巡检台的成功台数虚高——没连上、没采到东西却算一次成功。
+        # devices/network/collector.py 对同一情形写的是「空请求不能记 success」。
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.message, "未选择任何采集项。")
         self.assertEqual(result.data, {})
         self.assertEqual(session.get_queries, [])
         self.assertEqual(session.walk_queries, [])

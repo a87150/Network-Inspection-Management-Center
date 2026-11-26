@@ -27,6 +27,11 @@ from net.people.directory.base import (
 from net.models import People, PeopleSyncSource
 
 
+# 一次同步的停用比例超过这个值就判为异常快照（需人工核对范围）。
+DEACTIVATION_GUARD_RATIO = 0.5
+# 在职人数低于这个数时不套用比例守卫：小样本的比例没有统计意义。
+DEACTIVATION_GUARD_MIN_ACTIVE = 5
+
 _PREVIEW_SALT = 'net.people.sync.preview.v1'
 _PREVIEW_MAX_AGE_SECONDS = 300
 _PREVIEW_VERSION = 3
@@ -191,6 +196,26 @@ def preview_people_sync(source: PeopleSyncSource, adapter) -> SyncPreview:
         and person.platform_user_id not in skipped_external_ids
     ]
     deactivations.sort(key=lambda item: item['employee_id'])
+    # 快照规模守卫：一次同步把大半个花名册停用，几乎总是「范围被收窄了」而不是
+    # 「这批人真的一起离职了」。收窄可以来自 root_department_ids 改动，也可以来自
+    # 管理员在飞书/钉钉后台取消某个部门的应用可见范围——后者本系统零配置变更，
+    # 没有任何痕迹。定时同步不经人工预览直接落库，所以这里必须拦。
+    # 阈值取本地活跃数的 50%，且要求本地活跃数够大才判，避免小样本误报。
+    active_owned = [
+        person for person in local_people
+        if _owned_by_source(person, source) and person.is_active
+    ]
+    if len(active_owned) >= DEACTIVATION_GUARD_MIN_ACTIVE:
+        ratio = len(deactivations) / len(active_owned)
+        if ratio > DEACTIVATION_GUARD_RATIO:
+            return _invalid_preview(
+                source_key,
+                '本次快照会停用 %d 人（占当前在职 %d 人的 %d%%）。'
+                '这通常意味着同步范围被收窄（根部门或平台侧可见范围变动），'
+                '请核对根部门设置后再执行。'
+                % (len(deactivations), len(active_owned), round(ratio * 100)),
+                skipped=skipped,
+            )
     unsigned = SyncPreview(
         source_key=source_key,
         creates=tuple(creates), updates=tuple(updates), unchanged=tuple(unchanged),
@@ -363,6 +388,12 @@ def _set_person_record(person, source, record, synced_at):
     for field_name in _DATE_RECORD_FIELDS:
         if field_name in record:
             setattr(person, field_name, _record_date(record, field_name))
+    # 回到在职状态时清掉上一次停用写下的离职日期。停用分支只在字段为空时才写，
+    # 而在这里如果不主动清，就会留下「在职 + 有离职日期」的自相矛盾记录；
+    # 更麻烦的是 _person_matches_record 只在 record 带该键时才比较，这条脏数据
+    # 之后每次同步都判成 unchanged，永远自愈不了，只能人工改库。
+    if 'departure_date' not in record:
+        person.departure_date = None
 
 
 def _validate_person(person):
