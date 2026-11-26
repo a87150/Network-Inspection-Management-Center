@@ -224,7 +224,7 @@ Worker 同时承担到期计划检查、任务领取、租约续期和告警处�
 | 配置下载为空或无法解密 | 先看备份支持范围/成功版本，再核对原备份密钥；下载不会即时连接设备 |
 | 拓扑没有链路 | 确认巡检配置勾选“拓扑发现（LLDP/CDP）”，设备启用 LLDP/CDP，SNMP 可读 LLDP-MIB 或 SSH 模板能解析回显；Ping、ARP、MAC 表和名称相似不会生成物理链路 |
 | 域控 636 / BitLocker 失败 | 按 [CA 指南](docs/operations.md#windows-内部-ca-与-ldaps-排障) 查 DNS、证书链、端口及目录权限；项目 BitLocker 读取要求 LDAPS |
-| MariaDB W003 / W036 | **W036 表示带条件的唯一约束没被建**（MariaDB 不支持这种写法）。task 级的活动范围互斥靠 `active_scope_key` 列上的唯一索引；`TaskTargetRun` 的目标级互斥（`execution_scope_key`）在 MariaDB 上**没有约束兜底**，由入队时的显式预检保证。核对实际迁移和索引，不截断 DN、不重置表，详见[数据库说明](docs/architecture.md) |
+| MariaDB W003 / W036 | **W036 只说明带条件的唯一约束需要变通，不代表互斥不存在**。task 级的活动范围互斥靠 `active_scope_key` 上的普通唯一索引；`TaskTargetRun` 的目标级互斥由 `0040_mariadb_active_target_scope` 用 `STORED` 生成列 `net_active_execution_scope`（活跃态取 `execution_scope_key`、终态为 NULL）加唯一索引 `net_target_active_scope_mysql` 实现，**数据库层真实生效**。核对实际迁移和索引，不截断 DN、不重置表，详见[数据库说明](docs/architecture.md) |
 | 启动报 `DB_ENGINE must be ...` | 配置里的引擎值拼错了。**这是刻意的**：早前拼错会静默连上根目录的 SQLite 空库，看起来像数据全没了。改回 `mysql` 或 `sqlite` 即可 |
 | 告警未收到 | 整批是否结束、目标处理是否完成，再查总结生成错误、渠道状态与投递详情 |
 | 静态文件仍旧 | 确认运行代码、`collectstatic` 输出目录和浏览器缓存；更新 Python 后还需重启对应进程 |

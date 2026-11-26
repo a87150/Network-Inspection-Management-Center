@@ -5,7 +5,9 @@ from ldap3.core.exceptions import LDAPInvalidDnError
 from ldap3.utils.dn import parse_dn
 
 
-MAX_DOMAIN_OPERATION_TARGETS = 500
+# 域账户上千是常态（批量停用离职账号、批量移 OU）。500 会让这类操作直接
+# 被拒，而拒了也没有替代路径。上限留着只为拦误操作，与队列的入队上限对齐。
+MAX_DOMAIN_OPERATION_TARGETS = 5000
 
 _ACTION_PARAMETERS = {
     'account': {

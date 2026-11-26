@@ -50,7 +50,14 @@ def _filetime_to_date(value):
 
 
 def _ou_from_dn(value):
-    parts = str(value or '').split(',')
+    """取首个 RDN 之后的整段，作为对象所属 OU。
+
+    只按未转义的逗号切分：AD 里 CN 本身可以带逗号（改名成 Smith, John 之类），
+    写成 \\, 转义。裸 split(',') 会把这种名字从中间切断，把 ' John,OU=Sales,...'
+    当 OU 写进库，之后 PC 的组织归属就一直是错的。
+    （net/devices/pc/enrichment.py 里的 _ou 用的是同一套判据。）
+    """
+    parts = re.split(r'(?<!\\),', str(value or ''))
     return ','.join(parts[1:]) if len(parts) > 1 else ''
 
 
@@ -248,7 +255,7 @@ def fetch_domain_snapshot(config):
     return users, computers, groups, ous
 
 
-def apply_domain_snapshot(snapshot, base_dn=''):
+def apply_domain_snapshot(snapshot, base_dn='', scope_confirmed=True):
     users, computers, groups = snapshot[:3]
     seen_accounts = set()
     seen_computers = set()
@@ -350,6 +357,13 @@ def apply_domain_snapshot(snapshot, base_dn=''):
         # 把范围收窄到某个 OU 之后，范围内是有人的、范围外一个人都见不到；
         # 原来不带范围的全表 exclude 会把范围外的账号整批标成停用。
         # 不知道自己在看哪（DN 为空）的行一律不动。
+        #
+        # scope_confirmed 覆盖另一种收窄：user_filter/computer_filter 改了，
+        # 或者绑定账号只对部分 OU 有读权限。这两种情况下 base_dn 没变，
+        # 但实际命中集合变小了——「没见到」不等于「被停用」。判据是「本次的
+        # filter 与上一次成功同步相同」；不同就只更新见到的，不推断停用。
+        if not scope_confirmed:
+            seen_accounts, seen_computers = set(), set()
         if seen_accounts:
             stale_accounts = Domain_Account.objects.exclude(login_name__in=seen_accounts)
             if base_dn:

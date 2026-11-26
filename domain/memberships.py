@@ -10,6 +10,7 @@ from django.views.decorators.http import require_http_methods
 from index.common.access import admin_required
 from net.models import Domain_Group, DomainMembership, Domain_Account, Domain_Computer, Domain_Controller_Config
 from net.domain.tasks import enqueue_domain_operation
+from net.domain.memberships import dn_key
 from net.domain.validation import validate_dn_within_base
 from net.inspections.queue import is_sqlite_busy
 
@@ -21,8 +22,30 @@ def _candidates(group, object_type, base_dn):
     model = TARGET_MODELS[object_type]
     if not base_dn:
         return model.objects.none()
-    return (model.objects.filter(distinguished_name__iendswith=base_dn)
-            .exclude(distinguished_name='').exclude(memberships__group=group))
+    # 不用 distinguished_name__iendswith：MariaDB 把它编译成 LIKE '%base_dn'，
+    # 大小写敏感与否取决于列的排序规则（这套库是 utf8mb4_bin），而配置里的
+    # base_dn 与 AD 返回的 DN 在大小写、逗号后空格上常常不一致。一旦不一致，
+    # 候选列表恒空，「添加成员」整条路就走不通，且没有任何报错——因为 DN 校验
+    # 走的是 casefold 后的比较，配置本身是合法的。
+    # 改成在 Python 侧按规范化 DN 过滤；域账户规模在几千量级，整表取 DN 可接受。
+    wanted = dn_key(base_dn)
+    if not wanted:
+        return model.objects.none()
+    matched = [
+        pk for pk, dn in model.objects.exclude(distinguished_name='')
+        .exclude(memberships__group=group)
+        .values_list('pk', 'distinguished_name')
+        if _dn_within(dn, wanted)
+    ]
+    return model.objects.filter(pk__in=matched)
+
+
+def _dn_within(distinguished_name, base):
+    """DN 是否落在 base 之下，按规范化后的 RDN 比较。"""
+    key = dn_key(distinguished_name)
+    if not key or len(key) < len(base):
+        return False
+    return key[len(key) - len(base):] == base
 
 
 def _selected_ids(request, field):

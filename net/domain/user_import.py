@@ -19,6 +19,10 @@ from net.models import DomainOperation, Domain_Account, Domain_Controller_Config
 
 
 MAX_IMPORT_ROWS = 500
+# 上传表格的字节上限，CSV 与 xlsx 分支共用同一个数。
+MAX_IMPORT_BYTES = 20 * 1024 * 1024
+# 表格只有三列。单元格的 r 属性由上传递，不设上限就是一个可控的内存分配点。
+MAX_IMPORT_COLUMNS = 64
 REQUIRED_HEADERS = ('用户DN', '登录名', '显示名称')
 
 
@@ -56,7 +60,13 @@ def xlsx_template_bytes():
 
 def parse_csv_accounts(upload) -> list[dict]:
     try:
-        text = upload.read().decode('utf-8-sig')
+        # 和 xlsx 分支对齐：先卡字节数再读。不卡的话一次 read() 会把整个文件
+        # 拉进内存，每行建成 dict 还要再放大十倍，100MB 的表格能把 Web 进程打掉。
+        raw = upload.read(MAX_IMPORT_BYTES + 1)
+        if len(raw) > MAX_IMPORT_BYTES:
+            raise ValidationError(
+                'CSV 文件超过 %d MB，请拆分后再导入。' % (MAX_IMPORT_BYTES // 1024 // 1024))
+        text = raw.decode('utf-8-sig')
     except UnicodeDecodeError:
         raise ValidationError('请使用 UTF-8 编码的 CSV 文件。') from None
     try:
@@ -76,9 +86,20 @@ def parse_csv_accounts(upload) -> list[dict]:
 
 
 def _column_index(reference):
-    letters = ''.join(character for character in str(reference) if character.isalpha())
+    """把 'C12' 的列字母换算成 0 起的列号；不是合法坐标就返回 None。
+
+    没有字母时返回 None 而不是 -1：r 属性缺失会传进 None，str(None) 是 'None'，
+    其字母能算出一个像模像样的数字，比起来报错不如直接判非法。
+    """
+    if not isinstance(reference, str):
+        return None
+    letters = ''.join(character for character in reference if character.isalpha())
+    if not letters:
+        return None
     index = 0
     for character in letters.upper():
+        if character < 'A' or character > 'Z':
+            return None
         index = index * 26 + ord(character) - ord('A') + 1
     return index - 1
 
@@ -104,7 +125,7 @@ def parse_xlsx_accounts(upload) -> list[dict]:
     namespace = {'x': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
     try:
         with ZipFile(upload) as archive:
-            if sum(item.file_size for item in archive.infolist()) > 20 * 1024 * 1024:
+            if sum(item.file_size for item in archive.infolist()) > MAX_IMPORT_BYTES:
                 raise ValidationError('Excel 文件解压后过大。')
             shared_strings = []
             if 'xl/sharedStrings.xml' in archive.namelist():
@@ -125,6 +146,11 @@ def parse_xlsx_accounts(upload) -> list[dict]:
                 row = []
                 for cell in row_node.findall('x:c', namespace):
                     index = _column_index(cell.get('r'))
+                    # r 属性完全由上传者控制：写成 r="AAAAAAAAAAAAAAAAAAAA1" 就能让
+                    # 下面那个 while 无限 append，30 字节的 XML 换几 GB 内存。
+                    # 表格只有三列，超出范围直接按解析失败处理。
+                    if index is None or index < 0 or index > MAX_IMPORT_COLUMNS:
+                        raise ValidationError('Excel 文件的列位置异常，无法解析。')
                     while len(row) <= index:
                         row.append('')
                     if cell.get('t') == 'inlineStr':

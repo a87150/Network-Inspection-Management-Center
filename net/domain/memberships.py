@@ -46,6 +46,14 @@ def refresh_group_names(objects):
 
 def publish_memberships(users, computers, groups):
     # The caller publishes the complete LDAP snapshot in one short transaction.
+    #
+    # 一个组都没抓到时直接跳过。这不是「AD 里的组全没了」，而是 group_filter
+    # 改成了匹配不到，或者绑定账号保留了组对象读权限却被裁掉了 member 属性
+    # （AD 会静默省略属性，结果码仍是 0）。照着空快照往下走会把全部成员关系
+    # 和 group_names 清空——而清空之后成员弹窗一片空白，移出操作又会被
+    # 「不是已同步的直接成员」拒掉，界面上没法自救，只能等下次成功同步。
+    if not groups:
+        return
     group_map = {dn_key(row.distinguished_name): row for row in Domain_Group.objects.all()}
     objects = [(Domain_Account, list(Domain_Account.objects.all())),
                (Domain_Computer, list(Domain_Computer.objects.all()))]

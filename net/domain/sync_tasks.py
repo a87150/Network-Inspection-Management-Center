@@ -9,6 +9,29 @@ from net.inspections.executor import _begin_target, _database_guard, _has_live_l
 from net.inspections.state import save_target
 
 
+def _scope_filters(config):
+    """决定「本次能看见哪些对象」的那组配置。变了就不能推断谁被停用。"""
+    return {
+        'base_dn': (config.base_dn or '').strip(),
+        'user_filter': (config.user_filter or '').strip(),
+        'computer_filter': (config.computer_filter or '').strip(),
+        'group_filter': (config.group_filter or '').strip(),
+    }
+
+
+def _scope_is_unchanged(task):
+    """本次同步的范围是否与上一次成功同步一致。没有上一次就当作不一致。"""
+    previous = (
+        TaskRun.objects.filter(task_type='domain_sync', status='success')
+        .exclude(pk=task.pk)
+        .order_by('-finished_at', '-created_at')
+        .first()
+    )
+    if previous is None:
+        return False
+    return (previous.parameters_snapshot or {}).get('filters') == task.parameters_snapshot.get('filters')
+
+
 def enqueue_domain_sync(*, schedule=None, available_at=None):
     with _database_guard(), transaction.atomic():
         config = Domain_Controller_Config.objects.select_for_update().filter(pk=1).first()
@@ -24,7 +47,13 @@ def enqueue_domain_sync(*, schedule=None, available_at=None):
             source='scheduled' if schedule else 'manual', schedule=schedule,
             available_at=available_at or timezone.now(), total_targets=1,
             profile_snapshot={'name': '域控同步', 'host': config.host},
-            parameters_snapshot={'config_version': config.updated_at.isoformat(), 'concurrent_workers': 1},
+            parameters_snapshot={
+                'config_version': config.updated_at.isoformat(),
+                'concurrent_workers': 1,
+                # 留给下一次同步判断「范围是否被收窄」：filter 变了就不能
+                # 把这次没见到的对象推断成停用。
+                'filters': _scope_filters(config),
+            },
             target_scope_snapshot={'target_type': 'domain_config', 'target_ids': ['1']})
         task.scope_key = TaskRun.build_scope_key(task_type=task.task_type, profile_id=None,
                                                target_scope_snapshot=task.target_scope_snapshot)
@@ -56,7 +85,10 @@ def _publish(started, worker_id, snapshot=None, error='', lease_guard=None):
         if not error:
             try:
                 with transaction.atomic():
-                    counts = apply_domain_snapshot(snapshot, base_dn=config.base_dn)
+                    counts = apply_domain_snapshot(
+                        snapshot, base_dn=config.base_dn,
+                        scope_confirmed=_scope_is_unchanged(task),
+                    )
                 result = dict(zip(('accounts', 'computers', 'groups'), counts))
                 result['message'] = '同步完成：{} 个账号，{} 台计算机，{} 个分组。'.format(*counts)
                 if len(snapshot) > 3:
