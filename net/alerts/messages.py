@@ -23,13 +23,15 @@ def _asset_identity(target_type, target_id):
     model = TARGET_MODELS.get(target_type)
     if model is None:
         return '', ''
-    row = model.objects.filter(pk=target_id).values(
-        'ip' if target_type in ('server', 'monitor') else 'ip',
-        'name' if target_type == 'server' else 'device_name',
-    ).first() if target_type != 'monitor' else None
+    # monitor（WeakCurrentDevice）也在 TARGET_MODELS 里，原来那个
+    # 'if target_type != "monitor" else None' 把它整个排除掉，于是弱电设备告警
+    # 永远渲染成 UUID、IP 为空——值班人看不出是哪台机器。三个模型都是
+    # 「名称字段 + ip」的形状，只有名称字段名不同。
+    name_field = 'name' if target_type in ('server', 'network_device') else 'device_name'
+    row = model.objects.filter(pk=target_id).values('ip', name_field).first()
     if row is None:
         return '', ''
-    return str(row.get('name') or row.get('device_name') or ''), str(row.get('ip') or '')
+    return str(row.get(name_field) or ''), str(row.get('ip') or '')
 
 
 def build_alert_message(event, channel=None, template=None):

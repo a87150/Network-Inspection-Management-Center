@@ -4,6 +4,8 @@ import asyncio
 import inspect
 import math
 
+from django.core.exceptions import ValidationError
+
 from pysnmp.hlapi.v3arch.asyncio import (
     CommunityData,
     ContextData,
@@ -292,9 +294,10 @@ def _parse_memory(snapshot, vendor):
 def _parse_temperature(snapshot, vendor):
     vendor_oids = snapshot.get("_vendor_oids", VENDOR_OIDS.get(_vendor_key(vendor), {})).get("temperature", ())
     value = _first_numeric(snapshot["scalars"], vendor_oids)
-    # 厂商 OID 有时返回十分之一度或 0/1 状态码，直接当 ℃ 用会得到假读数。
-    # 与下面表遍历的判据保持一致，超范围的当作没采到。
-    if value is not None and -273.15 <= float(value) <= 1000:
+    # 厂商 OID 有时返回 0/1 状态码或十分之一度。0 和 1 这两种值几乎不可能是
+    # 真实摄氏度，而它们恰好落在下面那个区间里，所以单独排除——注释声称要挡
+    # 这两种情况，原来的判据其实一个都没挡住（实测 0→0.0℃、1→1.0℃）。
+    if value is not None and float(value) not in (0.0, 1.0) and -273.15 <= float(value) <= 1000:
         return {"values_celsius": [float(value)]}
     types = _table(snapshot, ENT_SENSOR_TYPE)
     scales = _table(snapshot, ENT_SENSOR_SCALE)
@@ -719,7 +722,15 @@ async def _collect_snapshot(device, timeout, selected_items, session_factory):
     session = None
     snapshot = {"scalars": {}, "tables": {}}
     vendor_registry = dict(VENDOR_OIDS.get(_vendor_key(device.vendor), {}))
-    template_settings = validate_collection_settings(getattr(device, 'collection_settings', {}) or {})
+    # 模板配置不合法是配置问题，不是设备问题。这一步原来在 try 之外，
+    # ValidationError 会一路逃到 collect_network_snmp 的 except Exception，
+    # 被 _category 归成 "response"，最终报「SNMP response error」且 reachable=True
+    # ——运维会去查设备协议，而真正要改的是模板里的 scale/OID 名。
+    try:
+        template_settings = validate_collection_settings(
+            getattr(device, 'collection_settings', {}) or {})
+    except ValidationError:
+        raise SnmpQueryError('invalid_configuration') from None
     try:
         custom_oids = {name: resolve_symbolic_oid(oid, template_settings.get('mib_modules', [])) for name, oid in template_settings.get('snmp_oids', {}).items()}
     except (ValueError, TypeError) as exc:

@@ -95,6 +95,11 @@ class DingTalkDirectoryAdapter:
     def _reference_name(self, access_token, kind, identifier):
         try:
             return self._load_reference_name(access_token, kind, identifier)
+        except (DirectoryAuthenticationError, DirectoryRateLimitError):
+            # 认证过期和限流不是「权限不足」。原来一律改写成
+            # DirectoryReferenceError，提示变成「请检查通讯录可见范围及读取权限」，
+            # 运维照着去后台开权限，而真正该做的是重新授权或等限流窗口过去。
+            raise
         except DirectoryAdapterError:
             raise DirectoryReferenceError() from None
 

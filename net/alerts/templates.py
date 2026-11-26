@@ -37,17 +37,20 @@ PRESETS = {
 
 # 单设备告警的变量集与汇总完全不同：它描述一台机器，不是一次任务。
 DEVICE_VARIABLES = (
-    'device_name', 'device_ip', 'target_type', 'status', 'tasks_name',
+    'device_name', 'device_ip', 'target_type', 'status', 'status_label', 'tasks_name',
     'occurred_at', 'details_url', 'issues', 'recovered_count',
 )
+# 标题要能区分「异常」和「恢复」。原来两种模式都把「设备异常」写死在标题里，
+# 恢复通知看上去和新故障一模一样，运维会当成新事故去查。
+_DEVICE_STATUS_LABELS = {'recovery': '设备恢复', 'recovered': '设备恢复'}
 DEVICE_COUNTS = {'recovered_count'}
 _DEVICE_BODY = (
     '设备：{device_name}（{device_ip}）\n类型：{target_type}\n'
     '状态：{status}\n时间：{occurred_at}\n问题：\n{issues}'
 )
 DEVICE_PRESETS = {
-    'compact': {'title_template': '设备异常：{device_name}', 'body_template': _DEVICE_BODY},
-    'detailed': {'title_template': '设备异常：{device_name} · {device_ip}',
+    'compact': {'title_template': '{status_label}：{device_name}', 'body_template': _DEVICE_BODY},
+    'detailed': {'title_template': '{status_label}：{device_name} · {device_ip}',
                  'body_template': _DEVICE_BODY + '\n所属任务：{tasks_name}\n累计恢复：{recovered_count}'},
 }
 
@@ -179,6 +182,8 @@ def render_task_summary(data, template=None):
     values = {key: _safe_text(data.get(key, 0 if key in _COUNTS else ''))
               for key in VARIABLES if key not in ('details_url', 'issues', 'recoveries')}
     # Task URLs are complete navigation targets, never shortened with ellipses.
+    values['status_label'] = _DEVICE_STATUS_LABELS.get(
+        str(data.get('status') or '').strip().lower(), '设备异常')
     values['details_url'] = str(sanitize(data.get('details_url') or ''))
     for key in ('issues', 'recoveries'):
         values[key] = _items(data.get(key))
@@ -219,6 +224,8 @@ def render_device_alert(data, template=None):
         for key in DEVICE_VARIABLES
         if key not in ('details_url', 'issues', 'tasks_name')
     }
+    values['status_label'] = _DEVICE_STATUS_LABELS.get(
+        str(data.get('status') or '').strip().lower(), '设备异常')
     values['details_url'] = str(sanitize(data.get('details_url') or ''))
     values['tasks_name'] = _safe_text(data.get('tasks_name'), 120)
     values['issues'] = _items(data.get('issues'))

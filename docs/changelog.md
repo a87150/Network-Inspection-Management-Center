@@ -130,6 +130,50 @@ BitLocker、统计和 Web 层，改掉的问题里有四处会让功能整体不
 
 这几条的共同点是改动会碰到语义（清空 vs 保留、限流阈值、模板日期格式），需要先定下来
 再动手，不适合夹在本次修复里一起做。
+### 导入与外部连接：又修掉七处
+- **弱电设备告警渲染成 UUID**（`net/alerts/messages.py`）。`_asset_identity` 里有个
+  `if target_type != 'monitor' else None`，把 `WeakCurrentDevice` 整个排除在外——
+  而它本来就在 `TARGET_MODELS` 里。弱电设备告警永远显示「设备异常：5a175cc6-…」，
+  设备名和 IP 全丢，值班人看不出是哪台机器。
+- **恢复通知标题写成「设备异常」**（`net/alerts/templates.py`）。两种预设的标题都写死
+  「设备异常：{device_name}」，状态行又是英文枚举，于是恢复通知和新故障长得一模一样。
+  新增 `status_label` 变量，预设改用 `{status_label}：{device_name}`；用户自定义模板里
+  写死的字段不受影响。
+- **门禁 HTTP 状态码坍缩成一句话**（`net/access/adapters.py`）。`raise_for_status()` 抛的是
+  `requests.HTTPError`，而调用方只把 `ValidationError` 当可读原因、其余记成
+  「门禁平台采集失败（HTTPError）。」——401/403/500 和路径写错全是一句话。
+  统一走 `_http_get`，连接错误和状态码都翻成可读的 `ValidationError`。
+- **SNMP 配置错误被归成设备异常**（`net/devices/network/snmp.py`）。
+  `validate_collection_settings` 原来在 try 之外，`ValidationError` 一路逃到
+  `except Exception`，被归成 `response`，报「SNMP response error」且 `reachable=True`——
+  运维会去查设备协议，而真正要改的是模板里的 scale 或 OID 名。现在归到
+  `invalid_configuration` 通道（那个通道本来就有，只是没接上）。
+- **厂商温度 OID 的 0/1 状态码被当成温度**（`net/devices/network/snmp.py`）。代码注释
+  声称要挡「十分之一度和 0/1 状态码」，但判据只有 `-273.15 <= v <= 1000`——0 和 1
+  恰好都落在里面，实测 0→0.0℃、1→1.0℃。现在单独排除这两个值。
+  十分之一度那种没法从代码判断，已记进备忘。
+- **设备 API 的失败原因被覆盖**（`net/infrastructure/http_collectors.py`）。只要状态不是
+  success，message 就被改写成固定串「部分巡检项未成功；请查看各项证据。」，
+  底层已经写好的 HTTP 401、超时、未配置 api_url 全部丢失。现在只在 message 为空时才填默认值。
+- **认证失败被伪装成权限不足**（`net/people/directory/dingtalk.py`）。名字解析阶段的
+  `except DirectoryAdapterError` 捕获了整个基类，认证过期和限流也被改写成
+  「请检查通讯录可见范围及读取权限」——运维照着去后台开权限，而真正该做的是重新授权。
+  现在 `DirectoryAuthenticationError` 和 `DirectoryRateLimitError` 原样抛出。
+
+### 导入与外部连接：两处导入缺陷
+- **域账户导入表头带空格就整列读空**（`net/domain/user_import.py`）。校验用 strip 后的
+  名字、取数却用原始名字，于是「登录名 」能通过必填列检查，随后整列读成空串，
+  报「第 2 行存在空的必填字段」，用户对着一列填满的登录名找不到问题。
+  现在校验和取数共用同一套名字。
+- **导入报错行号不是文件真实行号**（`net/data_exchange/inventory_csv.py`）。
+  `enumerate(reader, start=2)` 数的是 csv 记录数，而 `DictReader` 会静默跳过空行，
+  空行之后的行号全部偏小。改用 `reader.line_num`。
+
+### 需要实机验证的清单
+- 新增 `docs/integration-manual-checks.md`：九条只能在对端环境里定论的问题（飞书入职时间
+  字段、根部门 ID 的形态、两家的业务错误码、十分之一度的温度 OID、Excel 日期单元格式、
+  告警渠道真实限流阈值、目录限流的实际触发点、门禁事件量量级、设备 API 响应体积）。
+  每条写了怎么验、以及验完要改哪里。这些在验之前，相关行为是未知而不是正常。
 ## 2.35（2026-11-27）
 
 ### 采集状态不再被「本就不支持」拉低

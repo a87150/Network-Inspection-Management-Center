@@ -38,6 +38,32 @@ MAX_PAGES = 100
 PAGE_SIZE = 1000
 
 
+def _http_get(url, **kwargs):
+    """统一的 GET：把连接错误和 HTTP 状态码翻成可读的 ValidationError。
+
+    原来直接用 response.raise_for_status()，它抛的是 requests.HTTPError，
+    而调用方（access/executor.py）只把 ValidationError 当可读原因、其余
+    一律记成「门禁平台采集失败（HTTPError）。」——401/403/500 和路径写错
+    全坍缩成同一句话，管理员没法判断该改令牌还是改路径。
+    """
+    try:
+        response = requests.get(url, **kwargs)
+    except requests.RequestException as exc:
+        raise ValidationError(
+            '无法连接门禁平台（%s），请检查基础地址与网络。' % type(exc).__name__) from None
+    try:
+        response.raise_for_status()
+    except requests.HTTPError:
+        code = getattr(response, 'status_code', None)
+        if code:
+            raise ValidationError(
+                '门禁平台返回 HTTP %d，请检查事件路径、令牌权限与平台状态。'
+                % code) from None
+        raise ValidationError(
+            '门禁平台拒绝了请求，请检查事件路径与令牌权限。') from None
+    return response
+
+
 def register_adapter(platform, api_version, adapter_class):
     if not isinstance(platform, str) or not isinstance(api_version, str):
         raise TypeError('platform and api_version must be strings')
@@ -106,8 +132,7 @@ class ZKTecoV6600V6000CompatibilityAdapter(AccessPlatformAdapter):
             params[self.source.authentication_name] = token
         else:
             headers[self.source.authentication_name] = token
-        response = requests.get(self._url(), params=params, headers=headers, timeout=(5, 30), verify=self.source.verify_ssl, allow_redirects=False)
-        response.raise_for_status()
+        response = _http_get(self._url(), params=params, headers=headers, timeout=(5, 30), verify=self.source.verify_ssl, allow_redirects=False)
         try:
             envelope = response.json()
         except ValueError:
@@ -135,8 +160,7 @@ class ZKTecoV6600V6000CompatibilityAdapter(AccessPlatformAdapter):
         for page_no in range(1, MAX_PAGES + 1):
             if cancelled is not None and cancelled.is_set():
                 raise ValidationError('门禁采集已取消。')
-            response = requests.get(self._url(), params={**params, 'pageNo': page_no, 'pageSize': PAGE_SIZE}, headers=headers, timeout=(5, 30), verify=self.source.verify_ssl, allow_redirects=False)
-            response.raise_for_status()
+            response = _http_get(self._url(), params={**params, 'pageNo': page_no, 'pageSize': PAGE_SIZE}, headers=headers, timeout=(5, 30), verify=self.source.verify_ssl, allow_redirects=False)
             try:
                 envelope = response.json()
             except ValueError:

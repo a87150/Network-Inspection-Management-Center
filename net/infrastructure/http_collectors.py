@@ -192,7 +192,13 @@ def collect_security_api(device, timeout=12, selected_items=None):
         result.raw['config_info'] = config
         successes = (1 if config_settled else 0) + len([key for key in result.data if key != 'config_info'])
         result.status = 'success' if config_settled and result.status == 'success' else ('partial' if successes else 'failed')
-        result.message = '' if result.status == 'success' else '部分巡检项未成功；请查看各项证据。'
+        # 保留底层已经写好的具体原因（HTTP 401、超时、未配置 api_url 之类）。
+        # 原来无条件覆盖成固定串，用户只能看到「请查看各项证据」，
+        # 认证失败和网络失败再也分不出来。
+        if result.status == 'success':
+            result.message = ''
+        elif not result.message:
+            result.message = '部分巡检项未成功；请查看各项证据。'
         return result
     vendor = (device.vendor or '').lower()
     timer = Timer()

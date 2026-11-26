@@ -491,8 +491,11 @@ def import_csv(entity, uploaded_file):
         errors = []
         blank_people_employee_id_rows = []
         seen_keys = {}
-        for row_number, row in enumerate(reader, start=2):
-            if row_number > MAX_CSV_ROWS + 1:
+        for row_index, row in enumerate(reader, start=1):
+            # 报错行号必须是文件真实行号：DictReader 会静默跳过空行，
+            # 用记录序号会让空行之后的行号全部偏小，用户按行号去改改的是无关的行。
+            row_number = reader.line_num
+            if row_index > MAX_CSV_ROWS:
                 raise ValueError(f'CSV 最多允许 {MAX_CSV_ROWS} 行数据')
             cell_values = [
                 value

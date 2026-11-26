@@ -71,12 +71,22 @@ def parse_csv_accounts(upload) -> list[dict]:
         raise ValidationError('请使用 UTF-8 编码的 CSV 文件。') from None
     try:
         reader = csv.DictReader(StringIO(text))
-        if not reader.fieldnames or not set(REQUIRED_HEADERS) <= {
-            str(name).strip() for name in reader.fieldnames if name is not None
-        }:
+        # 表头两侧带空格是手改或从别处粘贴时的常见产物。原来校验用 strip 后的名字、
+        # 取数却用原始名字，于是「登录名 」能通过必填列检查，随后整列读成空串，
+        # 报「第 2 行存在空的必填字段」——用户对着一列填满的登录名找不到问题。
+        # 校验和取数必须用同一套名字。
+        column_of = {
+            str(name).strip(): name
+            for name in (reader.fieldnames or [])
+            if name is not None
+        }
+        if not column_of or not set(REQUIRED_HEADERS) <= set(column_of):
             raise ValidationError('表格缺少必填列：用户DN、登录名、显示名称。')
         rows = [
-            {header: str(row.get(header) or '').strip() for header in REQUIRED_HEADERS}
+            {
+                header: str(row.get(column_of[header]) or '').strip()
+                for header in REQUIRED_HEADERS
+            }
             for row in reader
             if any(str(value or '').strip() for value in row.values())
         ]
