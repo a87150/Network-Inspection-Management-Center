@@ -7,7 +7,7 @@ from dataclasses import dataclass, replace
 from types import MappingProxyType
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from net.domain.client import DomainActionResult, DomainClient
@@ -94,9 +94,18 @@ def abort_password_domain_task(task, *, worker_id, claim_generation):
                 ).order_by('created_at', 'pk')
             )
             for target in targets:
+                # 排队中和执行中被中断，后果不一样：排队中的还没碰过目录，直接重放
+                # 是安全的；执行中的可能已经把 add 发了出去、只是密码还没设，
+                # 重放会撞 68 并在目录里留一个没有密码的半成品账号。
+                # 这两个状态以前写同一个标记，重试门禁只认 stage，于是执行中的
+                # 也被当成安全重放。
+                in_flight = target.status == TaskRun.Status.RUNNING
                 target.status = TaskRun.Status.FAILED
                 target.finished_at = now
-                target.result_snapshot = {'interrupted': True}
+                target.result_snapshot = {
+                    'interrupted': True,
+                    'stage': ('manual_intervention_required' if in_flight else 'not_started'),
+                }
                 target.error_message = PASSWORD_INTERRUPTED_ERROR
                 save_target(target, {
                     'status', 'finished_at', 'result_snapshot', 'error_message',
@@ -128,9 +137,42 @@ def _same_dn(left, right):
         return False
 
 
+def _create_local_account(target, details):
+    """新建用户成功后立刻写一行本地镜像，用 get_or_create 不覆盖已有行。
+
+    不回写的话，导入阶段「登录名/DN 是否已存在」的检查对新建用户恒为假，
+    同一份表格导两次会得到两批失败任务，而用户在导入阶段拿不到任何冲突提示。
+    真正权威的属性仍然等一次 domain_sync 补全，这里只保证「这个名字被占了」
+    这件事立刻可见。
+    """
+    snapshot = target.target_snapshot if isinstance(target.target_snapshot, dict) else {}
+    login_name = str(snapshot.get('login_name') or '').strip()
+    distinguished_name = details.get('distinguished_name') or snapshot.get('distinguished_name')
+    if not login_name or not isinstance(distinguished_name, str) or not distinguished_name:
+        return 'missing_waiting_for_sync'
+    from net.domain.sync import _ou_from_dn
+
+    try:
+        Domain_Account.objects.get_or_create(
+            login_name=login_name,
+            defaults={
+                'account_name': login_name,
+                'distinguished_name': distinguished_name,
+                'ou': _ou_from_dn(distinguished_name),
+                # AD 新建账号默认禁用，设完密码再由调用方决定是否启用。
+                'is_active': False,
+            },
+        )
+    except (IntegrityError, ValidationError):
+        return 'missing_waiting_for_sync'
+    return ''
+
+
 def _update_local_mirror(target, context, details):
-    if context is None or context.action == DomainOperation.Action.CREATE_USER:
+    if context is None:
         return ''
+    if context.action == DomainOperation.Action.CREATE_USER:
+        return _create_local_account(target, details)
     model = {
         TaskTargetRun.TargetType.DOMAIN_ACCOUNT: Domain_Account,
         TaskTargetRun.TargetType.DOMAIN_COMPUTER: Domain_Computer,
@@ -246,7 +288,8 @@ def _persist_domain_outcome(
                 'success': bool(success),
             }
             if result_stage in {'user_created_password_pending', 'manual_intervention_required', 'completed',
-                                'destination_add_failed', 'destination_add_uncertain', 'destination_added_source_pending'}:
+                                'destination_add_failed', 'destination_add_uncertain', 'destination_added_source_pending',
+                                'write_result_unknown'}:
                 target.result_snapshot['stage'] = result_stage
             if safe_details:
                 target.result_snapshot.update(safe_details)

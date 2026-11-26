@@ -42,8 +42,11 @@ def domain_operation_create(request):
                 parameters=form.operation_parameters(),
                 password=form.operation_password() or None,
             )
-        except ValidationError:
-            messages.error(request, '域控操作参数无效，未创建任务。')
+        except ValidationError as exc:
+            # 具体原因（缺密码、不能选既有账号、请先同步目录）要露出来：
+            # 只回一句「参数无效」，用户只能盲试。
+            detail = '；'.join(str(message) for message in exc.messages)
+            messages.error(request, '域控操作参数无效，未创建任务。' + (f'原因：{detail}' if detail else ''))
         except OperationalError as exc:
             if not is_sqlite_busy(exc):
                 raise
@@ -52,7 +55,12 @@ def domain_operation_create(request):
             messages.success(request, '域控操作已加入后台队列。')
             return redirect('task_detail', pk=operation.task_id)
     else:
-        messages.error(request, '域控操作参数无效，未创建任务。')
+        detail = '；'.join(
+            str(item['message'])
+            for field_errors in form.errors.get_json_data().values()
+            for item in field_errors
+        )
+        messages.error(request, '域控操作参数无效，未创建任务。' + (f'原因：{detail}' if detail else ''))
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         from .views import domain_object_list
         return domain_object_list(request, 'accounts' if object_type == 'account' else 'computers', operation_form=form)

@@ -372,7 +372,8 @@ def retry_failed_domain_operation(operation_id, *, requested_by, password=None):
                         'operation_id': '新增用户恢复阶段无法验证，需要人工核查。',
                     })
                 recovery_stage = stage
-            elif stage in (None, ''):
+            elif stage in (None, '', 'not_started'):
+                # not_started：中断发生在排队阶段，目录没被碰过，重放安全。
                 recovery_stage = None
             else:
                 raise ValidationError({
@@ -380,6 +381,17 @@ def retry_failed_domain_operation(operation_id, *, requested_by, password=None):
                 })
             target_ids = []
         else:
+            # 结果不确定的写操作不能自动重放：AD 里对象很可能已经变成目标状态，
+            # 拿旧 DN 再发一次只会再失败一次，还会让人误以为操作没生效。
+            uncertain = [
+                str(target['target_id']) for target in failed_targets
+                if isinstance(target.get('result_snapshot'), dict)
+                and target['result_snapshot'].get('stage') == 'write_result_unknown'
+            ]
+            if uncertain:
+                raise ValidationError({'operation_id': (
+                    '有目标的操作结果不确定（目录可能已变更），请重新同步目录核对后再操作：'
+                    + '、'.join(uncertain[:3]))})
             recovery_stage = None
             target_ids = [target['target_id'] for target in failed_targets]
             parameters = dict(operation.parameter_summary)

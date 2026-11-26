@@ -29,15 +29,40 @@ function refreshDomainOperationSummary(doc, actionSelect, form) {
 }
 
 const boundDomainForms = new WeakSet();
+
+/* 三个面板各有一份动作下拉框（accounts / computers / groups），它们共用同一个
+   弹窗。用 doc.querySelector 只会拿到 DOM 里的第一个——也就是 accounts 的那份，
+   于是从计算机页签提交时，action 永远是账户下拉框的值。改成记住弹窗是被哪个
+   面板打开的，只读那份下拉框。 */
+let activeActionSelect = null;
+
 function bindDomainOperationModal(doc) {
-    const actionSelect = doc.querySelector('[data-domain-operation-action]');
     const form = doc.querySelector('[data-domain-operation-form]');
-    if (!actionSelect || !form) return;
+    if (!form) return;
     if (boundDomainForms.has(form)) return;
     boundDomainForms.add(form);
-    const refresh = () => refreshDomainOperationSummary(doc, actionSelect, form);
 
-    actionSelect.addEventListener('change', refresh);
+    const modal = doc.querySelector('#domainOperationModal');
+    modal?.addEventListener('show.bs.modal', (event) => {
+        const panel = event.relatedTarget?.closest('[data-domain-operation-controls]');
+        activeActionSelect = panel?.querySelector('[data-domain-operation-action]')
+            || doc.querySelector('[data-domain-operation-action]');
+        refresh();
+    });
+
+    const actionSelectOf = () => activeActionSelect
+        || doc.querySelector('[data-domain-operation-action]');
+    const refresh = () => {
+        const actionSelect = actionSelectOf();
+        if (actionSelect) refreshDomainOperationSummary(doc, actionSelect, form);
+    };
+
+    // 三个面板各有一份下拉框，哪个都可能是当前的：
+    // 在 doc 上委托能覆盖面板切换，直接绑当前这份则保证单测与老路径照常工作。
+    doc.addEventListener?.('change', (event) => {
+        if (event.target?.matches?.('[data-domain-operation-action]')) refresh();
+    });
+    actionSelectOf()?.addEventListener?.('change', refresh);
     form.querySelectorAll('[data-domain-summary-input]').forEach((input) => {
         input.addEventListener('input', refresh);
         input.addEventListener('change', refresh);
@@ -67,7 +92,8 @@ function delegateDomainCheckboxes(doc) {
     delegatedDomainChange = true;
     doc.addEventListener('change', (event) => {
         if (!event.target.matches('[data-domain-target-checkbox]')) return;
-        const actionSelect = doc.querySelector('[data-domain-operation-action]');
+        const actionSelect = activeActionSelect
+            || doc.querySelector('[data-domain-operation-action]');
         const form = doc.querySelector('[data-domain-operation-form]');
         if (actionSelect && form) refreshDomainOperationSummary(doc, actionSelect, form);
     });

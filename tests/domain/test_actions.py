@@ -576,7 +576,11 @@ class DomainClientTests(SimpleTestCase):
     @patch('ldap3.Tls')
     def test_connect_preserves_port_ssl_matrix_without_inferring_security_from_port(self, tls, server, _connection):
         """Treating 636 as secure or 389 as insecure would silently change saved connection behavior."""
-        plain = SimpleNamespace(**{**self.config.__dict__, 'port': 389, 'use_ssl': False})
+        plain = SimpleNamespace(**{
+            **self.config.__dict__, 'port': 389, 'use_ssl': False,
+            # 明文绑定需要显式开关，这条用例验的是端口/SSL 的映射关系而不是安全策略。
+            'allow_insecure_bind': True,
+        })
         tls_on_389 = SimpleNamespace(**{**self.config.__dict__, 'port': 389, 'use_ssl': True})
 
         DomainClient(plain).connect()

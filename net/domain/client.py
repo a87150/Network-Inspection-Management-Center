@@ -62,6 +62,13 @@ class DomainClient:
 
     def connect(self):
         use_ssl = bool(getattr(self.config, 'use_ssl', False))
+        if not use_ssl and not bool(getattr(self.config, 'allow_insecure_bind', False)):
+            # SIMPLE/NTLM 绑定会把域账号口令明文送上网络，而这个账号的权限
+            # 通常远大于普通用户。不默认放行，也不静默降级：要么开 SSL，
+            # 要么在配置里显式允许明文，让这个决定留在审计记录里。
+            raise ValidationError(
+                '域控绑定未加密。请启用 SSL（LDAPS），'
+                '或在连接设置中显式勾选「允许明文绑定」。')
         tls = ldap3.Tls(validate=ssl.CERT_REQUIRED) if use_ssl else None
         server = ldap3.Server(
             self.config.host,
@@ -127,7 +134,18 @@ class DomainClient:
                     stage='manual_intervention_required',
                     details={'distinguished_name': target_dn},
                 )
-            return self._exception_result(exc)
+            code = getattr(exc, 'result', None)
+            if isinstance(code, int) and not isinstance(code, bool) and code != 0:
+                # 目录明确回了错误码，说明请求被拒、没有写进去，重试是安全的。
+                return self._error_result(code)
+            # 走到这里说明请求已经发出但结果没读到（读结果超时、连接被关）。
+            # 对写操作而言「没读到结果」不等于「没生效」：move_ou 很可能已经在
+            # AD 生效了。标记成不确定，让重试门禁拦住拿旧 DN 再发一次的路径。
+            return DomainActionResult(
+                False, '操作结果不确定：目录可能已变更，请重新同步后再操作。',
+                stage='write_result_unknown',
+                details={'distinguished_name': target_dn},
+            )
         finally:
             if connection is not None:
                 try:

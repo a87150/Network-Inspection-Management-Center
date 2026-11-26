@@ -137,6 +137,12 @@ class Domain_Controller_Config(models.Model):
     host = models.CharField(max_length=255, blank=True)
     port = models.PositiveIntegerField(default=389)
     use_ssl = models.BooleanField(default=False)
+    # 不开 SSL 时绑定口令是明文上网的。默认拒绝，需要时显式放开——
+    # 存量现场（内网 DC 没配 LDAPS）能续命，但这个选择必须留痕、看得见。
+    allow_insecure_bind = models.BooleanField(
+        '允许明文绑定', default=False,
+        help_text='未启用 SSL 时仍允许用明文发送绑定口令。仅在无法启用 LDAPS 时开启。',
+    )
     base_dn = models.CharField(max_length=500, blank=True, help_text='例如：DC=example,DC=com')
     bind_username = models.CharField(max_length=255, blank=True)
     bind_password = EncryptedCharField(blank=True)

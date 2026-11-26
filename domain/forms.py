@@ -58,7 +58,14 @@ class DomainOperationForm(forms.Form):
     )
     destination_dn = forms.ChoiceField(required=False)
     group_dn = forms.ChoiceField(required=False)
-    enabled = forms.BooleanField(required=False)
+    # 三态而不是 checkbox：漏勾与「明确要取消」在 checkbox 上无法区分，
+    # 而这两个动作的取消语义是对整批账号反向写入。
+    enabled = forms.TypedChoiceField(
+        required=False,
+        choices=(('', '请选择'), ('True', '启用该策略'), ('False', '取消该策略')),
+        coerce=lambda value: value == 'True',
+        empty_value=None,
+    )
     password = forms.CharField(
         required=False,
         strip=False,
@@ -106,6 +113,9 @@ class DomainOperationForm(forms.Form):
             self.add_error(parameter, '请先同步目录并选择目标。')
         if cleaned.get('action') == 'remove_group':
             self.add_error('action', '请从分组成员窗口执行移出。')
+        if (cleaned.get('action') in {'must_change_password', 'password_never_expires'}
+                and cleaned.get('enabled') is None):
+            self.add_error('enabled', '请明确选择是启用还是取消该密码策略。')
         if cleaned.get('action') != 'create_user':
             if not cleaned.get('target_ids'):
                 self.add_error('target_ids', '请选择至少一个目标。')
@@ -139,7 +149,9 @@ class DomainOperationForm(forms.Form):
         if action == 'add_group':
             return {'group_dn': cleaned.get('group_dn', '').strip()}
         if action in {'must_change_password', 'password_never_expires'}:
-            return {'enabled': cleaned.get('enabled', False)}
+            # clean() 已保证这里不是 None：漏选会在表单层被拦下，
+            # 不会走到「默认 False = 取消策略」这条反向写入的路径。
+            return {'enabled': bool(cleaned.get('enabled'))}
         return {}
 
     def operation_password(self):

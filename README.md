@@ -16,6 +16,7 @@ PC 日志由 Windows/macOS 采集器每两小时本地覆盖 `latest.json`，再
 | 数据库/Redis 缓存、历史归档、迁移与查询优化 | [数据库与维护](docs/database.md) |
 | REST 资源层与 Vue 页面、迁移进度 | [REST + Vue 架构](docs/architecture-rest-vue.md) |
 | AI 问答页：检索、知识库、配置与边界 | [AI 助手](docs/ai-assistant.md) |
+| 域控改动里需要真实 AD / LDAPS 才能确认的十条 | [域控实机验证备忘](docs/domain-manual-checks.md) |
 | 版本变更与已知问题 | [更新记录](docs/changelog.md) |
 
 ## 部署与启动

@@ -24,7 +24,10 @@ def get_domain_statistics(*, today=None, inactive_days=60):
             missing_login=Count('pk', filter=Q(is_active=True, last_login_date__isnull=True)),
         )
         stats.update({f'{prefix}_{key}': value for key, value in counts.items()})
-    stats.update(Domain_Group.objects.aggregate(
+    # 只算最近一次同步还能看见的组。publish_memberships 对消失的组只标
+    # is_available=False 不删行，把这些行算进来会让「域分组」永久偏大，
+    # 而这些组在成员管理里又因为不可用被直接拒绝——两处口径必须一致。
+    stats.update(Domain_Group.objects.filter(is_available=True).aggregate(
         group_total=Count('pk'),
         security_group_total=Count('pk', filter=Q(group_category='security')),
         distribution_group_total=Count('pk', filter=Q(group_category='distribution')),
