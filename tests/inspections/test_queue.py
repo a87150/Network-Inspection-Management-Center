@@ -60,6 +60,40 @@ class EnqueueTaskTests(TestCase):
         self.assertEqual(target.target_snapshot['name'], '应用服务器')
         self.assertNotIn('password', target.target_snapshot)
 
+
+    def test_enqueue_accepts_over_a_thousand_targets_in_one_task(self):
+        """上千台设备是常见规模：不该被切成多个任务，也不该逐条 INSERT。"""
+        from net.inspections.queue import enqueue_task
+
+        Server.objects.bulk_create(
+            [Server(name='批量服务器 %d' % index, ip='198.51.100.%d' % (index + 1),
+                    server_type='linux')
+             for index in range(1200)],
+            batch_size=200,
+        )
+        target_ids = list(
+            Server.objects.order_by('pk').values_list('pk', flat=True))
+
+        task = enqueue_task(self.profile, target_ids, TaskRun.Source.MANUAL)
+
+        self.assertEqual(task.total_targets, len(target_ids))
+        self.assertEqual(task.target_runs.count(), len(target_ids))
+        self.assertTrue(all(
+            key for key in task.target_runs.values_list('execution_scope_key', flat=True)))
+
+    def test_enqueue_rejects_a_target_list_beyond_the_hard_ceiling(self):
+        """上限只留一条，拦的是误操作；上千台在它之下。"""
+        from net.inspections.queue import MAX_TARGETS_PER_TASK, enqueue_task
+
+        self.assertGreaterEqual(MAX_TARGETS_PER_TASK, 5000)
+        with self.assertRaises(ValidationError) as caught:
+            enqueue_task(
+                self.profile,
+                [str(index) for index in range(MAX_TARGETS_PER_TASK + 1)],
+                TaskRun.Source.MANUAL,
+            )
+        self.assertIn('一次最多添加', '；'.join(caught.exception.messages))
+
     def test_enqueue_snapshots_public_snmp_settings_and_excludes_all_secrets(self):
         from net.inspections.queue import enqueue_task
 

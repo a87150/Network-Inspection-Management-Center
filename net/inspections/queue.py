@@ -3,7 +3,11 @@
 import json
 import configparser
 import hashlib
-MAX_TARGETS_PER_TASK = 500
+# 单个任务的目标数上限。上千台设备是常态，所以这个值要放得开；
+# 留一条上限只是拦住「误操作把整库塞进一个任务」。
+MAX_TARGETS_PER_TASK = 5000
+# 目标行分批写入：逐条 save 会在一个事务里发 N 条 INSERT，几千条就把 worker 卡住。
+TARGET_INSERT_BATCH = 200
 
 from pathlib import Path
 import time
@@ -407,10 +411,15 @@ def _enqueue_task(profile, target_ids, source, overrides=None, *, _frozen_parent
         raise ValidationError({'target_ids': '相同配置和目标范围已有活动任务。'})
     # 目标级互斥只能靠显式预检：MariaDB 不支持带条件的唯一约束，
     # net_target_active_execution_scope_uniq 在这套部署上从未真正建过。
-    busy_targets = TaskTargetRun.objects.filter(
-        status__in=TaskRun.ACTIVE_STATUSES,
-        execution_scope_key__in=[f'{target_type}:{target_id}' for target_id, _ in targets],
-    ).values_list('target_id', flat=True)[:3]
+    keys = [f'{target_type}:{target_id}' for target_id, _ in targets]
+    busy_targets = []
+    for start in range(0, len(keys), TARGET_INSERT_BATCH):
+        busy_targets.extend(TaskTargetRun.objects.filter(
+            status__in=TaskRun.ACTIVE_STATUSES,
+            execution_scope_key__in=keys[start:start + TARGET_INSERT_BATCH],
+        ).values_list('target_id', flat=True)[:3])
+        if busy_targets:
+            break
     busy_targets = [str(target_id) for target_id in busy_targets]
     if busy_targets:
         raise ValidationError({'target_ids': (
@@ -436,8 +445,14 @@ def _enqueue_task(profile, target_ids, source, overrides=None, *, _frozen_parent
     try:
         with transaction.atomic():
             task.save()
-            for target in target_runs:
-                target.save()
+            if task.task_type == TaskRun.TaskType.DOMAIN_OPERATION:
+                # 域控任务的目标行要逐条 save：那是唯一做敏感快照校验的路径
+                # （TaskTargetRun.save 里对域控快照的检查），bulk_create 会绕过它。
+                for target in target_runs:
+                    target.save()
+            else:
+                TaskTargetRun.objects.bulk_create(
+                    target_runs, batch_size=TARGET_INSERT_BATCH)
     except IntegrityError as exc:
         if TaskRun.objects.filter(active_scope_key=task.scope_key).exists():
             raise ValidationError({'target_ids': '相同配置和目标范围已有活动任务。'}) from exc
