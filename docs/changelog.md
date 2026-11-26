@@ -58,6 +58,8 @@
 - 方案之外多做四块：多服务切换（页面上增删改、切当前服务，不必改环境变量重启）、
   用量观测（prompt/completion token 与往返毫秒）、`retrieve_test` 检索自检接口、
   知识库的列表/新增/表格导入/删除。
+- `docs/architecture-rest-vue.md` 的「已迁」从 3 补到 4，批次表与目录补上 AI 问答页：
+  整页 Vue（`pages/ai_chat.mjs`），接口挂 `api/ai/` 而不是 `/api/v1/`，因为它不是资源 CRUD。
 - 新增 `docs/ai-assistant.md`：写已实现的行为——一次提问的链路、五张表、三层配置、
   RRF 融合与两个阈值、阈值标定怎么看、知识库维护、六种拒答的分工、已知边界。
   原 `docs/ai-assistant-design.md` 保持「设计」身份不动。
