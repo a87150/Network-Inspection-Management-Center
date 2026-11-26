@@ -14,7 +14,9 @@ def send_alert(channel, message, *, http_post=None, smtp_factory=None, now=None)
     persistence are deliberately owned by the later delivery service.
     """
     if not getattr(channel, 'is_enabled', False):
-        return DeliveryResult(False, 'Alert channel is disabled.', False)
+        # 停用是人工决定，重试没有意义；但要和「发送失败」分开说，
+        # 否则界面上看起来像渠道坏了。
+        return DeliveryResult(False, '渠道已停用，未发送。', False)
 
     channel_type = getattr(channel, 'channel_type', '')
     if channel_type == 'feishu':

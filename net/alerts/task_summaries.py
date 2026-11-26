@@ -73,6 +73,10 @@ def summary_data(task):
         counts.update({key: presentation[key] for key in ('total', 'normal', 'abnormal', 'cancelled')})
         counts['skipped'] = presentation['ignored']
     counts['recovered'] = events.filter(event_type='recovery').values('target_run_id').distinct().count()
+    # 一次求值，下面判空和取示例都复用；原来对同一条查询连发三次。
+    # _examples 要的是 QuerySet（内部用 select_related），所以不能转 list。
+    abnormal_events = events.filter(event_type='abnormal')
+    has_abnormal_events = abnormal_events.exists()
     start, end = task.started_at or task.created_at, task.finished_at or timezone.now()
     return {
         **counts, 'task_name': str(task.profile_snapshot.get('name') or task.pk),
@@ -81,7 +85,7 @@ def summary_data(task):
         'finished_at': timezone.localtime(end).strftime('%Y-%m-%d %H:%M:%S'),
         'duration': f'{max(0, int((end-start).total_seconds()))} 秒',
         'details_url': f'/tasks/{task.pk}/',
-        'issues': _examples(events.filter(event_type='abnormal')) if events.filter(event_type='abnormal').exists()
+        'issues': _examples(abnormal_events) if has_abnormal_events
                   else ('请查看任务详情中的异常或缺少日志人员。' if counts['abnormal'] else '无'),
         'recoveries': _examples(events.filter(event_type='recovery')),
     }

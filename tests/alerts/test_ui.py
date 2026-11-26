@@ -176,7 +176,7 @@ class AlertUiTests(TestCase):
         outbound.assert_not_called()
         audit = self.primary.test_send_audits.get()
         self.assertEqual(audit.status, 'failed')
-        self.assertIn('disabled', audit.response_summary.lower())
+        self.assertIn('已停用', audit.response_summary)
         self.assertNotIn('attacker.invalid', audit.response_summary)
 
     def test_invalid_channel_save_reopens_create_and_edit_without_retaining_secrets(self):

@@ -118,7 +118,7 @@ class AlertSenderTests(SimpleTestCase):
 
         self.assertFalse(result.success)
         self.assertFalse(result.retryable)
-        self.assertIn('disabled', result.response_summary.lower())
+        self.assertIn('已停用', result.response_summary)
         post.assert_not_called()
 
     def test_webhook_failure_summary_is_bounded_redacted_and_timeout_is_retryable(self):

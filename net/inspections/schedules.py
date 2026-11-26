@@ -81,18 +81,21 @@ def next_run_at(schedule, after):
             raise ValidationError({'schedule': '每日计划必须设置执行时间。'})
         local_timezone = timezone.get_default_timezone()
         local_after = timezone.localtime(after, local_timezone)
-        candidate = timezone.make_aware(
-            datetime.combine(local_after.date(), schedule.daily_time),
-            local_timezone,
-        )
+
+        def at(day):
+            try:
+                return timezone.make_aware(
+                    datetime.combine(day, schedule.daily_time), local_timezone)
+            except Exception:
+                # DST 跳变会让某个本地时刻不存在（execute 抛 NonExistentTimeError）。
+                # 中国没有夏令时，换到时区才触发；退到当天该时刻之后一小时，
+                # 宁可晚一小时，也不要让整个计划因为一个不存在的时间点停摆。
+                fallback = datetime.combine(day, schedule.daily_time) + timedelta(hours=1)
+                return timezone.make_aware(fallback, local_timezone)
+
+        candidate = at(local_after.date())
         if candidate <= after:
-            candidate = timezone.make_aware(
-                datetime.combine(
-                    local_after.date() + timedelta(days=1),
-                    schedule.daily_time,
-                ),
-                local_timezone,
-            )
+            candidate = at(local_after.date() + timedelta(days=1))
         return candidate
 
     raise ValidationError({'schedule': '不支持的计划类型。'})

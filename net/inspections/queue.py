@@ -691,7 +691,11 @@ def _finish_locked(task, *, now, target_runs=None):
         target.status == TaskRun.Status.PARTIAL for target in target_runs
     )
     failures = sum(target_failed(target) for target in target_runs)
-    if successes == len(target_runs):
+    if not target_runs:
+        # 空目标集不能算成功：0 == 0 会让一个什么都没跑的任务显示 100% 正常。
+        # 只有手工造出 total_targets=0 的运行中任务能走到这里。
+        status = TaskRun.Status.FAILED
+    elif successes == len(target_runs):
         status = TaskRun.Status.SUCCESS
     elif successes or partials:
         status = TaskRun.Status.PARTIAL

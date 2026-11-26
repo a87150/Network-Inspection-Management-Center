@@ -3,6 +3,10 @@
 LEVELS = {'info': '提示', 'warning': '警告', 'critical': '严重'}
 RANK = {'info': 0, 'warning': 1, 'critical': 2}
 
+# 这几项一条就够严重，不靠标题文字判断——设备侧叫「温度异常」、PC 侧叫
+# 「CPU温度问题」，同一种物理风险在两个出口拿到两个级别。
+CRITICAL_ITEMS = frozenset({'domain_trust', 'cpu_health', 'temperature'})
+
 
 def grade_issue(issue, *, overrides=None):
     result = dict(issue)
@@ -18,7 +22,7 @@ def grade_issue(issue, *, overrides=None):
         severity = result['severity']
     elif missing:
         severity = 'info'
-    elif title in {'域信任问题', 'CPU温度问题'}:
+    elif item in CRITICAL_ITEMS or title in {'域信任问题', 'CPU温度问题'}:
         severity = 'critical'
     else:
         severity = result.get('severity', 'warning')

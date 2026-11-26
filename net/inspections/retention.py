@@ -55,8 +55,11 @@ def cleanup_inspection_records(limit=200):
         for setting, days in RECORD_RETENTION_DAYS.items():
             cutoff = now - timedelta(days=days)
             candidates = model.objects.filter(created_at__lt=cutoff).filter(
+                # 没有 task_target 的记录（早期数据或手工写入）永远匹配不上下面
+                # 任何一条 join 条件，也就永远删不掉；单独放行，否则会静默泄漏。
+                Q(task_target__isnull=True)
                 # The task that produced the record carries the setting it ran under.
-                Q(task_target__task__profile_snapshot__record_retention=setting)
+                | Q(task_target__task__profile_snapshot__record_retention=setting)
                 # Legacy tasks have no such key; fall back to the profile's current
                 # value so their rows stay reachable instead of growing forever.
                 | Q(
@@ -119,12 +122,16 @@ def cleanup_task_history(retention_days, limit=200):
     this cannot fail the way a plain bulk delete would.
     """
     cutoff = timezone.now() - timedelta(days=retention_days)
+    # 不能先切片再过滤：只要最老的一批都被 PROTECT 挡住，offset 永远不推进，
+    # 后面可删的再也看不到。多扫几倍、删够 limit 就停。
     candidates = TaskRun.objects.filter(
         status__in=TaskRun.TERMINAL_STATUSES,
         finished_at__lt=cutoff,
-    ).order_by('finished_at', 'pk')[:limit]
+    ).order_by('finished_at', 'pk')[:limit * 5]
     removed = 0
     for task in candidates:
+        if removed >= limit:
+            break
         if _strongly_referenced(task, TASK_HISTORY_TASK_BLOCKERS):
             continue
         with transaction.atomic():

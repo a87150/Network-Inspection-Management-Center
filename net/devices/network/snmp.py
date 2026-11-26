@@ -292,7 +292,9 @@ def _parse_memory(snapshot, vendor):
 def _parse_temperature(snapshot, vendor):
     vendor_oids = snapshot.get("_vendor_oids", VENDOR_OIDS.get(_vendor_key(vendor), {})).get("temperature", ())
     value = _first_numeric(snapshot["scalars"], vendor_oids)
-    if value is not None:
+    # 厂商 OID 有时返回十分之一度或 0/1 状态码，直接当 ℃ 用会得到假读数。
+    # 与下面表遍历的判据保持一致，超范围的当作没采到。
+    if value is not None and -273.15 <= float(value) <= 1000:
         return {"values_celsius": [float(value)]}
     types = _table(snapshot, ENT_SENSOR_TYPE)
     scales = _table(snapshot, ENT_SENSOR_SCALE)

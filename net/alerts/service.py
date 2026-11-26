@@ -257,6 +257,8 @@ def process_target_findings(target_run, findings) -> list[AlertEvent]:
             if finding['state'] == 'abnormal':
                 state.status = AlertState.Status.ABNORMAL
                 state.last_abnormal_at = observed_at
+                # 每个任务最多一条 abnormal 事件（get_or_create 按 target_run 去重），
+                # 所以这里每次都收：一轮巡检发现问题就该通知一次。
                 abnormal.append(finding)
                 state_groups['abnormal'].append(state)
             else:
