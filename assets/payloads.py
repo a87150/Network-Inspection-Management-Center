@@ -36,10 +36,22 @@ def asset_row_actions(kind, admin):
                             'url': '?task_modal=run&task_single_target=%s' % obj.pk,
                             'single_device_run': True})
         if admin and kind in {'networks', 'weakcurrent'}:
-            # configuration_backup_list / _diff / _download 三个视图本来就没入口，
-            # 用户只能手打 URL；拿配置的唯一可达路径是列表页的 ZIP 导出。
-            entries.append({'kind': 'link', 'label': '配置备份',
-                            'url': reverse('configuration_backup_list', args=[kind, obj.pk])})
+            # 这里是「拿一份配置」的入口，不是「看备份历史」的入口。原先指向
+            # 列表页：点一下、翻一页、再点一次「下载原文」，两次往返只为一份文件。
+            # 下载视图的响应本来就带 Content-Disposition: attachment，直接指过去
+            # 就是下载。没有备份时才退回历史页，让用户看到为什么是空的。
+            from net.devices.configuration_backups import list_configuration_backups
+
+            latest_backup = list_configuration_backups(obj).first()
+            if latest_backup:
+                entries.append({
+                    'kind': 'link', 'label': '配置备份',
+                    'url': reverse('configuration_backup_download',
+                                   args=[kind, obj.pk, latest_backup.pk]),
+                })
+            else:
+                entries.append({'kind': 'link', 'label': '配置备份',
+                                'url': reverse('configuration_backup_list', args=[kind, obj.pk])})
         if admin and device_kind:
             entries.append({
                 'kind': 'form', 'label': '停用' if obj.is_enabled else '启用',

@@ -129,6 +129,37 @@ class CollectionProfilesTests(TestCase):
         self.assertIn('legacy-brand',dict(form.fields['vendor'].choices))
         self.assertNotIn('legacy-brand',dict(device_form('networks').fields['vendor'].choices))
 
+    def test_vendor_alias_is_normalized_instead_of_becoming_a_new_option(self):
+        """h3 是 h3c 被截断的写法，不该在「其他」后面挂出一条裸选项。"""
+        from assets.forms import device_form
+        from net.devices.collection_profiles import vendor_choices, normalize_vendor
+
+        self.assertEqual(normalize_vendor('h3'), 'h3c')
+        self.assertEqual(normalize_vendor('H3C'), 'h3c')
+        self.assertEqual(normalize_vendor('华为'), 'huawei')
+        # 归一化之后就是已知选项，不该再追加。
+        self.assertNotIn('h3', [value for value, _ in vendor_choices('networks', 'h3')])
+
+        self.device.vendor = 'h3'
+        self.device.save()
+        form = device_form('networks', instance=self.device)
+        # 表单认得出它是华三：既不多一条裸值，保存时也会写成 h3c。
+        self.assertNotIn('h3', dict(form.fields['vendor'].choices))
+        self.assertIn('h3c', dict(form.fields['vendor'].choices))
+
+    def test_unknown_vendor_is_still_offered_but_marked_as_legacy(self):
+        """认不出来的自由文本要保留，否则用户打开表单就被迫改值；但要标出来。"""
+        from assets.forms import device_form
+        from net.devices.collection_profiles import vendor_choices
+
+        choices = vendor_choices('networks', 'zzz-brand')
+        self.assertIn(('zzz-brand', 'zzz-brand（已有值）'), choices)
+
+        self.device.vendor = 'zzz-brand'
+        self.device.save()
+        form = device_form('networks', instance=self.device)
+        self.assertEqual(dict(form.fields['vendor'].choices)['zzz-brand'], 'zzz-brand（已有值）')
+
     def test_item_command_editor_saves_and_previews_without_saving(self):
         from tests.auth import login_admin
         from django.urls import reverse

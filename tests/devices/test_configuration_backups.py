@@ -157,3 +157,30 @@ class ConfigurationBackupTests(TestCase):
         backup.pk = None
         with self.assertRaises(IntegrityError), transaction.atomic():
             backup.save(force_insert=True)
+
+
+    def test_row_action_downloads_the_latest_backup_instead_of_navigating(self):
+        """行内「配置备份」是拿文件，不是看历史列表。
+
+        原先指向 configuration_backup_list：点一下、翻一页、再点「下载原文」，
+        两次往返只为一份文件。下载视图的响应本来就有 Content-Disposition。
+        """
+        from assets.payloads import asset_row_actions
+        from django.urls import reverse
+
+        build = asset_row_actions('networks', True)
+        # 没有备份时退回历史页，这是唯一的例外。
+        empty = next(item for item in build(self.asset) if item['label'] == '配置备份')
+        self.assertEqual(empty['url'],
+                         reverse('configuration_backup_list', args=['networks', self.asset.pk]))
+
+        backup = self.store()
+        entry = next(item for item in build(self.asset) if item['label'] == '配置备份')
+        self.assertEqual(entry['url'], reverse(
+            'configuration_backup_download', args=['networks', self.asset.pk, backup.pk]))
+
+        # 存了第二份之后要指向更新的那版。
+        newer = self.store(at=self.at.replace(day=2))
+        entry = next(item for item in build(self.asset) if item['label'] == '配置备份')
+        self.assertEqual(entry['url'], reverse(
+            'configuration_backup_download', args=['networks', self.asset.pk, newer.pk]))

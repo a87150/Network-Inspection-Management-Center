@@ -18,10 +18,17 @@ VENDORS = {
 
 
 def vendor_choices(kind, current=''):
-    """Offer category-specific brands, retaining only this record's legacy value."""
+    """Offer category-specific brands, retaining only this record's legacy value.
+
+    current 是这条记录已经存着的值，可能是别名或错拼。先归一化：能对上已知
+    选项就当它不存在（用户看到的还是那个品牌），对不上才追加，并且标出来。
+    """
     choices = list(VENDORS[kind])
-    if kind != 'servers' and current and current not in dict(choices):
-        choices.append((current, current + '（已有值）'))
+    if kind != 'servers' and current:
+        resolved = normalize_vendor(current)
+        known = dict(choices)
+        if resolved not in known:
+            choices.append((resolved, str(current) + '（已有值）'))
     return choices
 
 SUBTYPES = {
@@ -42,7 +49,11 @@ def device_type_label(kind, value):
     return dict(SUBTYPES.get(kind, ())).get(str(value), value)
 
 
-ALIASES = {'华为':'huawei','华三':'h3c','锐捷':'ruijie','深信服':'sangfor','思科':'cisco','海康':'hikvision','海康威视':'hikvision','大华':'dahua','其它':'generic','宇视':'uniview','天地伟业':'tiandy','中控':'zkteco','中控智慧':'zkteco'}
+# 别名表是录入容错的第一道口子：CSV 导入、手工填写、旧系统迁移都会带进
+# 品牌的中文名、缩写和错拼。这里认出来的值会被归一成代码，认不出来的原样
+# 保留（台账允许自由文本），但那就成了表单里那个「多出来的选项」。
+# 'h3' 是 h3c 被截断的常见写法，不归一化就会在「其他」后面挂出一条裸值。
+ALIASES = {'华为':'huawei','华三':'h3c','h3':'h3c','h3c':'h3c','锐捷':'ruijie','深信服':'sangfor','思科':'cisco','海康':'hikvision','海康威视':'hikvision','大华':'dahua','其它':'generic','其他':'generic','宇视':'uniview','天地伟业':'tiandy','中控':'zkteco','中控智慧':'zkteco'}
 TYPE_ALIASES = {'路由':'router','路由器':'router','交换':'switch','交换机':'switch','无线控制器':'ac','上网行为管理':'ac_gateway','安全网关':'ac_gateway','无线ap':'ap','防火墙':'firewall','录像机':'nvr','dvr':'nvr','监控':'camera','摄像头':'camera','摄像机':'camera','门禁':'access','门禁控制器':'access','对讲':'intercom','广播':'broadcast','打印机':'printer','温湿度计':'environment','温湿度传感器':'environment','闸机':'access','门禁闸机':'access'}
 SECRET_FIELDS = ('snmp_community','snmp_auth_password','snmp_priv_password')
 SNMP_FIELDS = ('snmp_version','snmp_port','snmp_security_level','snmp_username','snmp_auth_protocol','snmp_priv_protocol','snmp_context_name','snmp_retries')

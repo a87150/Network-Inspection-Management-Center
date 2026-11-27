@@ -106,7 +106,17 @@ def device_form(kind, data=None, instance=None):
             if field_name in form.fields:
                 choices=[('', '请选择')]+[(value,label) for value,label in options if value]
                 current=getattr(instance,field_name,'') if instance else ''
-                if current and current not in dict(choices):choices.append((current,current))
+                if current:
+                    # 台账里的历史值可能是别名或错拼（h3 其实是 h3c）。先归一化，
+                    # 能对上已知选项就用那个选项——否则「其他」后面会多挂一条裸值，
+                    # 用户看着像另一家厂商，其实是同一家写了两遍。
+                    from net.devices.collection_profiles import normalize_vendor, normalize_subtype
+                    resolved=normalize_vendor(current) if field_name=='vendor' else normalize_subtype(kind,current)
+                    known=dict(choices)
+                    if resolved in known:
+                        current=resolved
+                    elif current not in known:
+                        choices.append((current,current+'（已有值）'))
                 original=form.fields[field_name]
                 if field_name=='vendor':
                     form.fields[field_name]=forms.ChoiceField(label=original.label,required=original.required,
