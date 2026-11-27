@@ -141,12 +141,14 @@ export function normalizeTopology(snapshot = {}) {
     const normalized = {
       id: `physical:${source}:${target}`,
       kind: 'physical_discovered', source, target,
+      // 链路自己就带着两侧接口名，先看它。interfaces 数组在撞到 limit 被截断时
+      // 查不到对应行，那时旧写法只剩一串 ID。
       localInterfaceLabel: reverseResolved
-        ? (text(remoteInterface?.name) || text(edge.remote_port_id))
-        : (text(localInterface?.name) || text(localInterface?.stable_key)),
+        ? (text(edge.remote_interface_name) || text(remoteInterface?.name) || text(edge.remote_port_id))
+        : (text(edge.local_interface_name) || text(localInterface?.name) || text(localInterface?.stable_key)),
       remoteInterfaceLabel: reverseResolved
-        ? (text(localInterface?.name) || text(localInterface?.stable_key))
-        : (text(remoteInterface?.name) || text(edge.remote_port_id) || text(edge.remote_port_description)),
+        ? (text(edge.local_interface_name) || text(localInterface?.name) || text(localInterface?.stable_key))
+        : (text(edge.remote_interface_name) || text(remoteInterface?.name) || text(edge.remote_port_id) || text(edge.remote_port_description)),
       protocols,
       protocolLabel: protocolLabel(protocols),
       evidenceDirection: text(edge.evidence_direction) || 'unknown',

@@ -45,6 +45,15 @@ def _has_code(value, code):
 
 
 def network_role(device):
+    """设备的拓扑角色。
+
+    台账里显式标注的 network_role 优先——那一栏是用户按现场实际填的，
+    比从名字里猜可靠。没标注（空值）才回退到按设备类型、名称、型号识别，
+    这样旧数据和自动导入的设备不会因为没填这一栏就被画到错误的层。
+    """
+    explicit = (getattr(device, 'network_role', '') or '').strip()
+    if explicit:
+        return explicit
     value = _device_text(device)
     if any(token in value for token in ('access point', '无线接入点')) or _has_code(value, 'ap'):
         return 'access_point'

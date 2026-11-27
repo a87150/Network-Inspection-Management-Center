@@ -35,6 +35,22 @@ class Computer(models.Model):
         return self.computer_name
 
 
+# 拓扑角色。device_type 只说「这是台交换机」，分不出它在网络里的位置，而拓扑
+# 分层要的正是这个位置。空值表示没标注，由 topology.presentation.network_role
+# 回退到按名称和类型猜——旧设备不会因为没填这一栏就画错层。
+NETWORK_ROLE_CHOICES = [
+    ('', '未标注（按名称自动识别）'),
+    ('core_switch', '核心交换机'),
+    ('distribution_switch', '汇聚交换机'),
+    ('access_switch', '接入交换机'),
+    ('firewall', '防火墙'),
+    ('router', '路由器'),
+    ('access_point', '无线 AP'),
+    ('wireless_controller', '无线控制器'),
+    ('network_other', '其他网络设备'),
+]
+
+
 def _check_device_enums(instance, kind):
     """校验并就地归一厂商与设备类型。
 
@@ -95,6 +111,10 @@ class Network_Device(models.Model):
     device_name = models.CharField(max_length=255, blank=True, null=True)
     ip = models.CharField(max_length=255, unique=True)
     device_type = models.CharField(max_length=255, blank=True, null=True)
+    network_role = models.CharField(
+        '拓扑角色', max_length=32, blank=True, default='', db_default='',
+        choices=NETWORK_ROLE_CHOICES,
+    )
     model = models.CharField(max_length=255, blank=True, null=True)
     vendor = models.CharField(max_length=255, blank=True, null=True)
     os_version = models.CharField('系统版本（自动采集）', max_length=1024, blank=True, default='', db_default='')

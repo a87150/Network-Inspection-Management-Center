@@ -138,6 +138,41 @@ if (mountElement && bootstrapElement) {
             return Number.isFinite(count) ? total + count : total;
           }, 0);
       },
+      /* 层间带上的车道分配。
+         原来每条边都把水平段放在「上下两点正中」，同一层之间的边 from/to 完全
+         相同，于是所有水平段落在同一条 y 上，叠成一根横线——图上看不出谁连谁。
+         这里按「上沿 → 下沿」把边分组，同组内按横向跨度排序后依次错开。 */
+      edgeLanes() {
+        const lanes = new Map();
+        const groups = new Map();
+        const nudge = (y) => Math.round(y * 2) / 2;  // 同一层的小数差不算不同层
+        for (const edge of this.topology.physicalEdges || []) {
+          const source = this.topologyNodes.get(edge.source);
+          const target = this.topologyNodes.get(edge.target);
+          if (!source || !target) continue;
+          if (Math.abs(source.y - target.y) < 12) continue;  // 同层互联另走一条规则
+          const upper = source.y < target.y ? source : target;
+          const lower = source.y < target.y ? target : source;
+          const from = nudge(upper.y + this.nodeBottom(upper));
+          const to = nudge(lower.y + this.nodeTop(lower));
+          if (to - from < 24) continue;  // 带子太窄，错开会挤在一起
+          const key = from + '|' + to;
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push({ id: edge.id, from, to, span: Math.abs(source.x - target.x) });
+        }
+        for (const list of groups.values()) {
+          if (list.length < 2) continue;
+          // 跨度大的排外侧：长线走外圈，短线在中间，交叉最少。
+          list.sort((left, right) => right.span - left.span || (left.id < right.id ? -1 : 1));
+          const band = list[0].to - list[0].from;
+          const step = Math.min(12, Math.max(3, band / (list.length + 1)));
+          const middle = list[0].from + band / 2;
+          list.forEach((item, index) => {
+            lanes.set(item.id, middle + (index - (list.length - 1) / 2) * step);
+          });
+        }
+        return lanes;
+      },
       topologyNodes() {
         return new Map(this.topology.nodes.map((node) => [node.id, node]));
       },
@@ -481,7 +516,9 @@ if (mountElement && bootstrapElement) {
         const lower = source.y < target.y ? target : source;
         const from = upper.y + this.nodeBottom(upper);
         const to = lower.y + this.nodeTop(lower);
-        const mid = from + Math.max(14, (to - from) / 2);
+        // 同一层间带上有多条边时走分配好的车道，只有一条时仍取正中。
+        const lane = this.edgeLanes.get(edge.id);
+        const mid = lane === undefined ? from + Math.max(14, (to - from) / 2) : lane;
         return `M ${upper.x} ${from} V ${mid} H ${lower.x} V ${to}`;
       },
       edgePath(edge) {
@@ -496,7 +533,8 @@ if (mountElement && bootstrapElement) {
         const lower = source.y < target.y ? target : source;
         const from = upper.y + this.nodeBottom(upper);
         const to = lower.y + this.nodeTop(lower);
-        const mid = from + Math.max(14, (to - from) / 2);
+        const lane = this.edgeLanes.get(edge.id);
+        const mid = lane === undefined ? from + Math.max(14, (to - from) / 2) : lane;
         return { x: (source.x + target.x) / 2, y: mid };
       },
       /* 端口：本地口 → 对端口；任一侧缺失就退化成已有的那一个。 */

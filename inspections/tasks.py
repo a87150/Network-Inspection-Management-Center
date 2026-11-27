@@ -214,7 +214,9 @@ def _filtered_queryset(post_data, profile):
             project for project in PROJECTS.values()
             if project[0] == profile.device_type
         )
-        source = model.objects.all()
+        # 停用的设备不在可巡检范围内，筛选时也不该出现——否则「筛选」和
+        # 「全部资产」两种口径会给出不同的可执行集合。
+        source = model.objects.filter(is_enabled=True)
         definition = get_table_definition(table_key)
     return apply_table_filters(
         request, source, definition, include_legacy_status=False,
@@ -245,7 +247,9 @@ def _target_ids_from_request(post_data, profile, target_mode):
                 project for project in PROJECTS.values()
                 if project[0] == profile.device_type
             )
-            source = source.objects.all()
+            # 停用的设备已经不在用了，拉进任务只会白跑一趟再留一条失败告警。
+            # 历史结果和配置备份仍留在库里，只是不再产生新的。
+            source = source.objects.filter(is_enabled=True)
         target_ids = list(source.order_by('pk').values_list('pk', flat=True))
     elif target_mode == 'filtered':
         if not state['filters']:

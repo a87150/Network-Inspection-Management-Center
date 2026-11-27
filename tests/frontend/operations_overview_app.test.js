@@ -488,3 +488,40 @@ test('Esc 处理器在 mounted 挂上、beforeUnmount 摘掉', () => {
   assert.match(source, /document\.addEventListener\('keydown', this\.handleKeydown\)/);
   assert.match(source, /document\.removeEventListener\('keydown', this\.handleKeydown\)/);
 });
+
+test('同一层间带的多条边分到不同车道，不再叠成一根横线', async () => {
+  const { options } = await loadComponent();
+  const nodes = new Map([
+    ['a', { id: 'a', kind: 'backbone', x: 100, y: 100 }],
+    ['b', { id: 'b', kind: 'backbone', x: 300, y: 100 }],
+    ['c', { id: 'c', kind: 'backbone', x: 500, y: 100 }],
+    ['p', { id: 'p', kind: 'backbone', x: 100, y: 400 }],
+    ['q', { id: 'q', kind: 'backbone', x: 300, y: 400 }],
+    ['r', { id: 'r', kind: 'backbone', x: 500, y: 400 }],
+  ]);
+  const edges = [
+    { id: 'e1', source: 'a', target: 'p' },
+    { id: 'e2', source: 'b', target: 'q' },
+    { id: 'e3', source: 'c', target: 'r' },
+  ];
+  const context = Object.create(options.methods || {});
+  context.topology = { physicalEdges: edges };
+  context.topologyNodes = nodes;
+  const lanes = options.computed.edgeLanes.call(context);
+  const values = edges.map((edge) => lanes.get(edge.id));
+  assert.equal(new Set(values).size, 3, '三条同一层的边应各占一条车道');
+  assert.ok(values.every((value) => Number.isFinite(value)), '每条边都要有车道');
+});
+
+test('只有一条边时仍走正中，不引入无谓偏移', async () => {
+  const { options } = await loadComponent();
+  const nodes = new Map([
+    ['a', { id: 'a', kind: 'backbone', x: 100, y: 100 }],
+    ['p', { id: 'p', kind: 'backbone', x: 300, y: 400 }],
+  ]);
+  const context = Object.create(options.methods || {});
+  context.topology = { physicalEdges: [{ id: 'only', source: 'a', target: 'p' }] };
+  context.topologyNodes = nodes;
+  const lanes = options.computed.edgeLanes.call(context);
+  assert.equal(lanes.has('only'), false, '单条边不分配车道，按旧逻辑取中');
+});

@@ -2,7 +2,7 @@
 
 from django.test import SimpleTestCase
 
-from topology.presentation import backbone_parents, network_role
+from topology.presentation import backbone_parents, network_role as network_role_of
 
 
 def node(pk, *, tier, label, role='access_switch'):
@@ -70,7 +70,45 @@ class BackboneHierarchyTests(SimpleTestCase):
             def __init__(self, device_type, device_name='', model=''):
                 self.device_type, self.device_name, self.model = device_type, device_name, model
 
-        self.assertEqual(network_role(Device('接入', 'A-2F')), 'access_switch')
-        self.assertEqual(network_role(Device('POE交换机', 'POE-1')), 'access_switch')
-        self.assertEqual(network_role(Device('汇聚', 'AGG-1')), 'distribution_switch')
-        self.assertEqual(network_role(Device('核心', 'CORE-1')), 'core_switch')
+        self.assertEqual(network_role_of(Device('接入', 'A-2F')), 'access_switch')
+        self.assertEqual(network_role_of(Device('POE交换机', 'POE-1')), 'access_switch')
+        self.assertEqual(network_role_of(Device('汇聚', 'AGG-1')), 'distribution_switch')
+        self.assertEqual(network_role_of(Device('核心', 'CORE-1')), 'core_switch')
+
+
+class NetworkRoleFieldTests(SimpleTestCase):
+    """台账显式标注的 network_role 优先于按名称猜。
+
+    device_type 只能说「这是台交换机」，分不出核心/汇聚/接入；靠 device_name
+    里的字猜层级是运气——设备叫 Core-01 或者 SW-CORE 时就猜不出来，会悄悄
+    从核心层掉到接入层。所以层级改成独立字段，由用户按现场实际填。
+    """
+
+    def role(self, device_type, device_name='', model='', network_role=''):
+        from types import SimpleNamespace
+        return network_role_of(SimpleNamespace(
+            device_type=device_type, device_name=device_name, model=model,
+            network_role=network_role,
+        ))
+
+    def test_explicit_role_wins_over_the_name(self):
+        # 名字像接入，但台账标的是核心：以台账为准。
+        self.assertEqual(self.role('switch', '接入-01', network_role='core_switch'), 'core_switch')
+        self.assertEqual(
+            self.role('switch', '接入-01', network_role='distribution_switch'),
+            'distribution_switch')
+
+    def test_explicit_role_does_not_need_a_name_hint(self):
+        """Core-01 这种命名以前猜不出层级，现在按字段走。"""
+        self.assertEqual(self.role('switch', 'Core-01', network_role='core_switch'), 'core_switch')
+        self.assertEqual(self.role('switch', 'SW-CORE', network_role='core_switch'), 'core_switch')
+
+    def test_blank_role_falls_back_to_the_name(self):
+        self.assertEqual(self.role('switch', '演示-核心交换机'), 'core_switch')
+        self.assertEqual(self.role('switch', '演示-园区汇聚交换机'), 'distribution_switch')
+        self.assertEqual(self.role('switch', '演示-接入交换机'), 'access_switch')
+        self.assertEqual(self.role('firewall', ''), 'firewall')
+
+    def test_blank_role_and_no_hint_still_lands_somewhere_usable(self):
+        self.assertEqual(self.role('switch', 'SW-1'), 'access_switch')
+        self.assertEqual(self.role('', 'X'), 'network_other')

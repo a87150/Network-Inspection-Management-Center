@@ -29,13 +29,17 @@ def _asset_sources():
     deferred 字段就回查一次 —— 1500 台设备乘十几次就是一个量级的 SQL 放大。
     这几个模型都没有 TextField/JSONField 大字段，所以只排掉凭据列，其余一次取回。
     """
+    # 停用表示这台设备已经不在用了：拆机、下架、报废。它还留在台账里是为了保住
+    # 历史记录和配置备份，但它不该再出现在拓扑图上——画出来会让人以为链路还在。
+    # Computer 用 is_active 表达另一件事（主机是否上报过），不在这里过滤。
     return (
         ('computers', Computer.objects.defer('login_account')),
-        ('networks', Network_Device.objects.defer(
+        ('networks', Network_Device.objects.filter(is_enabled=True).defer(
             'password', 'snmp_auth_password', 'snmp_priv_password', 'api_shared_secret',
         )),
-        ('servers', Server.objects.defer('password', 'api_token')),
-        ('weakcurrent', WeakCurrentDevice.objects.defer('api_password', 'api_token')),
+        ('servers', Server.objects.filter(is_enabled=True).defer('password', 'api_token')),
+        ('weakcurrent', WeakCurrentDevice.objects.filter(
+            is_enabled=True).defer('api_password', 'api_token')),
     )
 
 

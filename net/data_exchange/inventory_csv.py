@@ -20,6 +20,26 @@ MAX_CSV_COLUMNS = 64
 MAX_CSV_CELL_CHARS = 10000
 
 
+def _network_role(value):
+    """拓扑角色：代码（core_switch）和中文（核心交换机）都认。
+
+    device_type 只说「这是台交换机」，分不出它在网络里的位置，而拓扑分层
+    要的正是位置。这一列允许留空——空表示没标注，由拓扑自己按名称识别。
+    """
+    from net.models.devices import NETWORK_ROLE_CHOICES
+
+    text = str(value or '').strip()
+    if not text:
+        return ''
+    codes = {code for code, _label in NETWORK_ROLE_CHOICES if code}
+    if text.casefold() in codes:
+        return text.casefold()
+    by_label = {label: code for code, label in NETWORK_ROLE_CHOICES if code}
+    if text in by_label:
+        return by_label[text]
+    raise ValueError('未知的拓扑角色：%s' % text)
+
+
 def _text(value):
     return str(value or '').strip()
 
@@ -142,6 +162,7 @@ ENTITY_SPECS = {
         'columns': [
             ('设备名称', 'device_name', _text), ('IP地址', 'ip', _ip),
             ('设备类型', 'device_type', _text), ('厂商', 'vendor', _text),
+            ('拓扑角色', 'network_role', _network_role),
             ('连接方式', 'connection_type', _text), ('命令行协议', 'cli_protocol', _text),
             ('深信服 API地址', 'api_url', _text), ('深信服共享密钥', 'api_shared_secret', _text), ('校验HTTPS证书', 'verify_ssl', _boolean), ('SSH端口', 'port', _integer),
             ('系统版本', 'os_version', _text), ('型号', 'model', _text), ('CPU 型号', 'cpu_model', _text),

@@ -38,7 +38,8 @@ def topology_interfaces(request):
 @login_required
 @require_GET
 def topology_links(request):
-    queryset=NetworkTopologyLink.objects.select_related('local_interface').order_by('-last_seen_at','id')
+    queryset=NetworkTopologyLink.objects.select_related(
+        'local_interface','remote_interface').order_by('-last_seen_at','id')
     if request.GET.get('include_stale')!='1':queryset=queryset.filter(status='current')
     if request.GET.get('device_id'):
         queryset=queryset.filter(local_interface__device_id=request.GET['device_id']) | queryset.filter(remote_device_id=request.GET['device_id'])
