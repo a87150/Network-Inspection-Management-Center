@@ -233,7 +233,15 @@
                 </thead>
                 <tbody>
                     <tr v-for="(row, index) in ledger.rows" :key="'ledger-' + index">
-                        <td v-for="column in ledger.columns" :key="column.key">[[ row[column.key] ]]</td>
+                        <td v-for="column in ledger.columns" :key="column.key">
+                            <template v-if="cell(row, column.key).href">
+                                <a :href="cell(row, column.key).href">[[ cell(row, column.key).href_text || cell(row, column.key).text ]]</a>
+                            </template>
+                            <template v-else-if="cell(row, column.key).code"><code>[[ cell(row, column.key).text ]]</code></template>
+                            <template v-else>[[ cell(row, column.key).text ]]</template>
+                            <template v-if="cell(row, column.key).sub"><br>
+                                <span class="text-secondary">[[ cell(row, column.key).sub ]]</span></template>
+                        </td>
                     </tr>
                 </tbody>
             </table>

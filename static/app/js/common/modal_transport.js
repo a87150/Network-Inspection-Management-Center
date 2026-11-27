@@ -93,6 +93,11 @@
                     const updated = replacement.cloneNode(true);
                     current.replaceWith(updated);
                     win.AppTableWorkspace?.initializeWorkspace(updated, storage);
+                    /* 换进来的是新 DOM。表格主体如果是 Vue 岛，服务端渲染里只有
+                       一个 data-vue-page 容器，行是客户端渲染出来的——不重挂就
+                       只剩工具栏和空表头，看起来像"数据没了"。
+                       refreshTableWorkspaces 那条路径早就补了这一步，这里漏了。 */
+                    win.mountPages?.(updated);
                 }
             });
             win.AppTaskUI?.bind(doc);

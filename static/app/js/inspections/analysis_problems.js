@@ -21,7 +21,14 @@
                 if (response.redirected) throw new Error('登录状态已失效，请刷新页面重新登录。');
                 if (!response.ok) throw new Error('加载失败，请关闭弹窗后重新点击问题类型。');
                 const html = await response.text();
-                if (current === generation) body.innerHTML = html;
+                if (current === generation) {
+                    body.innerHTML = html;
+                    /* 这个片段里是一块空的 data-vue-page="analysis-problems" 岛，
+                       行要客户端渲染。innerHTML 插入的 <script> 按 HTML 规范不会执行，
+                       所以必须手动重挂——不挂就只剩「共 N 条」和一片空白，还不报错。
+                       同一片段在任务详情里走的是 device_workspace 那条 mountPages 路径。 */
+                    window.mountPages?.(body);
+                }
             } catch (error) {
                 if (current === generation && error.name !== 'AbortError') {
                     body.textContent = error.message || '加载失败，请稍后重试。';

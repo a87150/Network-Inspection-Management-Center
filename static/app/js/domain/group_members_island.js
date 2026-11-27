@@ -21,11 +21,19 @@ function readStore(modal) {
   }
 }
 
-function writeStore(modal, page, selected) {
+function readScope(modal) {
+  try {
+    return JSON.parse(modal?.dataset[STORE_FIELD] || '{}').scope || '';
+  } catch (error) {
+    return '';
+  }
+}
+
+function writeStore(modal, page, selected, scope) {
   if (!modal) return;
   const pages = readStore(modal);
   pages[page] = [...selected];
-  modal.dataset[STORE_FIELD] = JSON.stringify({ pages });
+  modal.dataset[STORE_FIELD] = JSON.stringify({ pages, scope });
 }
 
 function clearStore(modal) {
@@ -122,7 +130,13 @@ function mountIsland(root) {
   // 服务端回填的 checked 必须在 Vue 接管之前读：失败重投表单靠它恢复。
   const serverChecked = Array.from(root.querySelectorAll('input[data-member-target]:checked'))
     .map(input => input.value);
-  const saved = readStore(modal)[page];
+  // 暂存必须跟"当前看的是哪一批候选"绑在一起，只按页码分桶不够。
+  // 「现有成员」和「添加成员」是两个完全不同的对象集合，账户与域计算机也是，
+  // 搜索词变了更是。翻页回来沿用勾选还算烦人，跨模式沿用就是事故——
+  // 新页面里主键撞上的行会被预勾上，用户点「移除选中成员」就把没选过的人
+  // 从组里摘掉了，这是目录写操作，没有撤销。
+  const scope = root.dataset.memberScope || '';
+  const saved = readScope(modal) === scope ? readStore(modal)[page] : null;
 
   createApp({
     delimiters: ['[[', ']]'],
@@ -144,7 +158,7 @@ function mountIsland(root) {
     },
     watch: {
       selected(list) {
-        writeStore(modal, page, list);
+        writeStore(modal, page, list, scope);
       },
     },
     methods: {

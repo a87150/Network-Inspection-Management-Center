@@ -16,6 +16,72 @@
   测试：一条验返回的父节点正确（含已展开、主干节点、空输入三种边界），一条验展开后
   该终端确实进了可见图。
 
+### 前端专项审查：详情页与详情弹窗里的表格完全点不动（P0）
+- `static/app/vue/pages/resource_detail.mjs` 从 `this.$el.dataset.vueBootstrap` 取
+  bootstrap id，而 `$el` 是 Vue 自己创建的节点——宿主 `[data-vue-page]` 上的
+  `data-vue-bootstrap` 不会继承下来，永远是 `undefined`。于是排序、翻页、筛选、
+  重置发出请求后拿不到新分区，抛「响应里没有详情数据」，只 `console.error`
+  就没了，界面零反馈。中键在新标签打开反而正常，所以看起来时好时坏。
+  改成先从宿主上找。原有的测试给 `$el` 手工塞了 `dataset.vueBootstrap`，
+  正好把这个 bug 掩盖住了。
+- Vue 侧的两个详情弹窗（`components/detail_modal.mjs`、`asset_workspace.mjs`）
+  都不写 `[data-detail-url]`，只有旧的 `detail_modal.js` 写。`detailBase()` 因此回落到
+  `window.location.pathname`，也就是列表页地址——即使 id 取对了，请求也会打到列表页。
+  在弹窗打开时把详情地址写上。
+
+### 前端专项审查：域分组勾选会跨模式残留（P1）
+- `static/app/js/domain/group_members_island.js` 的勾选暂存只按页码分桶。
+  「现有成员」和「添加成员」是两个完全不同的对象集合，账户与域计算机也是，
+  搜索词变了更是——翻页回来沿用勾选还算烦人，跨模式沿用就是事故：
+  新页面里主键撞上的行会被 Vue 预勾上，用户点「移除选中成员」就把没选过的人
+  从组里摘掉了。这是目录写操作，没有撤销。
+  暂存现在跟 `member_mode | candidate_type | member_query` 绑在一起，
+  换了上下文就不复用。
+
+### 前端专项审查：问题明细弹窗永远空白（P1）
+- `static/app/js/inspections/analysis_problems.js` 只用 `innerHTML` 塞入片段。
+  片段里是一块空的 `data-vue-page` 岛，行要客户端渲染，而 `innerHTML` 插入的
+  `<script>` 按 HTML 规范不会执行——不重挂就只剩「共 N 条」和一片空白，还不报错。
+  同一片段在任务详情里走的是 `device_workspace` 的 `mountPages` 路径，只修了那一条。
+
+### 前端专项审查：其余已修的小项
+- 台账弹窗「保存网段」成功后先清空 rows 再刷新，刷新失败列表永久停在空状态。
+- 工具栏 `document` 级点击委托补了幂等守卫，处理器改成每次取最新实例。
+### 前端专项审查：修掉的五处
+- **IP 台账弹窗每一格都是空的**（`topology/ipam.py` + `operations_overview.html`）。
+  后端给的是 `{cells: {key: {text, sub, code, href}}}`，模板却直接写 `row[column.key]`，
+  插值出来的是整个对象。弹窗能打开、表头正常、行数也对，唯独每一格空着——这种
+  「看着有数据却读不出来」比报错更难被发现，而且只要台账非空就 100% 复现。
+  补了 `cell(row, key)` 取值函数，模板按 `cells[key].text` 渲染，顺带支持 `code`/`href`/`sub`。
+- **保存失败被当成保存成功**（`static/app/js/common/form_ajax.js`）。原来按 content-type
+  二分：不是 JSON 就一律走 `afterSave`。但视图未捕获异常是 500 HTML、CSRF 拒绝是 403 HTML、
+  反代错误是 502 HTML——三种失败都会关弹窗、丢掉用户填的内容、刷新表格，一句提示都没有。
+  现在先看 `response.ok`，非 2xx 一律显示具体状态码并保留输入。
+- **外置保存按钮的防重复提交完全失效**（`static/app/js/common/form_ajax.js`）。原来取
+  `form.querySelector('[type="submit"]')`，而告警模板、PC 配置、巡检项设置三处真模板的
+  保存按钮在 form 之外、靠 `form=` 属性关联——这时拿到 null，双击就发两份 POST；
+  表单内还有别的 submit（比如「测试发送」）时，被禁用的是没在提交的那个。改用 `event.submitter`。
+- **弹窗保存后表格变空白**（`static/app/js/common/modal_transport.js`）。`updateTables`
+  换完 DOM 只调 `initializeWorkspace`，没重挂 Vue 岛。表格主体是岛的页面（告警列表、
+  资产列表、PC 日志、巡检记录、任务中心）换完只剩工具栏和空表头。
+  `refreshTableWorkspaces` 那条路径早就补了 `mountPages`，这里漏了。
+- **降级快照被当成成功**（`static/app/js/operations-overview/app.js`）。后端把局部查询失败
+  降级成 `200 + {topology: {error}}`（`operations.py` 的 `_safe_region`），前端直接当成功：
+  图上空着却显示「数据已同步」，还顺带报「尚未采集到物理链路」，三处提示互相打脸。
+  现在识别出来当刷新失败处理，保留上一份快照并置 stale。
+
+### 前端专项审查：又一处数据失真
+- **「另有 N 个设备未绘制」整块不显示**（`static/app/js/operations-overview/app.js`）。
+  `truncationCount` 把 `Object.values(asset_truncation)` 全用 `Number()` 相加，
+  而 `operations.py:82` 会往同一个字典里写 `links: '链路超过显示上限…'` 这种字符串，
+  `Number()` 得到 NaN 一路传染，`v-if` 判假。链路被截断时提示反而不出现。
+  改成只累加真正的数字。
+
+### 前端专项审查：表格与弹窗
+- 台账弹窗「保存网段」成功后先把 rows 清空再刷新，刷新失败时列表永久停在空状态，
+  看起来像数据被清掉了。`loadLedger` 本来就会整体覆盖，清空那步是多余且有害的。
+- 工具栏的 `document` 级点击委托没有防重入守卫。虽然 `app.js` 是 `type="module"`、
+  ESM 有模块缓存不会重跑，但把守卫补上更稳，且处理器改成每次取最新实例。
 ## 2.36（2026-11-27）
 
 这一版是域控流程的专项：四路并行审查覆盖了连接、同步、写操作、成员关系、

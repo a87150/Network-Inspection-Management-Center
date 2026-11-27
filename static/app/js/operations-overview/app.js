@@ -83,8 +83,14 @@ if (mountElement && bootstrapElement) {
         return layoutTopology(graph, { width: this.topologyWidth, height: this.topologyHeight });
       },
       truncationCount() {
+        // asset_truncation 里混着非计数字段（operations.py 会写 links: '...' 之类的字符串）。
+        // 直接 Number() 它们得到 NaN，reduce 一路传染成 NaN，v-if 判假，
+        // 「另有 N 个设备未绘制」整块就再也不显示了。这里只累加真正的数字。
         return Object.values(this.snapshot.topology?.asset_truncation || {})
-          .reduce((total, value) => total + Number(value || 0), 0);
+          .reduce((total, value) => {
+            const count = typeof value === 'number' ? value : Number.NaN;
+            return Number.isFinite(count) ? total + count : total;
+          }, 0);
       },
       topologyNodes() {
         return new Map(this.topology.nodes.map((node) => [node.id, node]));
@@ -518,6 +524,13 @@ if (mountElement && bootstrapElement) {
       this.lookupRows = [];
       this.lookupQuery = '';
     },
+    /* 台账行是 {cells: {key: {text, sub, code, href, muted}}}，不是扁平的 {key: 文本}。
+       模板里必须走这里取值——直接写 row[key] 拿到的是对象，插值出来是空的。 */
+    cell(row, key) {
+      const value = row && row.cells ? row.cells[key] : null;
+      if (value && typeof value === 'object') return value;
+      return { text: value == null ? '' : String(value) };
+    },
     toggleSubnetForm() {
       this.subnetFormOpen = !this.subnetFormOpen;
       this.subnetError = '';
@@ -550,7 +563,9 @@ if (mountElement && bootstrapElement) {
         }
         this.subnetForm = { cidr: '', purpose: 'office', vlan: '', gateway: '', poolStart: '', poolEnd: '', note: '' };
         this.subnetFormOpen = false;
-        this.ledger = { ...this.ledger, rows: [] };
+        // 不要先把 rows 清空：loadLedger 会用服务端返回的节整体覆盖，
+        // 清空这一步是多余的；而一旦 loadLedger 失败（网络抖动、服务重启），
+        // 列表就永久停在空状态，看起来像数据没了，实际上只是这次刷新没成功。
         await this.loadLedger();
       } catch (error) {
         this.subnetError = error.message || '保存失败';
@@ -576,7 +591,16 @@ if (mountElement && bootstrapElement) {
               headers: { Accept: 'application/json' },
             });
             if (!response.ok) throw new Error(`Snapshot request failed: ${response.status}`);
-            return response.json();
+            const payload = await response.json();
+            // 后端把局部查询失败降级成 200 + {topology: {error: 'topology_unavailable'}}
+            // （operations.py 的 _safe_region 就是干这个的）。直接当成功会让界面
+            // 同时显示「数据已同步」和一张空图，还顺便报「尚未采集到物理链路」，
+            // 三处提示互相打脸。当成刷新失败处理：保留上一份快照并置 stale，
+            // 用户才知道自己看的是旧数据，而不是以为网络里真的没有设备。
+            if (payload && payload.topology && payload.topology.error) {
+              throw new Error('Snapshot degraded: ' + String(payload.topology.error));
+            }
+            return payload;
           } finally {
             window.clearTimeout(timeoutId);
             if (this.requestAbortController === requestController) this.requestAbortController = null;
@@ -612,24 +636,32 @@ if (mountElement && bootstrapElement) {
   const app = mounted && typeof mounted.zoomBy === 'function'
     ? mounted
     : (application._instance && application._instance.proxy) || mounted || application;
-  window.__topologyApp = app;
-
   // 这页的模板事件在本环境没绑上，工具栏改用 document 级委托。
   // 放在 mount 之后用返回的实例，不依赖 mounted 是否跑到。
-  const toolbarHandlers = {
-    'zoom-in': () => app.zoomBy(0.15),
-    'zoom-out': () => app.zoomBy(-0.15),
-    fit: () => app.fitViewport(),
-    reset: () => app.resetViewport(),
-    'ip-lookup': () => app.locateByIp(),
-    'ip-ledger': () => app.openIpLedgerModal(),
-  };
-  document.addEventListener('click', (event) => {
-    const button = event.target.closest && event.target.closest('[data-toolbar-act]');
-    if (!button) return;
-    const handler = toolbarHandlers[button.getAttribute('data-toolbar-act')];
-    if (!handler) return;
-    event.preventDefault();
-    handler();
-  });
+  //
+  // 监听必须幂等：整个脚本在 Vue 岛重挂时会再执行一遍，而 document 上的监听
+  // 不会随旧实例消失。不挡住的话点一次按钮会跑两次，而且第二次用的是已经
+  // 和 DOM 脱钩的旧实例。所以：只绑一次，处理器里每次现取最新实例。
+  window.__topologyApp = app;
+  if (!window.__topologyToolbarBound) {
+    window.__topologyToolbarBound = true;
+    document.addEventListener('click', (event) => {
+      const button = event.target.closest && event.target.closest('[data-toolbar-act]');
+      if (!button) return;
+      const live = window.__topologyApp;
+      if (!live) return;
+      const handlers = {
+        'zoom-in': () => live.zoomBy(0.15),
+        'zoom-out': () => live.zoomBy(-0.15),
+        fit: () => live.fitViewport(),
+        reset: () => live.resetViewport(),
+        'ip-lookup': () => live.locateByIp(),
+        'ip-ledger': () => live.openIpLedgerModal(),
+      };
+      const handler = handlers[button.getAttribute('data-toolbar-act')];
+      if (!handler) return;
+      event.preventDefault();
+      handler();
+    });
+  }
 }

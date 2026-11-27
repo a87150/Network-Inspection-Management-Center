@@ -72,7 +72,12 @@ export default {
         /** 岛内重载：接口地址只用来取数据，地址栏和弹窗层级都不动。 */
         async reloadSections(url) {
             if (!url || this.reloading) return;
-            const bootstrapId = this.$el && this.$el.dataset.vueBootstrap;
+            /* $el 是 Vue 自己造的节点，宿主 [data-vue-page] 上的 data-vue-bootstrap
+               不会继承下来——直接读 $el 永远是 undefined，于是排序/翻页/筛选拿不到
+               新分区，静默失败。先从宿主上找，再退到 $el（测试里是手工塞的）。 */
+            const host = this.$el && this.$el.closest && this.$el.closest('[data-vue-page]');
+            const bootstrapId = (host && host.dataset.vueBootstrap)
+                || (this.$el && this.$el.dataset.vueBootstrap);
             this.reloading = true;
             try {
                 const response = await fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}});

@@ -80,7 +80,12 @@
             return;
         }
         event.preventDefault();
-        var submitter = form.querySelector('[type="submit"]');
+        /* 用 event.submitter：保存按钮可能在 form 之外、靠 form= 属性关联
+           （告警模板、PC 配置、巡检项设置三处真模板都是这样）。这时
+           querySelector('[type="submit"]') 要么拿到 null（防重复完全失效，
+           双击就发两份 POST），要么拿到表单里另一个 submit（比如「测试发送」），
+           禁用的是根本没在提交的那个按钮。 */
+        var submitter = event.submitter || form.querySelector('[type="submit"]');
         if (submitter) {
             if (submitter.disabled) {
                 return;
@@ -96,6 +101,16 @@
         }).then(function (response) {
             var type = response.headers.get('content-type') || '';
             if (type.indexOf('application/json') === -1) {
+                /* 非 JSON 不等于成功：视图未捕获异常是 500 HTML，CSRF 拒绝是 403 HTML，
+                   反代/网关错误是 502 HTML。原来一律走 afterSave，用户填的内容随
+                   弹窗关闭消失，界面一句提示都没有。先看状态码再决定。 */
+                if (!response.ok) {
+                    return response.text().then(function () {
+                        showErrors(form, '保存失败', [
+                            '服务器返回 ' + response.status + '，内容未保存，请重试或联系管理员。',
+                        ]);
+                    });
+                }
                 /* 成功：服务端重定向到了带 flash 消息的页面，只取那条消息播报。 */
                 return response.text().then(function (html) {
                     afterSave(form, flashText(html));

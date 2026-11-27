@@ -30,6 +30,11 @@ export default {
             this.error = '';
             this.detail = null;
             this.show();
+            /* resource_detail.mjs 的 detailBase() 靠祖先上的 [data-detail-url] 认接口锚点。
+               这里是 Vue 侧的弹窗，不写这个属性它就会回落到 window.location.pathname——
+               也就是列表页地址，弹窗里对详情表格排序/翻页会打到列表页上，拿不到分区。 */
+            const element = this.$refs.modal;
+            if (element) element.dataset.detailUrl = this.base + id + '/';
             try {
                 this.detail = await api.get(this.base + id + '/detail.json');
             } catch (failure) {
