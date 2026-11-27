@@ -1,6 +1,8 @@
 from django.test import TestCase
 from django.core.exceptions import ValidationError
-from net.models import Network_Device, DeviceCollectionTemplate, DeviceCollectionBinding
+from net.models import (
+    DeviceCollectionBinding, DeviceCollectionTemplate, Network_Device, WeakCurrentDevice,
+)
 from net.devices.collection_profiles import collection_method_choices, resolve_collection_settings
 from tests.payloads import asset_table_text
 
@@ -469,3 +471,52 @@ class CollectionProfilesTests(TestCase):
             with self.subTest(item=key):
                 self.assertNotIn('（SNMP）', label)
                 self.assertNotIn('（SNMP/SSH）', label)
+
+
+class DeviceEnumGuardTests(TestCase):
+    """台账的厂商与设备类型不允许随便写。
+
+    这两个字段是自由文本（不同类别的取值集合不同，挂不了模型级 choices），
+    所以拦截在 clean() 里；表单和 CSV 导入都走 full_clean()，同一条路。
+    """
+
+    def assertAccepts(self, model, vendor, device_type, expect_vendor, expect_type):
+        obj = model(ip='192.0.2.99', vendor=vendor, device_type=device_type)
+        obj.clean()
+        self.assertEqual(obj.vendor, expect_vendor)
+        self.assertEqual(obj.device_type, expect_type)
+
+    def assertRejects(self, model, vendor, device_type, field):
+        obj = model(ip='192.0.2.99', vendor=vendor, device_type=device_type)
+        with self.assertRaises(ValidationError) as caught:
+            obj.clean()
+        self.assertIn(field, caught.exception.message_dict)
+
+    def test_aliases_are_normalized_to_codes(self):
+        self.assertAccepts(Network_Device, 'H3C', '核心交换机', 'h3c', 'switch')
+        self.assertAccepts(Network_Device, '华三', '接入交换机', 'h3c', 'switch')
+        self.assertAccepts(WeakCurrentDevice, 'Hikvision', '硬盘录像机', 'hikvision', 'nvr')
+        self.assertAccepts(WeakCurrentDevice, '海康', '摄像机', 'hikvision', 'camera')
+
+    def test_known_codes_pass_through_unchanged(self):
+        self.assertAccepts(Network_Device, 'h3c', 'switch', 'h3c', 'switch')
+        self.assertAccepts(Network_Device, '', '', '', '')
+
+    def test_unknown_vendor_is_rejected(self):
+        self.assertRejects(Network_Device, '随便什么牌子', 'switch', 'vendor')
+        self.assertRejects(WeakCurrentDevice, 'zzz', 'camera', 'vendor')
+
+    def test_unknown_device_type_is_rejected(self):
+        self.assertRejects(Network_Device, 'h3c', '乱写的类型', 'device_type')
+
+    def test_cross_category_vendor_is_rejected(self):
+        """海康是弱电的品牌，不该出现在网络设备上。"""
+        self.assertRejects(Network_Device, 'hikvision', 'switch', 'vendor')
+
+    def test_error_message_lists_the_allowed_values(self):
+        obj = Network_Device(ip='192.0.2.99', vendor='zzz', device_type='switch')
+        with self.assertRaises(ValidationError) as caught:
+            obj.clean()
+        message = caught.exception.message_dict['vendor'][0]
+        self.assertIn('华三', message)
+        self.assertIn('可选', message)

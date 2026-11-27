@@ -35,6 +35,30 @@ class Computer(models.Model):
         return self.computer_name
 
 
+def _check_device_enums(instance, kind):
+    """校验并就地归一厂商与设备类型。
+
+    台账这两个字段是自由文本（不同类别的取值集合不同，挂不了模型级 choices），
+    所以拦截放在 clean()：表单和 CSV 导入都会调 full_clean()，走同一条路。
+    认得出的别名顺手改写成代码，写入的就是标准值；认不出的直接报错，不再让
+    随便打的字符串进库。
+    """
+    from net.devices.collection_profiles import enum_error, resolve_enum
+
+    errors = {}
+    for field in ('vendor', 'device_type'):
+        if not hasattr(instance, field):
+            continue
+        raw = getattr(instance, field)
+        resolved = resolve_enum(kind, field, raw)
+        if resolved is None:
+            errors[field] = enum_error(kind, field, raw)
+        elif resolved != (raw or ''):
+            setattr(instance, field, resolved)
+    if errors:
+        raise ValidationError(errors)
+
+
 class Network_Device(models.Model):
     # SSH 与 Telnet 是同一个命令行会话的两种传输，互斥；SNMP 是独立的采集通道。
     CLI_PROTOCOL_CHOICES = [('ssh', 'SSH'), ('telnet', 'Telnet')]
@@ -149,6 +173,7 @@ class Network_Device(models.Model):
 
     def clean(self):
         super().clean()
+        _check_device_enums(self, 'networks')
         if self.effective_connection_type == 'sangfor_api':
             errors = {}
             if not self.api_url:
@@ -262,6 +287,9 @@ class WeakCurrentDevice(models.Model):
         db_table = 'net_weakcurrentdevice'
         verbose_name = '弱电设备'
         verbose_name_plural = '弱电设备'
+
+    def clean(self):
+        _check_device_enums(self, 'weakcurrent')
 
     @property
     def public_api_url(self):

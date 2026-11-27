@@ -54,7 +54,7 @@ def device_type_label(kind, value):
 # 保留（台账允许自由文本），但那就成了表单里那个「多出来的选项」。
 # 'h3' 是 h3c 被截断的常见写法，不归一化就会在「其他」后面挂出一条裸值。
 ALIASES = {'华为':'huawei','huawei':'huawei','华三':'h3c','h3':'h3c','h3c':'h3c','锐捷':'ruijie','ruijie':'ruijie','深信服':'sangfor','sangfor':'sangfor','思科':'cisco','cisco':'cisco','海康':'hikvision','海康威视':'hikvision','大华':'dahua','其它':'generic','其他':'generic','宇视':'uniview','天地伟业':'tiandy','中控':'zkteco','中控智慧':'zkteco'}
-TYPE_ALIASES = {'路由':'router','路由器':'router','交换':'switch','交换机':'switch','无线控制器':'ac','上网行为管理':'ac_gateway','安全网关':'ac_gateway','无线ap':'ap','防火墙':'firewall','录像机':'nvr','dvr':'nvr','监控':'camera','摄像头':'camera','摄像机':'camera','门禁':'access','门禁控制器':'access','对讲':'intercom','广播':'broadcast','打印机':'printer','温湿度计':'environment','温湿度传感器':'environment','闸机':'access','门禁闸机':'access'}
+TYPE_ALIASES = {'路由':'router','路由器':'router','交换':'switch','交换机':'switch','核心交换机':'switch','接入交换机':'switch','汇聚交换机':'switch','无线接入点':'ap','无线控制器':'ac','上网行为管理':'ac_gateway','安全网关':'ac_gateway','无线ap':'ap','防火墙':'firewall','录像机':'nvr','硬盘录像机':'nvr','dvr':'nvr','监控':'camera','摄像头':'camera','摄像机':'camera','门禁':'access','门禁控制器':'access','对讲':'intercom','广播':'broadcast','打印机':'printer','温湿度计':'environment','温湿度传感器':'environment','闸机':'access','门禁闸机':'access'}
 SECRET_FIELDS = ('snmp_community','snmp_auth_password','snmp_priv_password')
 SNMP_FIELDS = ('snmp_version','snmp_port','snmp_security_level','snmp_username','snmp_auth_protocol','snmp_priv_protocol','snmp_context_name','snmp_retries')
 NETWORK_KEYS = {'version','vendor','subtype','commands','parsers','snmp_oids','mib_modules','snmp_transforms'}
@@ -68,6 +68,36 @@ def normalize_vendor(value):
 def normalize_subtype(kind, value):
     value = str(value or '').strip().casefold()
     return TYPE_ALIASES.get(value, value)
+
+
+ENUM_FIELDS = {'vendor': VENDORS, 'device_type': SUBTYPES}
+
+
+def resolve_enum(kind, field, value):
+    """把台账的枚举字段解析成已知代码；认不出返回 None。
+
+    与 normalize_vendor / normalize_subtype 的分工：那两个只做别名替换，认不出
+    也把原值还回去（台账曾经允许自由文本，界面上靠「（已有值）」兜着）；这里
+    回答的是另一个问题——这个值到底该不该入库。认不出就是 None，由模型层报错。
+
+    三态：'' 表示没填（放行），代码表示认得（可能由别名归一而来），
+    None 表示填了但不认识（拒绝）。
+    """
+    text = str(value or '').strip()
+    if not text:
+        return ''
+    source = ENUM_FIELDS[field].get(kind, ())
+    codes = {code for code, _label in source if code}
+    canonical = normalize_vendor(text) if field == 'vendor' else normalize_subtype(kind, text)
+    return canonical if canonical in codes else None
+
+
+def enum_error(kind, field, value):
+    """认不出时给用户的提示：说清该字段能填什么。"""
+    source = ENUM_FIELDS[field].get(kind, ())
+    labels = [label for code, label in source if code]
+    name = '厂商' if field == 'vendor' else '设备类型'
+    return '%s「%s」不是已知取值，可选：%s。' % (name, value, '、'.join(labels))
 
 
 def normalize_version_match(value):
