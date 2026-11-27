@@ -649,15 +649,41 @@ body:has(.operations-overview) .app-footer {
     display: flex; flex-direction: column; gap: .25rem;
     font-size: .75rem; color: #8fa9bd;
 }
-.topo-ledger__form input {
+/* input 和 select 必须共用同一套外观：只写 input 时，下拉框会退回浏览器默认的
+   白底黑字，在一片深色面板里格外扎眼。 */
+.topo-ledger__form input,
+.topo-ledger__form select {
     padding: .4rem .55rem;
     font-size: .82rem;
+    font-family: inherit;
     color: var(--overview-text);
     background: rgba(6, 16, 26, .9);
     border: 1px solid rgba(111, 229, 255, .26);
     border-radius: .35rem;
+    transition: border-color .15s, box-shadow .15s;
+}
+.topo-ledger__form input:focus,
+.topo-ledger__form select:focus {
+    outline: none;
+    border-color: rgba(111, 229, 255, .62);
+    box-shadow: 0 0 0 2px rgba(111, 229, 255, .14);
 }
 .topo-ledger__form input::placeholder { color: #55707f; }
+/* 原生下拉箭头在深色底上是黑三角，几乎看不见；用内联 SVG 自绘一个同色的。 */
+.topo-ledger__form select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 1.6rem;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236fe5ff' fill-opacity='.72'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right .55rem center;
+    cursor: pointer;
+}
+/* 展开后的选项列表由系统渲染，只能定底色和字色。 */
+.topo-ledger__form select option {
+    color: var(--overview-text);
+    background: #0b1a26;
+}
 .topo-ledger__form-actions {
     display: flex; align-items: center; gap: .7rem;
     grid-column: 1 / -1;

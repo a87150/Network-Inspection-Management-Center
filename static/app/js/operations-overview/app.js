@@ -1,7 +1,7 @@
 import { createApp } from '../../../vendor/vue/vue.esm-browser.prod.js';
 import { createRefreshController } from './state.js';
 import {
-  normalizeTopology, visibleTopology, reconcileExpandedIds, layoutTopology,
+  normalizeTopology, visibleTopology, reconcileExpandedIds, layoutTopology, parentToExpand,
 } from './topology.js';
 import { createAmbientEffects } from './effects.js';
 
@@ -159,16 +159,36 @@ if (mountElement && bootstrapElement) {
         const field = document.getElementById('topology-ip-search');
         const query = String((field && field.value) || this.ipQuery || '').trim().toLowerCase();
         if (!query) return;
-        const nodes = this.topology?.nodes || [];
-        const hit = nodes.find((node) => String(node.ip || '').toLowerCase() === query)
-          || nodes.find((node) => String(node.ip || '').toLowerCase().includes(query))
-          || nodes.find((node) => String(node.label || '').toLowerCase().includes(query));
-        if (!hit) {
-          // 图上只画主干和部分终端；没画出来的设备去台账里查，别直接说"没有"。
+        // 先在完整图里找。this.topology 是「可见」图，折叠起来的终端根本不在里面，
+        // 只查可见图会永远漏掉挂在未展开主干下的设备，然后落到台账兜底——
+        // 用户要的是在图上看到它，不是打开一个侧边详情。
+        const full = normalizeTopology(this.snapshot.topology || {});
+        const fullNodes = full.nodes || [];
+        const match = (list) => list.find((node) => String(node.ip || '').toLowerCase() === query)
+          || list.find((node) => String(node.ip || '').toLowerCase().includes(query))
+          || list.find((node) => String(node.label || '').toLowerCase().includes(query));
+        const found = match(fullNodes);
+        if (!found) {
+          // 图上和完整图里都没有这台设备，再去台账查 ARP/MAC，
+          // 但要说清是「图里没有」而不是「资产里没有」。
           this.searchHitId = '';
           await this.locateByLedger(query);
           return;
         }
+
+        // 命中但被折叠：把父节点展开。不展开的话布局不会重算，
+        // 下面拿到的坐标还是旧的，视口会平移到一片空白上。
+        const expandId = parentToExpand(found, this.expandedNodeIds);
+        if (expandId) {
+          const next = new Set(this.expandedNodeIds);
+          next.add(expandId);
+          this.expandedNodeIds = next;
+          // 等一次渲染，让 computed 重新算坐标。
+          await this.$nextTick();
+        }
+
+        // 展开后重新取一次：完整图里的节点没有 x/y，坐标只有布局后才有。
+        const hit = (this.topology?.nodes || []).find((node) => node.id === found.id) || found;
         this.searchHitId = hit.id;
         // 直接开完整侧边栏：接口、VLAN、对端都在里面，比一张小卡片信息全。
         this.openDrawer(hit);

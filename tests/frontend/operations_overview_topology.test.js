@@ -60,6 +60,37 @@ test('shows only backbone by default and expands one device deterministically', 
   assert.equal(accessExpanded.attachmentEdges[0].attachmentSource, 'inferred_subnet');
 });
 
+test('locating a collapsed endpoint returns the parent that must be expanded', async () => {
+  const { normalizeTopology, parentToExpand } = await loadModule();
+  const graph = normalizeTopology(enterpriseSnapshot());
+  const pc = graph.nodes.find((node) => node.id === 'computers:pc-1');
+
+  // 默认收起时，这台 PC 不在可见图里——按 IP 定位必须先展开它的父节点，
+  // 否则拿到的坐标属于旧布局，视口会平移到空白处。
+  assert.equal(parentToExpand(pc, new Set()), 'networks:access');
+
+  // 已经展开过就不需要再动展开状态，避免重复触发重排。
+  assert.equal(parentToExpand(pc, new Set(['networks:access'])), '');
+
+  // 主干节点本身一直可见，不该被当作"需要展开的目标"。
+  const backbone = graph.nodes.find((node) => node.id === 'networks:core');
+  assert.equal(parentToExpand(backbone, new Set()), '');
+  assert.equal(parentToExpand(null, new Set()), '');
+});
+
+test('expanding the parent actually puts the located endpoint on the canvas', async () => {
+  const { normalizeTopology, visibleTopology, parentToExpand } = await loadModule();
+  const graph = normalizeTopology(enterpriseSnapshot());
+  const pc = graph.nodes.find((node) => node.id === 'computers:pc-1');
+
+  const before = new Set();
+  assert.ok(!visibleTopology(graph, before).nodes.some((node) => node.id === pc.id));
+
+  const expandId = parentToExpand(pc, before);
+  const after = new Set([...before, expandId]);
+  assert.ok(visibleTopology(graph, after).nodes.some((node) => node.id === pc.id));
+});
+
 test('reconciles expansions after refresh removes a backbone node', async () => {
   const { reconcileExpandedIds } = await loadModule();
   const graph = { nodes: [{ id: 'networks:core', kind: 'backbone' }] };

@@ -192,6 +192,14 @@ export function reconcileExpandedIds(expandedIds, graph) {
   return new Set([...expandedIds].filter((id) => valid.has(id)));
 }
 
+/* 要让这个节点出现在图上，需要展开哪个主干；已经可见就返回空串。
+   终端只有在父节点展开时才进 visibleTopology，所以按 IP 定位到一台
+   折叠起来的设备时，必须先把这个父节点展开。 */
+export function parentToExpand(node, expandedIds = new Set()) {
+  if (!node || node.kind !== 'endpoint' || !node.parentId) return '';
+  return expandedIds.has(node.parentId) ? '' : node.parentId;
+}
+
 export function visibleTopology(graph, expandedIds = new Set()) {
   const nodes = graph.nodes.filter((node) => node.kind === 'backbone'
     || node.kind === 'external'
