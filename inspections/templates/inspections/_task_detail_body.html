@@ -1,5 +1,6 @@
 {% load static %}
-<div id="task-detail" data-vue-page="task-detail" data-vue-bootstrap="detail-bootstrap">
+{% comment %}data-task-pending：任务还没进终态时状态轮询才需要继续跑，由视图算好传进来。{% endcomment %}
+<div id="task-detail" data-vue-page="task-detail" data-vue-bootstrap="detail-bootstrap"{% if task_pending %} data-task-pending="1"{% endif %}>
     <noscript><p class="alert alert-warning mb-0">任务详情需要启用 JavaScript。</p></noscript>
 </div>
 {{ detail|json_script:"detail-bootstrap" }}

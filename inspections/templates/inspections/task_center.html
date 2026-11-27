@@ -14,7 +14,9 @@
 <div class="row g-3 mb-3" role="tablist" aria-label="任务与异常">
     <div class="col-12 col-md-4">
         <button class="card surface-card metric-card h-100 w-100 text-start text-body border-0 d-flex flex-column{% if view == 'tasks' %} border-primary{% endif %}"
-                type="button" role="tab" aria-selected="{% if view == 'tasks' %}true{% else %}false{% endif %}"
+                type="button" role="tab" id="center-tab-tasks"
+                aria-selected="{% if view == 'tasks' %}true{% else %}false{% endif %}"
+                aria-controls="task-center-pane" tabindex="{% if view == 'tasks' %}0{% else %}-1{% endif %}"
                 data-center-tab="tasks" data-center-url="?object=tasks">
             <div class="card-body p-4 d-flex flex-column flex-grow-1" style="width:100%">
                 <div class="metric-card__status-row mb-3" style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;width:100%">
@@ -30,7 +32,9 @@
     </div>
     <div class="col-12 col-md-4">
         <button class="card surface-card metric-card h-100 w-100 text-start text-body border-0 d-flex flex-column{% if view == 'errors' %} border-primary{% endif %}"
-                type="button" role="tab" aria-selected="{% if view == 'errors' %}true{% else %}false{% endif %}"
+                type="button" role="tab" id="center-tab-errors"
+                aria-selected="{% if view == 'errors' %}true{% else %}false{% endif %}"
+                aria-controls="task-center-pane" tabindex="{% if view == 'errors' %}0{% else %}-1{% endif %}"
                 data-center-tab="errors" data-center-url="?object=errors">
             <div class="card-body p-4 d-flex flex-column flex-grow-1" style="width:100%">
                 <div class="metric-card__status-row mb-3" style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;width:100%">

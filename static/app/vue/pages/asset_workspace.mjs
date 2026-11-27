@@ -45,6 +45,10 @@ export default {
             detailId: this.selectedId,
             detailLoading: false,
             detailError: '',
+            /* 详情请求序号：连点两行时只认最后点的那个。
+               以前用 detailLoading 当闸门，第二次点击被整条丢掉，弹窗里留的是第一次
+               点的行；第一次请求要是挂住不回来，这张表就再也点不开详情。 */
+            detailTicket: 0,
         };
     },
     computed: {
@@ -144,19 +148,25 @@ export default {
         },
         async openDetail(row) {
             const id = row.id || '';
-            if (!id || !this.detailBase || this.detailLoading) return;
+            if (!id || !this.detailBase) return;
+            const ticket = ++this.detailTicket;
             this.detailLoading = true;
             this.detailError = '';
             // 先把弹窗支起来，让点下去立刻有反馈，数据回来再填进去。
             this.detail = null;
             this.showDetailModal();
             try {
-                this.detail = await api.get(this.detailBase + id + '/detail.json');
+                const payload = await api.get(this.detailBase + id + '/detail.json');
+                // 期间又点了别的行：这份结果已经过期，写回去就是旧行盖新行。
+                if (ticket !== this.detailTicket) return;
+                this.detail = payload;
                 this.detailId = id;
             } catch (failure) {
+                if (ticket !== this.detailTicket) return;
                 this.detailError = failure.message || '详情加载失败';
             } finally {
-                this.detailLoading = false;
+                // 旧请求晚到的收尾不能把新请求的 loading 清掉。
+                if (ticket === this.detailTicket) this.detailLoading = false;
             }
         },
         showDetailModal() {
@@ -172,6 +182,9 @@ export default {
             element.removeAttribute('aria-hidden');
         },
         closeDetail() {
+            // 关窗即放弃在途请求，否则慢响应回来还会往已经关掉的弹窗里填数据。
+            this.detailTicket += 1;
+            this.detailLoading = false;
             this.detail = null;
             this.detailId = '';
         },

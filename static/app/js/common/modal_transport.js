@@ -267,9 +267,22 @@
             event.preventDefault();
             return navigate(modal, url.toString());
         });
+        /* 弹窗内容被片段替换过，只清内存草稿是不够的：表单控件还停在上一次的
+           输入上，错误块和上一次的结果提示也还留在 DOM 里，下次打开会先看到
+           「上次的报错 + 上次的输入」。关闭时按服务端渲染的默认值复位，并摘掉
+           这些运行时块；真正的默认值在 HTML 属性里，form.reset() 正好回到那里。 */
+        function resetModalContent(modal) {
+            if (!modal || typeof modal.querySelectorAll !== 'function') return;
+            modal.querySelectorAll('form').forEach(form => form.reset?.());
+            modal.querySelectorAll(
+                '[data-modal-feedback], [data-modal-result], [data-flash-message], '
+                + '[data-field-error], .invalid-feedback, .errorlist',
+            ).forEach(node => node.remove?.());
+        }
         doc.addEventListener('hidden.bs.modal', event => {
             const state = states.get(event.target);
             if (state) state.drafts.clear(); // Credentials never enter browser storage.
+            resetModalContent(event.target);
             if (state?.reloadOnClose) {
                 state.reloadOnClose = false;
                 refreshPageData(event.target);

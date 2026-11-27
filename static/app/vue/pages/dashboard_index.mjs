@@ -3,6 +3,13 @@
    任务栏复用 PC 页那份 TaskBar，翻页走 tasks.json，不动地址栏。 */
 import TaskBar from '../components/task_bar.mjs';
 
+/* 同 pc_workspace：跟随 302 拿到登录页 HTML 时 response.ok 仍是 true，
+   json() 抛的是 SyntaxError，原始信息对用户没有意义，换成能照着做的提示。 */
+function readableFailure(error, fallback) {
+    if (error instanceof SyntaxError) return fallback;
+    return (error && error.message) || fallback;
+}
+
 function stampOf(value) {
     if (!value) return '暂无';
     const text = String(value);
@@ -18,7 +25,7 @@ export default {
         taskbar: {type: Object, default: () => ({})},
     },
     data() {
-        return {taskData: this.taskbar, taskBusy: false};
+        return {taskData: this.taskbar, taskBusy: false, taskError: ''};
     },
     methods: {
         stampOf,
@@ -35,11 +42,18 @@ export default {
             const endpoint = this.taskData.endpoint;
             if (!endpoint || this.taskBusy) return;
             this.taskBusy = true;
+            this.taskError = '';
             try {
                 const response = await fetch(endpoint + '?task_page=' + encodeURIComponent(page), {
                     headers: {'X-Requested-With': 'XMLHttpRequest'},
                 });
-                if (response.ok) this.taskData = {...await response.json(), endpoint};
+                /* 会话过期时服务端跟随 302 回一个 200 的登录页：ok 为真，
+                   json() 却会抛。以前这条 rejection 没人接，等于点了翻页毫无反应；
+                   现在两种情况都落到同一句提示上。 */
+                if (!response.ok) throw new Error('任务列表加载失败，请刷新页面后重试。');
+                this.taskData = {...await response.json(), endpoint};
+            } catch (error) {
+                this.taskError = readableFailure(error, '任务列表加载失败，请刷新页面后重试。');
             } finally {
                 this.taskBusy = false;
             }
@@ -171,6 +185,7 @@ export default {
 
         <div class="mt-4 dashboard-task-region"
              :class="{'dashboard-task-region--empty': !(taskData.rows || []).length}">
+            <p v-if="taskError" class="alert alert-danger py-2" role="alert">[[ taskError ]]</p>
             <task-bar :rows="taskData.rows || []" :count="taskData.count || 0"
                       :page="taskData.page || 1" :pages="taskData.pages || 1"
                       :selected-id="taskData.selected_id || ''"

@@ -35,6 +35,13 @@ export default {
             loading: false,
             error: '',
             visible: {},
+            /* 表头那个三态全选框的状态来源。行勾选框是服务端 payload 通过
+               v-bind 塞进 DOM 的，checked 由用户在浏览器里改，Vue 从不追踪；
+               所以「本页是否全选」只能是读一次 DOM 算出来的派生值，存进 data 才
+               能驱动模板。模板里写 allSelected（不带括号）拿到的是 methods 上的
+               函数对象，恒真，表头会永远画成已勾选、indeterminate 也永不出现。 */
+            allChecked: false,
+            someChecked: false,
         };
     },
     computed: {
@@ -59,32 +66,42 @@ export default {
     },
     mounted() {
         this.syncColumnToggles();
-        document.addEventListener('change', this.syncColumnToggles);
+        this.refreshSelection();
+        // 一个 document 级 change 监听管两件事：列显隐、表头全选框的三态。
+        // 行勾选框的点击也会冒泡上来，正好顺手把全选状态重算一遍。
+        document.addEventListener('change', this.onDocumentChange);
     },
     unmounted() {
-        document.removeEventListener('change', this.syncColumnToggles);
+        document.removeEventListener('change', this.onDocumentChange);
     },
     methods: {
         boxes() {
             const root = this.$el && this.$el.querySelectorAll ? this.$el : document;
             return Array.from(root.querySelectorAll('tbody [' + this.select_attr + ']'));
         },
-        allSelected() {
+        /** 把 DOM 里那批行勾选框的状态算成 data，模板才有东西可绑。 */
+        refreshSelection() {
             const list = this.boxes();
-            return list.length > 0 && list.every((box) => box.checked);
-        },
-        someSelected() {
-            return this.boxes().some((box) => box.checked);
+            this.allChecked = list.length > 0 && list.every((box) => box.checked);
+            this.someChecked = list.some((box) => box.checked);
         },
         toggleAll(event) {
             const on = event.target.checked;
             this.boxes().forEach((box) => { box.checked = on; });
+            // 程序改 checked 不会派发 change，必须自己重算一遍。
+            this.refreshSelection();
         },
         selectAll() {
             this.boxes().forEach((box) => { box.checked = true; });
+            this.refreshSelection();
         },
         selectInvert() {
             this.boxes().forEach((box) => { box.checked = !box.checked; });
+            this.refreshSelection();
+        },
+        onDocumentChange() {
+            this.syncColumnToggles();
+            this.refreshSelection();
         },
         syncColumnToggles() {
             const next = {};
@@ -116,6 +133,8 @@ export default {
                 this.from = payload.start_index;
                 this.to = payload.end_index;
                 // 翻页在岛内完成，不写地址栏。
+                // 新一页的行是重新渲染出来的勾选框，全选状态要跟着回到「一个没选」。
+                this.$nextTick(() => this.refreshSelection());
             } catch (failure) {
                 this.error = failure.message || '加载失败';
             } finally {
@@ -176,7 +195,7 @@ export default {
                 <thead>
                     <tr>
                         <th v-if="select_attr" scope="col" class="text-center">
-                            <input class="form-check-input" type="checkbox" :checked="allSelected" :indeterminate.prop="someSelected && !allSelected"
+                            <input class="form-check-input" type="checkbox" :checked="allChecked" :indeterminate.prop="someChecked && !allChecked"
                                    aria-label="全选本页" @change="toggleAll($event)">
                         </th>
                         <th v-for="column in visibleColumns" :key="column.key" scope="col" :data-column-key="column.key" :aria-sort="ariaSort(column)">

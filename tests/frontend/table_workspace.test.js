@@ -648,12 +648,14 @@ function partialNavigationFixture({fetchError = null} = {}) {
     const replacement = replacementFixture.workspace;
     const originalQuerySelector = replacement.querySelector.bind(replacement);
     const focusedSortLink = {focused: false, focus() { this.focused = true; }};
+    const focusedPageButton = {focused: false, focus() { this.focused = true; }};
     const resultSummary = {textContent: '共 18 条，当前显示第 1–18 条'};
     const liveRegion = {textContent: ''};
     replacement.querySelector = (selector) => (
         selector === '[data-sort-key="name"]' ? focusedSortLink
-            : selector === '[data-result-summary]' ? resultSummary
-                : originalQuerySelector(selector)
+            : selector === 'a[data-page="next"]' ? focusedPageButton
+                : selector === '[data-result-summary]' ? resultSummary
+                    : originalQuerySelector(selector)
     );
 
     const current = {
@@ -715,8 +717,8 @@ function partialNavigationFixture({fetchError = null} = {}) {
         },
     };
     return {
-        browserWindow, current, documentListeners, documentRoot, focusedSortLink, liveRegion,
-        history, location, replacement, requests, windowListeners,
+        browserWindow, current, documentListeners, documentRoot, focusedPageButton,
+        focusedSortLink, liveRegion, history, location, replacement, requests, windowListeners,
     };
 }
 
@@ -804,6 +806,136 @@ test('partial table request failure falls back to normal navigation', async () =
 
     assert.deepEqual(fixture.location.assigned, [targetUrl]);
     assert.equal(fixture.current.getAttribute('aria-busy'), null);
+});
+
+test('pagination click puts focus back on the same control after the partial refresh', async () => {
+    const fixture = partialNavigationFixture();
+    const binding = controller.bindPartialTableNavigation(
+        fixture.documentRoot,
+        memoryStorage(),
+        fixture.browserWindow,
+    );
+    const link = {
+        href: 'https://example.test/assets/people/?sort=name&order=asc&page=2',
+        target: '',
+        dataset: {page: 'next'},
+        hasAttribute: () => false,
+        closest(selector) {
+            return selector === '[data-table-workspace]' ? fixture.current : null;
+        },
+    };
+    const event = {
+        button: 0, defaultPrevented: false,
+        metaKey: false, ctrlKey: false, shiftKey: false, altKey: false,
+        preventDefault() {},
+        target: {
+            closest(selector) {
+                return selector.includes('page-pagination__button') ? link : null;
+            },
+        },
+    };
+
+    await binding.handleClick(event);
+
+    assert.equal(fixture.current.replacedWith, fixture.replacement);
+    // 翻页后焦点掉回 body 就等于键盘用户每翻一页都要重新 Tab 进分页区。
+    assert.equal(fixture.focusedPageButton.focused, true);
+});
+
+test('an older table refresh response cannot overwrite the newer one', async () => {
+    const page = partialPage();
+    const settled = [];
+    page.browserWindow.fetch = (url) => new Promise((resolve) => {
+        settled.push({url: String(url), resolve});
+    });
+    const pages = {'2': workspaceFixture(), '3': workspaceFixture()};
+    Object.values(pages).forEach(({workspace}) => { workspace.ownerDocument = page.documentRoot; });
+    page.browserWindow.DOMParser = class {
+        parseFromString(html) {
+            return {querySelectorAll: () => [pages[html].workspace]};
+        }
+    };
+    const respond = (index, pageNumber) => settled[index].resolve({
+        ok: true,
+        url: settled[index].url,
+        async text() { return pageNumber; },
+    });
+
+    const older = controller.refreshTableWorkspaces(
+        page.documentRoot, 'https://example.test/assets/people/?page=2', page.storage, page.browserWindow,
+    );
+    const newer = controller.refreshTableWorkspaces(
+        page.documentRoot, 'https://example.test/assets/people/?page=3', page.storage, page.browserWindow,
+    );
+    // 后发的请求先回：它才该决定表格内容。
+    respond(1, '3');
+    await newer;
+    respond(0, '2');
+    const stale = await older;
+
+    assert.deepEqual(stale, []);
+    assert.equal(page.host.workspace.replacedWith, pages['3'].workspace);
+});
+
+test('server toolbar bulk selection reaches the checkboxes the Vue island renders after init', () => {
+    const page = partialPage();
+    const fixture = page.host;
+    const listeners = new Map();
+    const attributes = new Map([[
+        'href', 'https://example.test/assets/networks/configurations.zip',
+    ]]);
+    const configurationExport = {
+        textContent: '',
+        getAttribute: (name) => attributes.get(name) ?? null,
+        setAttribute: (name, value) => { attributes.set(name, String(value)); },
+        removeAttribute: (name) => { attributes.delete(name); },
+        classList: {toggle() {}},
+        addEventListener() {},
+    };
+    const selectAll = element();
+    const selectInvert = element();
+    // Vue 岛挂载之后才画出来的复选框：initializeWorkspace 执行那一刻 DOM 里没有它们。
+    const rendered = [element({value: 'device-1'}), element({value: 'device-2'})];
+    rendered.forEach((box) => {
+        box.matches = (selector) => selector === '[data-device-selection-target]';
+    });
+    let islandMounted = false;
+    const originalQuerySelectorAll = fixture.workspace.querySelectorAll.bind(fixture.workspace);
+    fixture.workspace.querySelectorAll = (selector) => (
+        selector === '[data-device-selection-target]'
+            ? (islandMounted ? rendered : [])
+            : originalQuerySelectorAll(selector)
+    );
+    fixture.workspace.addEventListener = (type, listener) => listeners.set(type, listener);
+    const originalQuerySelector = fixture.workspace.querySelector.bind(fixture.workspace);
+    fixture.workspace.querySelector = (selector) => ({
+        '[data-selected-config-export]': configurationExport,
+        '[data-device-select-all]': selectAll,
+        '[data-device-select-invert]': selectInvert,
+    }[selector] || originalQuerySelector(selector));
+
+    controller.initializeWorkspace(fixture.workspace, page.storage, page.location);
+    islandMounted = true;
+
+    selectAll.dispatch('click');
+
+    assert.deepEqual(rendered.map((box) => box.checked), [true, true]);
+    assert.equal(
+        configurationExport.getAttribute('href'),
+        'https://example.test/assets/networks/configurations.zip?target_ids=device-1%2Cdevice-2',
+    );
+
+    selectInvert.dispatch('click');
+
+    // 全部取消后下载链接不能留着上一批设备 id。
+    assert.equal(attributes.has('href'), false);
+
+    rendered[0].checked = true;
+    listeners.get('change')({target: rendered[0]});
+    assert.equal(
+        configurationExport.getAttribute('href'),
+        'https://example.test/assets/networks/configurations.zip?target_ids=device-1',
+    );
 });
 
 test('browser history refreshes table content without adding another history entry', async () => {

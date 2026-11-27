@@ -2,6 +2,11 @@
    纯展示，数据从 props 进，交互用事件抛出，自己不请求、不改 URL。 */
 import { cellOf, badgeClassOf, actionClassOf } from '../composables/use_table.mjs';
 
+/** 列宽下限，拖拽和键盘两条路径共用，两边夹出不同的最小值就会互相踩回去。 */
+const MIN_COLUMN_WIDTH = 72;
+/** 方向键一次挪多少像素：一步太小，键盘要按十几下才看得出变化。 */
+const KEYBOARD_RESIZE_STEP = 16;
+
 export default {
     delimiters: ['[[', ']]'],
     props: {
@@ -88,7 +93,7 @@ export default {
             const startX = event.clientX;
             const startWidth = th.getBoundingClientRect().width;
             const move = (moveEvent) => {
-                const next = Math.max(72, Math.round(startWidth + moveEvent.clientX - startX));
+                const next = Math.max(MIN_COLUMN_WIDTH, Math.round(startWidth + moveEvent.clientX - startX));
                 this.widths = {...this.widths, [column.key]: next};
             };
             const stop = () => {
@@ -100,6 +105,32 @@ export default {
             document.body.classList.add('table-resizing');
             document.addEventListener('mousemove', move);
             document.addEventListener('mouseup', stop);
+        },
+        /* 手柄是 span，不给键盘一条路的话，只有鼠标用户能调列宽。
+           方向键左右挪，宽度用和拖拽相同的下限夹住；步长与 common/table_resize.js
+           的 KEYBOARD_STEP 保持一致 —— 同一页面上两套手柄手感不能不一样。 */
+        resizeByKeyboard(column, event) {
+            if (event.key === 'Home') {
+                // 和 table_resize.js 一样：Home 清掉这一列存下来的宽度，交回自动排版。
+                event.preventDefault();
+                event.stopPropagation();
+                const next = {...this.widths};
+                delete next[column.key];
+                this.widths = next;
+                this.saveWidths();
+                return;
+            }
+            const delta = event.key === 'ArrowLeft' ? -KEYBOARD_RESIZE_STEP
+                : (event.key === 'ArrowRight' ? KEYBOARD_RESIZE_STEP : 0);
+            if (!delta) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const th = event.currentTarget.closest('th');
+            // 第一次按方向键时还没被拖过：拿当前渲染宽度当起点，否则会从 0 起跳。
+            const current = this.widths[column.key]
+                || (th ? Math.round(th.getBoundingClientRect().width) : 0);
+            this.widths = {...this.widths, [column.key]: Math.max(MIN_COLUMN_WIDTH, current + delta)};
+            this.saveWidths();
         },
     },
     template: `
@@ -115,9 +146,10 @@ export default {
                 <th v-for="column in visibleColumns" :key="column.key" scope="col" :data-column-key="column.key" :aria-sort="ariaSort(column)">
                     <a v-if="column.sortable" class="table-sort-link" href="#" :data-sort-key="column.key" @click.prevent="$emit('sort', column)">[[ column.label ]]</a>
                     <template v-else>[[ column.label ]]</template>
-                    <span class="table-resize-handle" role="separator" aria-orientation="vertical"
-                          :aria-label="'拖动调整「' + column.label + '」列宽'"
-                          @mousedown="startResize(column, $event)" @click.stop></span>
+                    <span class="table-resize-handle" role="separator" aria-orientation="vertical" tabindex="0"
+                          :aria-label="'调整「' + column.label + '」列宽：拖动，或按左右方向键'"
+                          @mousedown="startResize(column, $event)"
+                          @keydown="resizeByKeyboard(column, $event)" @click.stop></span>
                 </th>
                 <th scope="col" class="table-actions-column table-actions-cell">操作</th>
             </tr></thead>

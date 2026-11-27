@@ -48,7 +48,14 @@ export default {
             const body = modal && modal.querySelector('[data-problem-body]');
             const title = document.getElementById('deviceProblemsTitle');
             if (title) title.textContent = label + '问题明细';
-            if (body) body.textContent = '正在加载问题明细…';
+            // 明细区里现在这一份可能是上次插进来的岛（mount() 会写 __vue_app__）。
+            // 写占位文本、换整段 HTML 都等于把宿主丢掉，所以先收掉旧实例：
+            // 不收的话旧组件的 document 级监听器一直留着，开几次明细就攒几套。
+            const boot = await import('/static/app/vue/boot.mjs');
+            if (body) {
+                boot.unmountPages(body);
+                body.textContent = '正在加载问题明细…';
+            }
             const instance = window.bootstrap ? window.bootstrap.Modal.getOrCreateInstance(modal) : null;
             if (instance) instance.show();
             try {
@@ -57,13 +64,17 @@ export default {
                     headers: {'X-Requested-With': 'XMLHttpRequest'},
                 });
                 if (!response.ok) throw new Error('加载失败，请关闭弹窗后重试。');
+                const html = await response.text();
                 if (!body) return;
-                body.innerHTML = await response.text();
+                // 上面已经收过旧岛，这里直接换内容，不会再漏实例。
+                body.innerHTML = html;
                 // 明细返回的是一个 Vue 岛，动态插进来的节点要自己挂一次。
-                const {mountPages} = await import('/static/app/vue/boot.mjs');
-                await mountPages(body);
+                await boot.mountPages(body);
             } catch (error) {
-                if (body) body.textContent = error.message || '加载失败，请稍后重试。';
+                if (body) {
+                    boot.unmountPages(body);
+                    body.textContent = error.message || '加载失败，请稍后重试。';
+                }
             }
         },
         /** 切任务时顺带把统计换掉。 */

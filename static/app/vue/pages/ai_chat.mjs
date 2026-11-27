@@ -75,6 +75,8 @@ export default {
         ],
         providerChoice: '',
         providers: [],
+        // 取列表失败时单独说一句：列表本身要保留，不能让人以为配置丢了。
+        providersError: '',
         probeQuery: '',
         probing: false,
         probeDone: false,
@@ -394,21 +396,33 @@ export default {
                 this.settingsError = error.message || '清除失败';
             }
         },
-        async switchProvider(id) {
+        async switchProvider(event) {
+            // 模板把这个 select 的 change 事件整条传进来：失败时要把下拉拨回去。
+            const select = event && event.target ? event.target : null;
+            const id = select ? select.value : String(event || '');
             if (!id) return;
+            const previous = this.activeProviderId;
             try {
                 await api.post('/api/ai/providers/activate/', {id});
                 await this.loadProviders();
             } catch (error) {
-                this.error = error.message || '切换失败';
+                /* 这个 select 只有单向的 :value 绑定，DOM 的选中项是用户自己改的，
+                   激活失败后不回滚，下拉就停在新选项上，而服务端生效的还是旧的那条：
+                   界面和实际状态对不上，再选一次同一个值也不会再触发 change。 */
+                if (select) select.value = String(previous);
+                this.error = this.describe(error, '切换失败');
             }
         },
         async loadProviders() {
             try {
                 const payload = await api.get('/api/ai/providers/');
                 this.providers = (payload && payload.rows) || [];
+                this.providersError = '';
             } catch (error) {
-                this.providers = [];
+                /* 以前这里把 providers 清空，下拉退回「未配置」，用户看到的是
+                   自己保存的服务不见了 —— 其实只是这一次请求失败。保留上一份
+                   已知的列表，另外把失败说出来。 */
+                this.providersError = this.describe(error, '模型服务列表读取失败，请刷新页面后重试。');
             }
         },
         async activateProvider(row) {
@@ -585,8 +599,9 @@ export default {
                     <span class="ai-chat__stat" v-if="usage.tokens_per_second">[[ usage.tokens_per_second ]] tok/s</span>
                     <span class="ai-chat__stat" v-if="knowledge.total">知识库 [[ knowledge.total ]]</span>
                     <span class="ai-chat__spacer-fill"></span>
+                    <span v-if="providersError" class="ai-chat__stat text-danger" role="status">[[ providersError ]]</span>
                     <select class="ai-chat__pill" :value="activeProviderId" title="切换模型服务"
-                            @change="switchProvider($event.target.value)">
+                            @change="switchProvider($event)">
                         <option v-if="!providers.length" value="">未配置</option>
                         <option v-for="row in providers" :key="row.id" :value="row.id">
                             [[ row.name ]][[ row.chat_model ? ' · ' + row.chat_model : '' ]]

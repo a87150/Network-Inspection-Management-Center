@@ -143,7 +143,7 @@ function bindBulkChoiceGroup(group) {
     group.querySelector('[data-bulk-invert]').addEventListener('click', () => updateCheckboxSelection(inputs(), 'invert'));
 }
 
-if (typeof module !== 'undefined') module.exports = {bindAlertPolicy,applicableTargetItems,applicableMethodNotes, switchProfile, selectRow, clearRowTarget, filterTargetDeviceChoices, updateTargetDeviceSelection, updateCheckboxSelection};
+if (typeof module !== 'undefined') module.exports = {bindAlertPolicy,applicableTargetItems,applicableMethodNotes, switchProfile, selectRow, clearRowTarget, filterTargetDeviceChoices, updateTargetDeviceSelection, updateCheckboxSelection, selectTask};
 
 const boundTaskControls = new WeakSet();
 function bindInspectionRuleFilter(container) {
@@ -239,6 +239,28 @@ function bindTaskUI(root) {
     });
 }
 if (typeof window !== 'undefined') window.AppTaskUI = {bind: bindTaskUI};
+/* 整块换内容的区域（结果区、面板）没有自己的报错位：失败只能走全局 live region，
+   视觉用户和屏幕阅读器都收得到。静默 return 会让人对着上一份内容当成新结果读。 */
+function announce(text) {
+    const liveRegion = document.getElementById?.('app-live-region');
+    if (liveRegion) liveRegion.textContent = text;
+}
+
+/* 换进来的表格 DOM 是全新的：列显隐、筛选按钮、每页条数都要重新接一遍线，
+   否则工具栏看着还在、点着没反应，列偏好也回不到上次存的那套。
+   modal_transport 换表格后补的是同一步。 */
+function initializeResultTables(region) {
+    let storage = null;
+    try {
+        storage = window.localStorage;
+    } catch (_) {
+        /* 隐私模式下 localStorage 会抛，偏好当没有。 */
+    }
+    region.querySelectorAll('[data-table-workspace]').forEach((workspace) => {
+        window.AppTableWorkspace?.initializeWorkspace?.(workspace, storage, window.location);
+    });
+}
+
 /* 任务表：点行把下方结果换成那一次，点「详情」开弹窗。
    行跳转保留全部现有查询参数，只改 task，翻页和筛选不会丢。 */
 async function selectTask(row) {
@@ -257,15 +279,19 @@ async function selectTask(row) {
         if (!response.ok) throw new Error(String(response.status));
         // 只换结果区的内容：滚动位置、筛选栏、任务表都留在原地。
         region.innerHTML = await response.text();
+        initializeResultTables(region);
         table.querySelectorAll('[data-task-row]').forEach((item) => {
             item.classList.toggle('is-selected', item === row);
         });
         // 选中任务是页面内部切换，不写地址栏。
     } catch (error) {
-        region.classList.remove('is-loading');
+        announce('切换任务失败，下方仍是上一条任务的结果，请重试。');
         return;
+    } finally {
+        // 失败时也必须摘掉 is-loading：它对 region 加了 pointer-events: none，
+        // 留着等于把整个结果区锁死，连重试的点击都进不来。
+        region.classList.remove('is-loading');
     }
-    region.classList.remove('is-loading');
 }
 
 function bindTaskTable(doc) {

@@ -5,6 +5,33 @@ import {
 } from './topology.js';
 import { createAmbientEffects } from './effects.js';
 
+/* 抽屉/台账打开前的焦点位置按组件实例存。
+   不放进 data()：DOM 节点一旦进了响应式代理，之后访问 isConnected、调用
+   focus() 在部分浏览器会抛 Illegal invocation（方法里的 this 变成了 Proxy）。
+   WeakMap 既不参与响应式，也不会把节点留到组件销毁之后。 */
+const focusReturnTargets = new WeakMap();
+
+function focusMemory(instance) {
+  let memory = focusReturnTargets.get(instance);
+  if (!memory) {
+    memory = { drawer: null, ledger: null };
+    focusReturnTargets.set(instance, memory);
+  }
+  return memory;
+}
+
+/* DRF 的字段级错误里只有英文键（cidr/pool_start…），直接拼给用户看等于
+   让他去猜是哪个输入框。这里换成模板里显示的中文标签。 */
+const SUBNET_FIELD_LABELS = {
+  cidr: '网段',
+  purpose: '用途',
+  vlan: 'VLAN',
+  gateway: '网关',
+  pool_start: 'DHCP 池起始',
+  pool_end: 'DHCP 池结束',
+  note: '备注',
+};
+
 const mountElement = document.querySelector('#operations-overview-app');
 const bootstrapElement = document.querySelector('#operations-overview-bootstrap');
 
@@ -51,13 +78,21 @@ if (mountElement && bootstrapElement) {
         ledger: { columns: [], rows: [], counts: [], empty_title: '', empty_message: '' },
         // 节点详情点开抽屉时才取，首屏 snapshot 不带。
         nodeDetails: {},
-        nodeDetailsBusy: false,
+        // 在途与失败状态按节点 id 记。原来是一个全局 busy 布尔：A、B 两个节点
+        // 交错打开时，先回来的 A 会把 busy 置 false，B 的抽屉立刻从「加载中」
+        // 变成「未配置」，看上去像这台设备没有资料。
+        nodeDetailsLoading: {},
+        nodeDetailsErrors: {},
+        nodeDetailSeq: {},
         liveStatus: '网络拓扑已就绪',
         controller: null,
         unsubscribe: null,
         ambientEffects: null,
         requestAbortController: null,
         panStart: null,
+        // 当前这轮拖动挂在 window 上的监听拆除函数。存在实例上而不是闭包里，
+        // 才能在下一次 startPan 或漏掉的 pointerup 之后把它收掉。
+        panCleanup: null,
       panMoved: false,
         // 按 IP 定位：输入的查询串和命中的节点 id，模板据此高亮。
         ipQuery: '',
@@ -115,9 +150,17 @@ if (mountElement && bootstrapElement) {
       },
       drawerDetails() {
         const node = this.drawerNode;
-        const cached = this.nodeDetails[node && node.id];
-        const details = cached || (node && node.details) || [];
-        if (this.nodeDetailsBusy) return [{ label: '加载中', value: '正在读取该节点详情…' }];
+        const id = node && node.id;
+        // 「加载中」只针对当前这个节点，不能用全局忙闲判断：
+        // 否则 A 的请求收尾时会把 B 抽屉的加载态一起清掉。
+        if (id && this.nodeDetailsLoading[id]) return [{ label: '加载中', value: '正在读取该节点详情…' }];
+        const cached = id ? this.nodeDetails[id] : undefined;
+        const details = cached !== undefined ? cached : ((node && node.details) || []);
+        // 取详情失败原来只 console.error，抽屉照旧渲染成「未配置」，
+        // 看起来像这台设备真没有资料。失败必须说出来，但不能挤掉已有的资料。
+        const error = id ? this.nodeDetailsErrors[id] : '';
+        if (error && !details.length) return [{ label: '详情读取失败', value: error }];
+        if (error) return [...details, { label: '详情读取失败', value: error }];
         return details.length ? details : [{ label: 'IP / 备注', value: node?.ip || '未配置' }];
       },
     },
@@ -199,11 +242,14 @@ if (mountElement && bootstrapElement) {
         // 直接开完整侧边栏：接口、VLAN、对端都在里面，比一张小卡片信息全。
         this.openDrawer(hit);
         // 命中的节点居中：视口 translate 是把内容点搬到屏幕中心的反向量。
+        // 中心必须取 canvasWidth/canvasHeight（viewBox 的真实尺寸），不是
+        // topologyWidth/topologyHeight（布局盒子）。多场地时画布横向变宽、
+        // 展开终端后画布纵向变高，用布局盒子算会把命中节点推到视口之外。
         const scale = this.viewport?.scale || 1;
         this.viewport = {
           scale,
-          x: Number((this.topologyWidth / 2 - hit.x * scale).toFixed(1)),
-          y: Number((this.topologyHeight / 2 - hit.y * scale).toFixed(1)),
+          x: Number((this.canvasWidth / 2 - hit.x * scale).toFixed(1)),
+          y: Number((this.canvasHeight / 2 - hit.y * scale).toFixed(1)),
         };
         this.controller?.updateUiState({ viewport: this.viewport });
         this.liveStatus = '已定位 ' + (hit.label || hit.ip);
@@ -231,10 +277,24 @@ if (mountElement && bootstrapElement) {
           this.liveStatus = '台账查询失败，请稍后重试';
         }
       },
-      /* 命中节点的可读摘要：位置、类型、状态，以及它连出去的物理口和 VLAN。 */
+      /* 工具栏的「＋/－」和滚轮必须是同一套定点缩放。
+         只改 scale 不补 translate，内容会以 (0,0) 为不动点缩放：
+         连点 6~8 次放大后视野整块被推出画布，用户只能靠「重置」救回来。
+         这里以视口中心为不动点（canvasWidth/2, canvasHeight/2，与 wheelZoom
+         同一套用户坐标），公式同 wheelZoom：t' = p - (p - t) * (s'/s)。 */
       zoomBy(delta) {
-        const scale = Math.min(2.2, Math.max(0.6, this.viewport.scale + delta));
-        this.viewport = { ...this.viewport, scale: Number(scale.toFixed(2)) };
+        const current = this.viewport?.scale || 1;
+        const scale = Number(Math.min(2.2, Math.max(0.6, current + delta)).toFixed(2));
+        // 已经在缩放上下限时不动视口，避免无意义的取整抖动。
+        if (scale === current) return;
+        const ratio = scale / current;
+        const pointX = this.canvasWidth / 2;
+        const pointY = this.canvasHeight / 2;
+        this.viewport = {
+          scale,
+          x: Number((pointX - (pointX - this.viewport.x) * ratio).toFixed(1)),
+          y: Number((pointY - (pointY - this.viewport.y) * ratio).toFixed(1)),
+        };
         this.controller?.updateUiState({ viewport: this.viewport });
       },
       /* 滚轮缩放：以鼠标所指的点为不动点。
@@ -269,25 +329,38 @@ if (mountElement && bootstrapElement) {
       },
       /* 整块画布都能拖：以前只绑空白处，图一密就没有可抓的地方。
          不能用 setPointerCapture：捕获后 click 的目标会变成 svg，
-         节点上的 openDrawer 永远收不到事件，表现就是"点详情没反应"。 */
+         节点上的 openDrawer 永远收不到事件，表现就是"点详情没反应"。
+         没有捕获就没有兜底的 pointerup：松手发生在窗口外、或者按住时标签页
+         被切走，pointerup/pointercancel 都不会到。所以自己管这组监听——
+         startPan 先拆上一轮残留的，endPan 拆自己的，movePan 再按
+         event.buttons 收尾（见下）。漏一个就是一次「不按键移动鼠标也在平移，
+         而且 window 上多留一组监听」。 */
       startPan(event) {
+        this.panCleanup?.();
         if (event.button !== 0 && event.pointerType === 'mouse') return;
         this.panMoved = false;
         this.panStart = { pointerId: event.pointerId, x: event.clientX, y: event.clientY,
           originX: this.viewport.x, originY: this.viewport.y };
         // 指针移出画布也要继续跟着走，所以挂在 window 上而不是 svg 上。
         const move = (evt) => this.movePan(evt);
-        const up = (evt) => {
-          this.endPan(evt);
-          window.removeEventListener('pointermove', move);
-          window.removeEventListener('pointerup', up);
-          window.removeEventListener('pointercancel', up);
-        };
+        const up = (evt) => this.endPan(evt);
         window.addEventListener('pointermove', move);
         window.addEventListener('pointerup', up);
         window.addEventListener('pointercancel', up);
+        this.panCleanup = () => {
+          window.removeEventListener('pointermove', move);
+          window.removeEventListener('pointerup', up);
+          window.removeEventListener('pointercancel', up);
+          this.panCleanup = null;
+        };
       },
       movePan(event) {
+        // 指针事件说「现在没有任何键按下」，而我们还认为自己正在拖：
+        // 说明 pointerup 丢了。立刻收尾，否则回到页面不按键移动鼠标也会拖着画布走。
+        if (event.buttons === 0) {
+          this.endPan(event);
+          return;
+        }
         if (!this.panStart || this.panStart.pointerId !== event.pointerId) return;
         const dx = event.clientX - this.panStart.x;
         const dy = event.clientY - this.panStart.y;
@@ -308,7 +381,11 @@ if (mountElement && bootstrapElement) {
         });
       },
       endPan(event) {
-        if (!this.panStart || this.panStart.pointerId !== event.pointerId) return;
+        // pointerId 对不上也要拆监听：多指、或者按到一半换了指针设备时，
+        // 在这里提前 return 会把这组 window 监听永久留在 window 上。
+        const owns = Boolean(this.panStart) && this.panStart.pointerId === event.pointerId;
+        this.panCleanup?.();
+        if (!owns) return;
         if (this.panFrame) {
           cancelAnimationFrame(this.panFrame);
           this.panFrame = null;
@@ -424,30 +501,79 @@ if (mountElement && bootstrapElement) {
       cardWidth(node) {
         return node.cardWidth || (node.kind === 'backbone' ? 156 : 120);
       },
+      /* 抽屉、台账都是 role="dialog"。打开时把焦点移进去，关闭时还给触发元素：
+         不移进去，Tab 会继续在背后被遮挡的画布上走；不还回去，焦点落在 <body>，
+         下一次 Tab 从页面开头重来。两者都只在 JS 里做，模板结构不用动。 */
+      captureFocus(slot) {
+        focusMemory(this)[slot] = document.activeElement || null;
+      },
+      restoreFocus(slot) {
+        const memory = focusMemory(this);
+        const target = memory[slot];
+        memory[slot] = null;
+        // 触发元素可能已经随重渲染消失（快照刷新会重建节点）。这时不给兜底：
+        // 硬塞焦点到一个不相干的控件上比交给浏览器默认处理更糟。
+        if (target && target.isConnected !== false && typeof target.focus === 'function') target.focus();
+      },
+      /* 浮层由 v-if 插入，这一帧还没有节点；$nextTick 里才拿得到。 */
+      focusOverlay(selector) {
+        this.$nextTick(() => {
+          const panel = document.querySelector(selector);
+          if (panel && typeof panel.focus === 'function') panel.focus();
+        });
+      },
       openDrawer(node) {
+        // 抽屉已经开着（从一个节点换到另一个）时不要重记回位目标：
+        // 此刻 activeElement 已经在抽屉里，记住它等于关闭后把焦点扔进虚空。
+        if (!this.drawerNodeId) this.captureFocus('drawer');
         this.drawerNodeId = node.id;
         this.liveStatus = `已打开 ${node.label} 的详情`;
+        this.focusOverlay('.topology-drawer__close');
         this.loadNodeDetails(node);
       },
       /** 抽屉里的详情按节点 id 单独取，取过一次就缓存，来回点不再发请求。 */
       async loadNodeDetails(node) {
         const id = node && node.id;
         if (!id || this.nodeDetails[id] || !node.detailsUrl) return;
-        this.nodeDetailsBusy = true;
+        // 每次请求带一个自增序号。同一节点先后发起两次（先失败后重试）时，
+        // 只有序号最新的那次能写结果，先发的慢响应不会覆盖后发的。
+        const seq = (this.nodeDetailSeq[id] || 0) + 1;
+        this.nodeDetailSeq = {...this.nodeDetailSeq, [id]: seq};
+        this.nodeDetailsLoading = {...this.nodeDetailsLoading, [id]: true};
+        this.nodeDetailsErrors = {...this.nodeDetailsErrors, [id]: ''};
         try {
           const response = await fetch(node.detailsUrl, {headers: {'X-Requested-With': 'XMLHttpRequest'}});
-          if (!response.ok) return;
+          if (this.nodeDetailSeq[id] !== seq) return;
+          if (!response.ok) {
+            // 原来在这里直接 return：抽屉停在「未配置」，用户以为设备真的没资料。
+            this.nodeDetailsErrors = {
+              ...this.nodeDetailsErrors,
+              [id]: '读取失败（HTTP ' + response.status + '），请稍后重试',
+            };
+            this.liveStatus = node.label + ' 的详情读取失败，请稍后重试';
+            return;
+          }
           const data = await response.json();
+          if (this.nodeDetailSeq[id] !== seq) return;
           this.nodeDetails = {...this.nodeDetails, [id]: data.details || []};
         } catch (error) {
+          if (this.nodeDetailSeq[id] !== seq) return;
           console.error('取节点详情失败：', error);
+          this.nodeDetailsErrors = {...this.nodeDetailsErrors, [id]: '详情读取失败，请检查网络后重试'};
+          this.liveStatus = node.label + ' 的详情读取失败，请稍后重试';
         } finally {
-          this.nodeDetailsBusy = false;
+          // 只清自己那一次的加载标记：并发的另一台设备还在等，不能被顺手清掉。
+          if (this.nodeDetailSeq[id] === seq) {
+            const loading = {...this.nodeDetailsLoading};
+            delete loading[id];
+            this.nodeDetailsLoading = loading;
+          }
         }
       },
       closeDrawer() {
         this.drawerNodeId = '';
         this.drawerFallback = null;
+        this.restoreFocus('drawer');
       },
 
       formatTime(value) {
@@ -483,9 +609,26 @@ if (mountElement && bootstrapElement) {
       handleVisibility() {
         this.controller?.handleVisibilityChange();
       },
+      /* 浮层按层级关：台账盖在抽屉之上，一次 Esc 只关最上面那层，
+         同时关掉两层会让用户丢失刚才在看的节点。 */
+      handleKeydown(event) {
+        if (event.key !== 'Escape' && event.key !== 'Esc') return;
+        if (this.ledgerOpen) {
+          event.preventDefault?.();
+          this.closeLedger();
+          return;
+        }
+        if (this.drawerNodeId) {
+          event.preventDefault?.();
+          this.closeDrawer();
+        }
+      },
     async openIpLedgerModal() {
       this.lookupOpen = false;
+      // 台账已经有 backdrop click，但键盘用户没有对应的关闭方式，也没人把焦点移进去。
+      if (!this.ledgerOpen) this.captureFocus('ledger');
       this.ledgerOpen = true;
+      this.focusOverlay('.topo-ledger__close');
       if (this.ledger.rows.length || this.ledgerLoading) return;
       await this.loadLedger();
     },
@@ -535,6 +678,27 @@ if (mountElement && bootstrapElement) {
       this.subnetFormOpen = !this.subnetFormOpen;
       this.subnetError = '';
     },
+    /* DRF 的 4xx 有三种常见形状：{detail: '...'}（权限、唯一约束）、
+       字段级 {cidr: ['该网段与已登记网段重叠']}、以及 non_field_errors。
+       原来只读 detail：字段级校验失败时界面只有「保存失败（HTTP 400）」，
+       用户不知道该改哪个输入框。这里把任意形状压成一行可读文本。 */
+    subnetErrorMessage(payload, status) {
+      const flatten = (value) => {
+        if (value == null) return '';
+        if (typeof value === 'string') return value.trim();
+        if (Array.isArray(value)) return value.map(flatten).filter(Boolean).join('；');
+        if (typeof value === 'object') {
+          return Object.entries(value).map(([key, item]) => {
+            const text = flatten(item);
+            if (!text) return '';
+            const label = SUBNET_FIELD_LABELS[key];
+            return label ? label + '：' + text : text;
+          }).filter(Boolean).join('；');
+        }
+        return String(value);
+      };
+      return flatten(payload) || ('保存失败（HTTP ' + status + '）');
+    },
     /** 新增网段就在这个弹窗里做，不跳页面。 */
     async submitSubnet() {
       this.subnetBusy = true;
@@ -558,8 +722,8 @@ if (mountElement && bootstrapElement) {
           }),
         });
         if (!response.ok) {
-          const detail = await response.json().catch(function () { return {}; });
-          throw new Error(detail.detail || ('保存失败（HTTP ' + response.status + '）'));
+          const payload = await response.json().catch(function () { return {}; });
+          throw new Error(this.subnetErrorMessage(payload, response.status));
         }
         this.subnetForm = { cidr: '', purpose: 'office', vlan: '', gateway: '', poolStart: '', poolEnd: '', note: '' };
         this.subnetFormOpen = false;
@@ -575,6 +739,7 @@ if (mountElement && bootstrapElement) {
     },
     closeLedger() {
       this.ledgerOpen = false;
+      this.restoreFocus('ledger');
     },
     },
     mounted() {
@@ -612,6 +777,9 @@ if (mountElement && bootstrapElement) {
       this.controller.start();
       this.$nextTick(this.updateDimensions);
       document.addEventListener('visibilitychange', this.handleVisibility);
+      // Esc 关闭是最上层浮层的唯一键盘出口，挂在 document 上才不会因为焦点
+      // 落在抽屉里的按钮上而失效。
+      document.addEventListener('keydown', this.handleKeydown);
       window.addEventListener('resize', this.updateDimensions, { passive: true });
       this.updateDimensions();
       this.ambientEffects = createAmbientEffects(document.querySelector('[data-overview-ambient]'));
@@ -628,6 +796,7 @@ if (mountElement && bootstrapElement) {
       this.unsubscribe?.();
       this.ambientEffects?.destroy();
       document.removeEventListener('visibilitychange', this.handleVisibility);
+      document.removeEventListener('keydown', this.handleKeydown);
       window.removeEventListener('resize', this.updateDimensions);
     },
   });

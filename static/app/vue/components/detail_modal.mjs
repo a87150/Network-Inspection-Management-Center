@@ -12,7 +12,15 @@ export default {
         modalId: {type: String, default: 'workspaceDetailModal'},
     },
     data() {
-        return {detail: null, loading: false, error: ''};
+        return {
+            detail: null,
+            loading: false,
+            error: '',
+            /* 请求序号：点了第二行就以第二行为准。用 loading 当闸门会把第二次点击
+               整条丢掉，弹窗最后显示的是第一次点的那行；第一次要是挂住不回来，
+               后面所有点击都再也进不来。 */
+            ticket: 0,
+        };
     },
     mounted() {
         // 弹窗关闭事件用原生监听：Vue 模板里带点的事件名会被当成修饰符。
@@ -25,7 +33,8 @@ export default {
     },
     methods: {
         async open(id) {
-            if (!id || !this.base || this.loading) return;
+            if (!id || !this.base) return;
+            const ticket = ++this.ticket;
             this.loading = true;
             this.error = '';
             this.detail = null;
@@ -36,11 +45,17 @@ export default {
             const element = this.$refs.modal;
             if (element) element.dataset.detailUrl = this.base + id + '/';
             try {
-                this.detail = await api.get(this.base + id + '/detail.json');
+                const payload = await api.get(this.base + id + '/detail.json');
+                // 期间又点了别的行：这份结果已经过期，写回去就是旧行盖新行。
+                if (ticket !== this.ticket) return;
+                this.detail = payload;
             } catch (failure) {
+                if (ticket !== this.ticket) return;
                 this.error = failure.message || '详情加载失败';
             } finally {
-                this.loading = false;
+                // 只在最后一次请求上收 loading，否则晚到的旧请求会把新的重新标成空闲，
+                // 骨架屏提前消失、后面还能再叠一轮请求。
+                if (ticket === this.ticket) this.loading = false;
             }
         },
         show() {
@@ -55,6 +70,10 @@ export default {
             element.removeAttribute('aria-hidden');
         },
         close() {
+            // 关掉就等于放弃这次请求：不涨序号的话，慢响应回来照样往 detail 里写，
+            // loading 也一直挂着，关窗成了摆设。
+            this.ticket += 1;
+            this.loading = false;
             this.detail = null;
             this.error = '';
         },

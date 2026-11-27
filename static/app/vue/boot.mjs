@@ -67,6 +67,27 @@ function clearStaleModalState() {
     });
 }
 
+/* 收起一段子树里已经挂上的岛。mount() 会给宿主写 __vue_app__，
+   直接把子树的 innerHTML 换掉只是把 DOM 丢了：组件里的 document 级监听器、
+   定时器和 watcher 都还活着，换几次就攒几套，旧闭包还会在后续事件里一起触发。
+   换内容之前先调这里，再拼新 HTML。 */
+export function unmountPages(root = document) {
+    const hosts = root && root.querySelectorAll
+        ? Array.from(root.querySelectorAll('[data-vue-page]'))
+        : [];
+    hosts.forEach((host) => {
+        const app = host.__vue_app__;
+        if (!app || typeof app.unmount !== 'function') return;
+        try {
+            app.unmount();
+        } catch (error) {
+            console.error('卸载 Vue 岛失败：', host.dataset && host.dataset.vuePage, error);
+        }
+        // unmount() 不会清掉这个属性，留着的话下次 mountPages 会以为已经挂过了。
+        delete host.__vue_app__;
+    });
+}
+
 export async function mountPages(root = document) {
     if (root === document) clearStaleModalState();
     const hosts = Array.from(root.querySelectorAll('[data-vue-page]'));
@@ -90,6 +111,7 @@ export async function mountPages(root = document) {
 // 换进来一段新 HTML 的页面（Ajax 分页签等）要重新挂岛，普通 script 拿不到模块导出。
 if (typeof window !== 'undefined') {
     window.mountPages = mountPages;
+    window.unmountPages = unmountPages;
 }
 
 if (typeof document !== 'undefined') {

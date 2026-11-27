@@ -639,6 +639,11 @@ def task_list(request):
     # 页头两个卡片始终并排显示，任务视图也要有异常计数。
     context.setdefault('error_metrics', _error_metrics())
     context['view'] = view
+    # 状态轮询的唯一判据：还有排队/运行中的任务才值得让页面自己去刷。
+    # 放在这里而不是模板里判断，异常视图没有 task_metrics，模板条件会很难读。
+    metrics = context.get('task_metrics') or {}
+    context['task_pending'] = view == 'tasks' and bool(
+        metrics.get('running') or metrics.get('queued'))
     if request.GET.get('fragment') == 'pane':
         return render(request, 'inspections/_task_center_pane.html', context)
     return render(request, 'inspections/task_center.html', context)
@@ -746,6 +751,8 @@ def task_detail(request, pk):
             target.domain_dn = snapshot.get('distinguished_name', '')
     context = {
         'task': task,
+        # 任务详情也靠这个标记决定要不要继续轮询；终态的任务不该再让浏览器定时取。
+        'task_pending': task.status in TaskRun.ACTIVE_STATUSES,
         'page_obj': page_obj,
         'table_definition': definition,
         'table_state': table_state,

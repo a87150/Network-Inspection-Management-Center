@@ -214,3 +214,71 @@ test('method notes follow the selected devices, not every possible device', () =
     ssh.input.checked = false; snmp.input.checked = false;
     assert.equal(ui.applicableMethodNotes([ssh, snmp]).size, 0);
 });
+/* ---- 结果区换内容：换完要重挂表格工作区，失败要说话 ---- */
+function bootTaskUI(overrides = {}) {
+    const sandbox = {
+        module: {exports: {}},
+        URL,
+        Event,
+        document: {addEventListener() {}, getElementById: () => null, querySelector: () => null},
+        window: {location: {href: 'http://localhost/assets/servers/?task=2'}},
+        fetch: async () => ({ok: true, text: async () => ''}),
+        ...overrides,
+    };
+    vm.runInNewContext(fs.readFileSync(require.resolve('../../static/app/js/inspections/task_ui.js'), 'utf8'), sandbox);
+    return sandbox;
+}
+
+test('switching task initializes the table workspaces inside the fresh results', async () => {
+    const initialized = [];
+    const region = {
+        innerHTML: '<p>旧结果</p>',
+        classList: {add() {}, remove() {}},
+        querySelectorAll: selector => selector === '[data-table-workspace]' ? [workspace] : [],
+    };
+    const workspace = {dataset: {tableKey: 'servers'}};
+    const row = {dataset: {taskId: '7'}, closest: () => ({querySelectorAll: () => []})};
+    const sandbox = bootTaskUI({
+        document: {addEventListener() {}, getElementById: id => id === 'task-results-region' ? region : null},
+        window: {
+            location: {href: 'http://localhost/assets/servers/?filter_server_type=linux'},
+            localStorage: {getItem: () => null, setItem() {}},
+            AppTableWorkspace: {initializeWorkspace: (target, storage, location) => initialized.push([target, storage, location])},
+        },
+        fetch: async () => ({ok: true, text: async () => '<div data-table-workspace></div>'}),
+    });
+
+    await sandbox.module.exports.selectTask(row);
+
+    assert.equal(region.innerHTML, '<div data-table-workspace></div>');
+    // 换进来的表格是全新 DOM：列显隐、筛选按钮都只在 initializeWorkspace 里接线。
+    assert.equal(initialized.length, 1);
+    assert.equal(initialized[0][0], workspace);
+    assert.equal(initialized[0][1], sandbox.window.localStorage);
+});
+
+test('a failed task switch keeps the previous results and reports it', async () => {
+    const liveRegion = {textContent: ''};
+    const removed = [];
+    const region = {
+        innerHTML: '<p>旧结果</p>',
+        classList: {add() {}, remove: name => removed.push(name)},
+        querySelectorAll: () => [],
+    };
+    const row = {dataset: {taskId: '8'}, closest: () => ({querySelectorAll: () => []})};
+    const sandbox = bootTaskUI({
+        document: {
+            addEventListener() {},
+            getElementById: id => id === 'task-results-region' ? region : id === 'app-live-region' ? liveRegion : null,
+        },
+        fetch: async () => ({ok: false, status: 500, text: async () => ''}),
+    });
+
+    await sandbox.module.exports.selectTask(row);
+
+    // 旧内容留着是对的，但必须让用户知道这不是他点的那一条。
+    assert.equal(region.innerHTML, '<p>旧结果</p>');
+    assert.match(liveRegion.textContent, /切换任务失败/);
+    // is-loading 对结果区加了 pointer-events: none，失败路径也得摘掉，否则锁死。
+    assert.deepEqual(removed, ['is-loading']);
+});

@@ -47,7 +47,7 @@
     </div>
 </div>
 {% elif view == 'rows' %}
-<div id="asset-pane-rows" data-view-pane="rows">
+<div id="asset-pane-rows">
     <div data-table-workspace data-table-key="{{ table_definition.key }}">
         <div class="table-toolbar">{% if maintenance_enabled %}{% include 'common/table_workspace.html' with table_filter_actions_template='devices/maintenance_action.html' %}{% else %}{% include 'common/table_workspace.html' %}{% endif %}</div>
         <div class="card surface-card table-scroll-shell">
@@ -60,13 +60,12 @@
     </div>
 </div>
 {% else %}
-<div id="asset-pane-other" data-view-pane="{{ view }}">{% include 'devices/_pane.html' %}</div>
+<div id="asset-pane-other">{% include 'devices/_pane.html' %}</div>
 {% endif %}
 {% include 'devices/maintenance_modal.html' %}
 {% endblock %}
 {% block page_scripts %}
 <script type="module" src="{% static 'app/vue/boot.mjs' %}"></script>
-<script src="{% static 'app/js/devices/view_tabs.js' %}" defer></script>
 {% include 'common/scripts/table_workspace.html' %}
 {% include 'common/scripts/modal_workflows.html' %}
 {% if maintenance_enabled %}<script src="{% static 'app/js/devices/maintenance_window.js' %}" defer></script>{% endif %}

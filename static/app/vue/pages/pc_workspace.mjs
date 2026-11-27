@@ -4,6 +4,14 @@ import MetricCard from '../components/metric_card.mjs';
 import WorkspaceTable from '../components/workspace_table.mjs';
 import TaskBar from '../components/task_bar.mjs';
 
+/* 会话过期时服务端跟随 302 回一个 200 的登录页：ok 为真，json() 抛 SyntaxError。
+   把原始英文解析错误原样甩给用户（"Unexpected token <"）等于什么都没说，
+   这类错误一律换成能照着做的提示；其余错误保留服务端给的话。 */
+function readableFailure(error, fallback) {
+    if (error instanceof SyntaxError) return fallback;
+    return (error && error.message) || fallback;
+}
+
 const STATUS_CLASS = {
     success: 'text-bg-success',
     failed: 'text-bg-danger',
@@ -27,6 +35,11 @@ export default {
         // 切方块只改这里，不写地址栏：三块内容首屏一起渲染，切换不重新请求。
         return {
             activeTab: this.page.view || 'assets', tasks: null, tasksBusy: false, statsView: null,
+            // 任务栏翻页、点任务两条路都会打网络，失败要有地方落，不能静默。
+            taskError: '',
+            // 连点两条任务时只认最后一次：序号一变，先发的旧响应就被丢掉。
+            statsTicket: 0,
+            statsBusy: false,
             // 没点过的 tab 不挂载：它的筛选栏和表格不进 DOM，也不占首屏渲染。
             visited: {assets: true},
             // 切到 logs / analyses 才去取那一块，首屏只查台账。
@@ -124,22 +137,43 @@ export default {
         async selectTask(row) {
             const endpoint = this.analysesView.statsUrl;
             if (!row || !row.id || !endpoint) return;
-            const response = await fetch(endpoint + '?task=' + encodeURIComponent(row.id), {
-                headers: {'X-Requested-With': 'XMLHttpRequest'},
-            });
-            if (!response.ok) return;
-            this.statsView = await response.json();
-            this.tasks = {...(this.tasks || this.analysesView.tasks || {}), selected_id: row.id};
+            const ticket = ++this.statsTicket;
+            this.statsBusy = true;
+            this.taskError = '';
+            try {
+                const response = await fetch(endpoint + '?task=' + encodeURIComponent(row.id), {
+                    headers: {'X-Requested-With': 'XMLHttpRequest'},
+                });
+                if (ticket !== this.statsTicket) return;
+                /* !ok 以前是直接 return，用户点了任务什么都没变也没提示。
+                   会话过期时服务端还会跟随 302 给出 200 的登录页 HTML，ok 为真、
+                   json() 抛错，那条 rejection 没人接——两种都收进同一句提示。 */
+                if (!response.ok) throw new Error('任务统计加载失败，请刷新页面后重试。');
+                const payload = await response.json();
+                if (ticket !== this.statsTicket) return;
+                this.statsView = payload;
+                this.tasks = {...(this.tasks || this.analysesView.tasks || {}), selected_id: row.id};
+            } catch (error) {
+                if (ticket !== this.statsTicket) return;
+                this.taskError = readableFailure(error, '任务统计加载失败，请刷新页面后重试。');
+            } finally {
+                if (ticket === this.statsTicket) this.statsBusy = false;
+            }
         },
         async goTaskPage(page) {
             const endpoint = (this.analysesView.tasks || {}).endpoint;
             if (!endpoint || this.tasksBusy) return;
             this.tasksBusy = true;
+            this.taskError = '';
             try {
                 const response = await fetch(endpoint + '?task_page=' + encodeURIComponent(page), {
                     headers: {'X-Requested-With': 'XMLHttpRequest'},
                 });
-                if (response.ok) this.tasks = await response.json();
+                // 同上：登录失效时 ok 为真但拿到的是 HTML，json() 会抛，必须接住。
+                if (!response.ok) throw new Error('任务列表加载失败，请刷新页面后重试。');
+                this.tasks = await response.json();
+            } catch (error) {
+                this.taskError = readableFailure(error, '任务列表加载失败，请刷新页面后重试。');
             } finally {
                 this.tasksBusy = false;
             }
@@ -185,9 +219,10 @@ export default {
             <div class="mb-4">
                 <task-bar v-bind="taskData" :busy="tasksBusy" :selected-id="taskData.selected_id || ''"
                           @select="selectTask" @page="goTaskPage"></task-bar>
+                <p v-if="taskError" class="alert alert-danger py-2 mt-3 mb-0" role="alert">[[ taskError ]]</p>
             </div>
 
-            <section aria-labelledby="latest-analysis-title">
+            <section aria-labelledby="latest-analysis-title" :aria-busy="statsBusy ? 'true' : 'false'">
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
                     <div><p class="page-heading__eyebrow mb-1">[[ statsEyebrow ]]</p><h2 class="h5 mb-0" id="latest-analysis-title">[[ statsTitle ]]</h2></div>
                     <div v-if="view.task && view.task.id" class="d-flex flex-wrap align-items-center gap-3">

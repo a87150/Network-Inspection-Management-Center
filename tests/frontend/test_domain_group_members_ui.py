@@ -89,3 +89,12 @@ class DomainGroupMemberInterfaceTests(TestCase):
         )
         self.assertContains(response, 'class="modal-content modal-surface"')
         self.assertContains(response, 'class="modal-loading-state"')
+    def test_selection_counters_share_the_island_state(self):
+        """工具栏和页脚两个计数必须同一来源：静态数字勾选后永远停在「已选 0」。"""
+        response = self.client.get(reverse('domain_group_members', args=[self.group.pk]))
+        body = response.content.decode(response.charset)
+
+        self.assertEqual(body.count('[[ summary ]]'), 2, body)
+        self.assertNotIn('已选 0 / 可选', body)
+        # 播报只留页脚那一个 polite 区域，否则同一件事会被念两遍。
+        self.assertEqual(body.count('data-member-selection-summary aria-live="polite"'), 1)

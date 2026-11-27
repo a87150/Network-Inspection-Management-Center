@@ -5,9 +5,11 @@ const {createPeopleTaskController} = require('../../static/app/js/people/import_
 
 function fixture(payloads, {workflowOpen = false} = {}) {
     const posts = [];
+    const timers = [];
+    const handlers = {};
     const state = {
         running: [], message: '', href: '', shows: 0, inline: [], jumpHandler: null,
-        resultRequests: [], events: [], appended: [],
+        resultRequests: [], events: [], appended: [], requests: 0, closeHandler: null,
     };
     const root = {
         dataset: {statusUrl: '/status/', csrfToken: 'csrf'},
@@ -19,7 +21,7 @@ function fixture(payloads, {workflowOpen = false} = {}) {
                     set href(value) { state.href = value; },
                     addEventListener(_name, handler) { state.jumpHandler = handler; },
                 },
-                '[data-people-completion-close]': {addEventListener() {}},
+                '[data-people-completion-close]': {addEventListener(_name, handler) { state.closeHandler = handler; }},
                 '#peopleTaskCompletionModal': {},
             }[selector];
         },
@@ -34,11 +36,13 @@ function fixture(payloads, {workflowOpen = false} = {}) {
         },
     };
     const document = {
+        hidden: false,
         querySelector: selector => selector === '[data-people-task-notifications]' ? root : (
             workflowOpen ? {querySelector: () => ({prepend: notice => state.inline.push(notice)})} : null
         ),
         body: {appendChild(node) { state.appended.push(node); }},
         dispatchEvent(event) { state.events.push(event); },
+        addEventListener(type, handler) { (handlers[type] ||= []).push(handler); },
         createElement(tag) {
             return {
                 tag, className: '', textContent: '', type: '', dataset: {}, children: [],
@@ -60,7 +64,9 @@ function fixture(payloads, {workflowOpen = false} = {}) {
                 return {querySelector: selector => selector === '#peoplePreviewModal' ? incomingModal : null};
             }
         },
-        setTimeout: () => 1,
+        addEventListener(type, handler) { (handlers[type] ||= []).push(handler); },
+        /* 定时器只排队不自动执行：退避间隔要能被断言，重试也要能由测试自己驱动。 */
+        setTimeout(fn, delay) { timers.push({fn, delay}); return timers.length; },
         clearTimeout() {},
     };
     const fetchImpl = async (url, options = {}) => {
@@ -72,9 +78,19 @@ function fixture(payloads, {workflowOpen = false} = {}) {
             state.resultRequests.push(url);
             return {ok: true, text: async () => '<html>result page</html>'};
         }
-        return {ok: true, json: async () => payloads.shift() || {tasks: []}};
+        state.requests += 1;
+        const next = payloads.shift();
+        if (next && next.error) throw new Error('status failed');
+        return {ok: true, json: async () => next || {tasks: []}};
     };
-    return {controller: createPeopleTaskController({document, window, fetchImpl}), state, posts, window};
+    /* 跑掉最老的那一拍定时器，模拟"退避时间到了"。 */
+    async function runNextTimer() {
+        const next = timers.shift();
+        if (next) await next.fn();
+        return next?.delay;
+    }
+    const controller = createPeopleTaskController({document, window, fetchImpl});
+    return {controller, state, posts, window, document, timers, runNextTimer, handlers};
 }
 
 test('poll renders running notice without navigating or reloading', async () => {
@@ -146,4 +162,65 @@ test('result jump acknowledges the task then opens the preview in place', async 
     assert.equal(state.shows, 2);
     assert.equal(state.events.length, 1);
     assert.equal(state.events[0].type, 'app:modal-updated');
+});
+
+test('every terminal task gets shown, one popup at a time', async () => {
+    const first = {id: 'a', status: 'success', show_terminal: true,
+        message: 'A 预览完成', jump_url: '/task/a/', ack_url: '/ack/a/'};
+    const second = {id: 'b', status: 'failed', show_terminal: true,
+        message: 'B 预览失败', jump_url: '/task/b/', ack_url: '/ack/b/'};
+    const {controller, state} = fixture([{tasks: [first, second]}]);
+
+    await controller.poll();
+
+    // 一轮里两个终态：先给一个。弹窗被下一个顶掉，前一个结果就再也回不去了。
+    assert.equal(state.shows, 1);
+    assert.match(state.message, /A 预览完成/);
+
+    // 关掉这个，队列里的下一个当场补上——不依赖下一次轮询（终态后轮询本来就停了）。
+    await state.closeHandler();
+    assert.equal(state.shows, 2);
+    assert.match(state.message, /B 预览失败/);
+
+    await state.closeHandler();
+    assert.equal(state.shows, 2);
+});
+
+test('a failed status poll backs off and keeps retrying', async () => {
+    const done = {id: 'c', status: 'success', show_terminal: true,
+        message: '导入完成', jump_url: '/task/c/', ack_url: '/ack/c/'};
+    const {controller, state, runNextTimer, timers} = fixture([
+        {error: true}, {error: true}, {error: true},
+    ]);
+
+    await controller.poll();
+    assert.equal(timers[0].delay, 3000);
+    await runNextTimer();
+    assert.equal(timers[0].delay, 6000);
+    await runNextTimer();
+    assert.equal(timers[0].delay, 12000);
+    // 一次失败就永久停摆的话，这里根本不会有第三拍。
+    assert.equal(state.requests, 3);
+
+    // 服务恢复后按正常节奏继续，终态照常发现。
+    const recovered = fixture([{tasks: [done]}]);
+    await recovered.controller.poll();
+    assert.equal(recovered.state.shows, 1);
+    assert.equal(recovered.timers.length, 0);
+});
+
+test('coming back into view or online polls immediately', async () => {
+    const {controller, state, document, handlers} = fixture([{tasks: []}, {tasks: []}, {tasks: []}]);
+    await controller.poll();
+    const before = state.requests;
+
+    // 后台标签页的定时器会被节流甚至冻结，回到前台不能等残留的那一拍。
+    document.hidden = false;
+    handlers.visibilitychange[0]();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(state.requests, before + 1);
+
+    handlers.online[0]();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(state.requests, before + 2);
 });

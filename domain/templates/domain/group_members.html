@@ -109,7 +109,12 @@
                             <input id="domain-members-page-filter" type="search" class="form-control form-control-sm" style="max-width: 14rem;" data-member-page-filter placeholder="在本页中筛选">
                             <button type="button" class="btn btn-outline-secondary btn-sm" data-member-export data-member-export-name="{{ group.group_name }}">导出本页 CSV</button>
                         </div>
-                        <span class="domain-members-selection__count" data-member-selection-summary aria-live="polite">已选 0 / 可选 {{ candidate_total }}</span>
+                        {% comment %}
+                        和页脚那个计数用同一个来源（岛的 summary）：服务端渲染的静态数字
+                        在勾选后永远停在「已选 0」，跟页脚实时数字互相打脸。
+                        aria-live 只留页脚那一处——两个 polite 区域同时变会播报两遍。
+                        {% endcomment %}
+                        <span class="domain-members-selection__count" data-member-selection-summary>[[ summary ]]</span>
                     </div>
 
                     <div class="card surface-card table-scroll-shell domain-members-table-card">

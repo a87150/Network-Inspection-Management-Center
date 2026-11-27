@@ -25,9 +25,16 @@
 
     function updateConfigurationDownload(button, targets) {
         if (!button) return;
+        // 服务端渲染的下载地址只读一次并留底：全部取消选择后 href 必须被摘掉，
+        // 否则 <a> 还挂着上一次的 target_ids，中键/右键「在新标签页打开」照样
+        // 能把那批设备的配置下走。再选回来时靠留底还原地址。
+        const baseAttribute = 'data-configuration-href';
+        const baseHref = button.getAttribute(baseAttribute) || button.getAttribute('href') || '';
+        if (baseHref) button.setAttribute(baseAttribute, baseHref);
         const ids = targets.filter(target => target.checked).map(target => target.value);
-        const state = configurationDownloadState(button.href, ids);
-        if (state.href) button.href = state.href;
+        const state = configurationDownloadState(baseHref, ids);
+        if (state.href) button.setAttribute('href', state.href);
+        else button.removeAttribute('href');
         button.textContent = state.label;
         button.classList.toggle('disabled', state.disabled);
         button.setAttribute('aria-disabled', String(state.disabled));

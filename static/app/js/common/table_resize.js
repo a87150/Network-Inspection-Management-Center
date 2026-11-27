@@ -7,6 +7,9 @@
     'use strict';
 
     var MIN_WIDTH = 72;
+    // 方向键一次挪多少像素：和 data_table.mjs 的 KEYBOARD_RESIZE_STEP 一致，
+    // 两套手柄都在页面上时手感不能不一样。
+    var KEYBOARD_STEP = 16;
 
     function storageKey(table) {
         // 键优先取表格自己，其次取外层容器（模板里标在 card / shell 上）。
@@ -88,7 +91,10 @@
             handle.className = 'table-resize-handle';
             handle.setAttribute('role', 'separator');
             handle.setAttribute('aria-orientation', 'vertical');
-            handle.setAttribute('aria-label', '拖动调整「' + (th.textContent || '').trim() + '」列宽');
+            // 手柄是 span，不给键盘一条路就只有鼠标用户能调列宽；role=separator
+            // 但不可聚焦对辅助技术来说是半个控件。
+            handle.setAttribute('tabindex', '0');
+            handle.setAttribute('aria-label', '调整「' + (th.textContent || '').trim() + '」列宽：拖动，或按左右方向键');
             handle.addEventListener('mousedown', function (event) {
                 event.preventDefault();
                 event.stopPropagation();
@@ -107,6 +113,54 @@
                 document.body.classList.add('table-resizing');
                 document.addEventListener('mousemove', move);
                 document.addEventListener('mouseup', stop);
+            });
+            // 键盘路径和拖拽共用同一份 widths 和同一个下限：两边各夹一套值会互相踩回去。
+            function renderedWidth() {
+                return th.getBoundingClientRect ? Math.round(th.getBoundingClientRect().width) : 0;
+            }
+            function currentWidth() {
+                // 没存过宽度时拿表头此刻的渲染宽度当起点，否则第一次按方向键会从 0 起跳。
+                return widths[key] || renderedWidth() || MIN_WIDTH;
+            }
+            function maxWidth() {
+                var tableWidth = table.getBoundingClientRect
+                    ? Math.round(table.getBoundingClientRect().width)
+                    : 0;
+                return tableWidth > MIN_WIDTH ? tableWidth : MIN_WIDTH * 4;
+            }
+            function syncAriaValue() {
+                handle.setAttribute('aria-valuenow', String(currentWidth()));
+            }
+            function setWidth(value) {
+                widths[key] = Math.max(MIN_WIDTH, Math.min(maxWidth(), Math.round(value)));
+                applyWidths(table, widths);
+                saveWidths(table, widths);
+                syncAriaValue();
+            }
+            handle.setAttribute('aria-valuemin', String(MIN_WIDTH));
+            handle.addEventListener('keydown', function (event) {
+                if (event.key === 'ArrowLeft') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setWidth(currentWidth() - KEYBOARD_STEP);
+                } else if (event.key === 'ArrowRight') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setWidth(currentWidth() + KEYBOARD_STEP);
+                } else if (event.key === 'Home') {
+                    // Home 回自动列宽：删掉这一列的保存值，宽度交回浏览器排版。
+                    event.preventDefault();
+                    event.stopPropagation();
+                    delete widths[key];
+                    applyWidths(table, widths);
+                    saveWidths(table, widths);
+                    syncAriaValue();
+                } else if (event.key === 'End') {
+                    // End 是反过来的一档：一列最多占满整张表。
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setWidth(maxWidth());
+                }
             });
             th.appendChild(handle);
         });

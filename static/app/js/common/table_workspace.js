@@ -233,8 +233,6 @@
             moreFilters: workspace.querySelector('[data-more-filters]'),
             exportLinks: Array.from(workspace.querySelectorAll('[data-filtered-export]')),
             configurationExport: workspace.querySelector('[data-selected-config-export]'),
-            configurationTargets: Array.from(workspace.querySelectorAll('[data-device-selection-target]')),
-            selectionTargets: Array.from(workspace.querySelectorAll('[data-device-selection-target]')),
             selectionAll: workspace.querySelector('[data-device-select-all]'),
             selectionInvert: workspace.querySelector('[data-device-select-invert]'),
             configurationFeedback: workspace.querySelector('[data-configuration-export-feedback]'),
@@ -272,17 +270,37 @@
             elements,
         );
         applyPreferences(elements, preferences);
-        updateConfigurationDownload(elements.configurationExport, elements.configurationTargets);
-        elements.configurationTargets.forEach((target) => {
-            target.addEventListener('change', () => {
-                updateConfigurationDownload(elements.configurationExport, elements.configurationTargets);
-                renderConfigurationFeedback(elements.configurationFeedback, '');
-            });
+        // 服务端工具栏的「全选/反选/下载所选」作用在表格里的复选框上，而 Vue
+        // 表格页的复选框是岛挂载之后才画出来的；initializeWorkspace 跑在
+        // mountPages 之前，这里同步快照下来的数组永远是空的，工具栏就永久失效。
+        // 改成用的时候再查一次 DOM，并靠 change 事件委托感知单个勾选，挂载顺序
+        // 不再影响结果。
+        const selectionTargets = () => Array.from(
+            workspace.querySelectorAll('[data-device-selection-target]'),
+        );
+        const refreshDownloadButton = () => updateConfigurationDownload(
+            elements.configurationExport, selectionTargets(),
+        );
+        refreshDownloadButton();
+        workspace.addEventListener?.('change', (event) => {
+            if (!event.target?.matches?.('[data-device-selection-target]')) return;
+            refreshDownloadButton();
+            renderConfigurationFeedback(elements.configurationFeedback, '');
         });
         const applyTargetSelection = (action) => {
-            updateTargetSelection(elements.selectionTargets, action);
-            updateConfigurationDownload(elements.configurationExport, elements.configurationTargets);
+            const targets = selectionTargets();
+            updateTargetSelection(targets, action);
+            refreshDownloadButton();
             renderConfigurationFeedback(elements.configurationFeedback, '');
+            // Vue 岛在根节点上用 @change 读选择，直接改 checked 不会触发它，
+            // 岛里「已选 N 台」和它自己的下载链接就和复选框对不上。补发一次
+            // 冒泡 change，和岛内 selectAll 的做法保持一致。
+            const EventConstructor = workspace.ownerDocument?.defaultView?.Event
+                || (typeof Event === 'function' ? Event : null);
+            if (!EventConstructor) return;
+            targets.forEach((target) => target.dispatchEvent?.(
+                new EventConstructor('change', {bubbles: true}),
+            ));
         };
         elements.selectionAll?.addEventListener('click', () => applyTargetSelection('all'));
         elements.selectionInvert?.addEventListener('click', () => applyTargetSelection('invert'));
@@ -363,9 +381,26 @@
             .catch(() => {});
     }
 
+    // 换每页条数、连续取消筛选、连点分页都会连续触发页内刷新，而网络返回的
+    // 顺序不等于请求发出的顺序：晚发的先回，早发的旧内容就会盖住新内容。
+    // 给每次请求编号，只让最后一次的响应落 DOM。
+    function nextRefreshToken(documentRoot) {
+        const token = (documentRoot.__tableRefreshToken || 0) + 1;
+        documentRoot.__tableRefreshToken = token;
+        return token;
+    }
+
+    function isLatestRefresh(documentRoot, token) {
+        return documentRoot.__tableRefreshToken === token;
+    }
+
+    function tableWorkspaces(documentRoot) {
+        return Array.from(documentRoot.querySelectorAll('[data-table-workspace]'));
+    }
+
     async function refreshTableWorkspaces(documentRoot, href, storage, browserWindow, options = {}) {
-        const currentWorkspaces = Array.from(documentRoot.querySelectorAll('[data-table-workspace]'));
-        currentWorkspaces.forEach((workspace) => workspace.setAttribute('aria-busy', 'true'));
+        const token = nextRefreshToken(documentRoot);
+        tableWorkspaces(documentRoot).forEach((workspace) => workspace.setAttribute('aria-busy', 'true'));
         try {
             const response = await browserWindow.fetch(href, {
                 credentials: 'same-origin',
@@ -377,7 +412,12 @@
                 'text/html',
             );
             const replacements = Array.from(parsed.querySelectorAll('[data-table-workspace]'));
-            const pairs = currentWorkspaces.map((workspace) => {
+            // 过期响应直接扔掉：既不替换 DOM，也不能拿它做整页跳转兜底——那会
+            // 把最后一次请求的结果覆盖掉。
+            if (!isLatestRefresh(documentRoot, token)) return [];
+            // 替换目标在响应回来时重新查一次：先发的请求可能已经把发起时那个
+            // 节点换掉了，对着 detached 的旧节点 replaceWith 等于什么都没换。
+            const pairs = tableWorkspaces(documentRoot).map((workspace) => {
                 const replacement = replacements.find(
                     (candidate) => candidate.dataset.tableKey === workspace.dataset.tableKey,
                 );
@@ -396,18 +436,36 @@
                 browserWindow.mountPages?.(replacement);
             });
             announceTableUpdate(documentRoot, pairs.map(({replacement}) => replacement));
-            if (options.focusTableKey && options.focusSortKey) {
-                const target = pairs.find(
-                    ({replacement}) => replacement.dataset.tableKey === options.focusTableKey,
-                )?.replacement;
-                target?.querySelector(`[data-sort-key="${options.focusSortKey}"]`)?.focus();
-            }
+            restoreFocusAfterRefresh(pairs, options);
             return pairs.map(({replacement}) => replacement);
         } catch (_error) {
-            currentWorkspaces.forEach((workspace) => workspace.removeAttribute('aria-busy'));
+            if (!isLatestRefresh(documentRoot, token)) return [];
+            tableWorkspaces(documentRoot).forEach((workspace) => workspace.removeAttribute('aria-busy'));
             browserWindow.location.assign(href);
             return [];
         }
+    }
+
+    // 局部刷新把整块 DOM 换掉，被点的那个元素已经不在文档里，浏览器会把焦点
+    // 丢回 body。只认 focusSortKey 会把分页和「重置查询」漏掉，所以按被点元素
+    // 的类别分别找同一个控件：排序链接按列键，分页按钮按 data-page（翻到末页
+    // 时它变成不可聚焦的 span，退到页码输入框），重置查询退到第一个可见控件。
+    function restoreFocusAfterRefresh(pairs, options) {
+        if (!options.focusTableKey) return;
+        const table = pairs.find(
+            ({replacement}) => replacement.dataset.tableKey === options.focusTableKey,
+        )?.replacement;
+        if (!table?.querySelector) return;
+        const selectors = [];
+        if (options.focusSortKey) selectors.push(`[data-sort-key="${options.focusSortKey}"]`);
+        if (options.focusPage) selectors.push(`a[data-page="${options.focusPage}"]`);
+        if (options.focusQueryReset) selectors.push('[data-query-reset]');
+        if (!selectors.length) return;
+        selectors.push('.page-pagination__input', '[data-table-query-form] input:not([type="hidden"])');
+        const destination = selectors
+            .map((selector) => table.querySelector(selector))
+            .find((candidate) => typeof candidate?.focus === 'function');
+        destination?.focus();
     }
 
     function bindPartialTableNavigation(documentRoot, storage, browserWindow) {
@@ -430,6 +488,9 @@
                 {
                     focusTableKey: workspace.dataset.tableKey,
                     focusSortKey: link.dataset.sortKey || '',
+                    // 分页按钮和「重置查询」也要带焦点意图，否则翻页后焦点掉回 body。
+                    focusPage: link.dataset.page || '',
+                    focusQueryReset: link.hasAttribute?.('data-query-reset') === true,
                 },
             );
         };
