@@ -85,7 +85,7 @@
             </p>
             <div v-if="snapshot.topology?.mode !== 'empty'" class="topology-canvas-shell">
                 <svg class="topology-canvas" :viewBox="`0 0 ${canvasWidth} ${canvasHeight}`" :style="{ minWidth: canvasWidth + 'px' }"
-                     role="img" aria-labelledby="topology-title topology-description"
+                     role="group" aria-labelledby="topology-title topology-description"
                      @pointerdown="startPan" @pointermove="movePan" @pointerup="endPan" @pointercancel="endPan"
                      @click.capture="suppressClickAfterPan" @wheel.prevent="wheelZoom">
                     <title id="topology-title">企业主要网络设备与 LLDP/CDP 物理拓扑</title>
@@ -98,10 +98,10 @@
                               class="topology-edge topology-edge--hierarchy" aria-hidden="true" />
                         <path v-for="edge in topology.attachmentEdges" :key="edge.id" :d="edgePath(edge)"
                               class="topology-edge" :class="edge.attachmentSource === 'physical_discovered' ? 'topology-edge--attachment-physical' : 'topology-edge--inferred'"
-                              tabindex="0" role="button" :aria-label="edgeAriaLabel(edge)" @click="selectEdge(edge)" @keydown.enter.prevent="selectEdge(edge)" @keydown.space.prevent="selectEdge(edge)" />
+                              tabindex="-1" role="button" :aria-label="edgeAriaLabel(edge)" @click="selectEdge(edge)" @keydown.enter.prevent="selectEdge(edge)" @keydown.space.prevent="selectEdge(edge)" />
                         <path v-for="edge in topology.physicalEdges" :key="edge.id" :d="edgePath(edge)"
                               class="topology-edge topology-edge--physical" :class="{ 'is-stale': edge.status === 'stale', 'is-lateral': edge.lateral, 'is-vpn': edge.vpn }"
-                              tabindex="0" role="button" :aria-label="edgeAriaLabel(edge)" @click="selectEdge(edge)" @keydown.enter.prevent="selectEdge(edge)" @keydown.space.prevent="selectEdge(edge)"
+                              tabindex="-1" role="button" :aria-label="edgeAriaLabel(edge)" @click="selectEdge(edge)" @keydown.enter.prevent="selectEdge(edge)" @keydown.space.prevent="selectEdge(edge)"
                               @pointerenter="hoverEdge(edge)" @pointerleave="hoverEdge(null)" @focus="hoverEdge(edge)" @blur="hoverEdge(null)" />
                         <!-- 端口与 VLAN 只跟着选中/悬停的那条边走，避免 221 条全铺文字。 -->
                         <g v-for="edge in topology.physicalEdges" :key="'label-' + edge.id"
