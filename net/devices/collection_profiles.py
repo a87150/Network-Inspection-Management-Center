@@ -53,7 +53,7 @@ def device_type_label(kind, value):
 # 品牌的中文名、缩写和错拼。这里认出来的值会被归一成代码，认不出来的原样
 # 保留（台账允许自由文本），但那就成了表单里那个「多出来的选项」。
 # 'h3' 是 h3c 被截断的常见写法，不归一化就会在「其他」后面挂出一条裸值。
-ALIASES = {'华为':'huawei','华三':'h3c','h3':'h3c','h3c':'h3c','锐捷':'ruijie','深信服':'sangfor','思科':'cisco','海康':'hikvision','海康威视':'hikvision','大华':'dahua','其它':'generic','其他':'generic','宇视':'uniview','天地伟业':'tiandy','中控':'zkteco','中控智慧':'zkteco'}
+ALIASES = {'华为':'huawei','huawei':'huawei','华三':'h3c','h3':'h3c','h3c':'h3c','锐捷':'ruijie','ruijie':'ruijie','深信服':'sangfor','sangfor':'sangfor','思科':'cisco','cisco':'cisco','海康':'hikvision','海康威视':'hikvision','大华':'dahua','其它':'generic','其他':'generic','宇视':'uniview','天地伟业':'tiandy','中控':'zkteco','中控智慧':'zkteco'}
 TYPE_ALIASES = {'路由':'router','路由器':'router','交换':'switch','交换机':'switch','无线控制器':'ac','上网行为管理':'ac_gateway','安全网关':'ac_gateway','无线ap':'ap','防火墙':'firewall','录像机':'nvr','dvr':'nvr','监控':'camera','摄像头':'camera','摄像机':'camera','门禁':'access','门禁控制器':'access','对讲':'intercom','广播':'broadcast','打印机':'printer','温湿度计':'environment','温湿度传感器':'environment','闸机':'access','门禁闸机':'access'}
 SECRET_FIELDS = ('snmp_community','snmp_auth_password','snmp_priv_password')
 SNMP_FIELDS = ('snmp_version','snmp_port','snmp_security_level','snmp_username','snmp_auth_protocol','snmp_priv_protocol','snmp_context_name','snmp_retries')

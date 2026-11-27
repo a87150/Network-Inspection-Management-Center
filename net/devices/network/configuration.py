@@ -9,7 +9,7 @@ NETWORK_CONFIG = {
     'cisco': ('terminal length 0', 'show running-config', 'end', 'running-config'),
     'h3c': ('screen-length disable', 'display current-configuration', 'return', 'current-configuration'),
 }
-VENDOR_ALIASES = {'cisco': ('cisco', '思科'), 'h3c': ('h3c', '华三')}
+
 BAD_OUTPUT = re.compile(
     r'(?im)--\s*more\s*--|----\s*more\s*----|press\s+(?:any|enter|space)|'
     r'\b(?:truncated|pagination)\b|^\s*(?:%\s*)?(?:error\b|invalid\s+(?:input|command)|'
@@ -19,10 +19,18 @@ BAD_OUTPUT = re.compile(
 
 
 def network_vendor(value):
-    value = str(value or '').strip().casefold()
-    return next((key for key, aliases in VENDOR_ALIASES.items()
-                 if any(re.search(r'(?<![a-z0-9])' + re.escape(alias) + r'(?![a-z0-9])', value)
-                        for alias in aliases)), '')
+    """日志里的品牌名 → 有原生配置命令的 CLI 家族，没有就返回空串。
+
+    这里原先自己维护一张 VENDOR_ALIASES（只有 cisco/h3c），和台账那边的
+    collection_profiles.ALIASES 是两套：'h3' 在这一侧认不出来，退化成
+    generic_termerserver 驱动配 'terminal length 0'，而采集模板那侧认出 h3c、
+    下的是 'display version'——驱动与命令集错配，配置备份还会被判 unsupported。
+    现在统一走 normalize_vendor，两张表只留一张。
+    """
+    from net.devices.collection_profiles import normalize_vendor
+
+    normalized = normalize_vendor(value)
+    return normalized if normalized in NETWORK_CONFIG else ''
 
 
 def validate_native(content, vendor):

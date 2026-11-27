@@ -23,6 +23,40 @@ def _task_scope(task, records):
     return joined.queryset, missing
 
 
+def _problem_rows(records, category):
+    """把一批巡检记录摊成问题明细行。
+
+    CSV 导出要全量，所以不能只吃当前页——这里吃的是 queryset 或 page。
+    """
+    from net.devices.pc.severity import grade_issue
+
+    rows = []
+    for record in records:
+        findings = []
+        for raw in record.exceptions if isinstance(record.exceptions, list) else []:
+            if not isinstance(raw, dict):
+                continue
+            issue = grade_issue(raw)
+            if issue['category'] == category:
+                findings.append({
+                    'title': issue.get('问题类型') or '未命名问题',
+                    'description': issue.get('详细问题') or '',
+                    'severity': issue['severity'], 'severity_label': issue['severity_label'],
+                })
+        rows.append({
+            'asset': record.computer.computer_name if record.computer_id else '—',
+            'user': (record.computer.user_name if record.computer_id else '') or '—',
+            'issue': ' / '.join('%s：%s' % (f['title'], f['description']) for f in findings),
+            'severity': findings[0]['severity_label'] if findings else '提示',
+            'metrics': (
+                record.report_metrics
+                if record.report_metrics and record.report_metrics != '无可用指标'
+                else '—'
+            ),
+        })
+    return rows
+
+
 def _problem_rows_csv(category, rows):
     """问题明细导出：和表格同源，不另算一遍。"""
     import csv
@@ -52,7 +86,7 @@ def _problem_definition():
 
 
 def _problem_rows_response(request, task, category, page_obj, rows, definition, state,
-                           route='analysis_problem_list'):
+                           route='analysis_problem_list', records=None):
     """问题明细统一走 table_payload，弹窗里复用工作区那套表格能力。"""
     from django.http import JsonResponse
     from django.urls import reverse
@@ -62,7 +96,10 @@ def _problem_rows_response(request, task, category, page_obj, rows, definition, 
     )
 
     if request.GET.get('format') == 'csv':
-        return _problem_rows_csv(category, rows)
+        # rows 只是当前页（默认 20 行），导出要全量：21 条问题会少导最后一条。
+        # records 是筛选后未分页的 queryset，传进来就用它重算一遍。
+        export_rows = rows if records is None else _problem_rows(records, category)
+        return _problem_rows_csv(category, export_rows)
 
     payload = attach_column_options(table_payload(
         page_obj, definition,
@@ -101,7 +138,6 @@ def _problem_rows_response(request, task, category, page_obj, rows, definition, 
 @require_GET
 def analysis_problem_list(request, pk):
     from net.models import TaskRun
-    from net.devices.pc.severity import grade_issue
 
     from index.common.table_query import apply_table_filters
 
@@ -151,32 +187,9 @@ def analysis_problem_list(request, pk):
     # 它替换掉原来写死的 order_by，并且分页在 SQL 层，只把当页的 exceptions 读出来。
     records, state = apply_table_filters(request, records, definition, include_legacy_status=False)
     page_obj = Paginator(records, state['page_size']).get_page(request.GET.get('page'))
-    rows = []
-    for record in page_obj:
-        findings = []
-        for raw in record.exceptions if isinstance(record.exceptions, list) else []:
-            if not isinstance(raw, dict):
-                continue
-            issue = grade_issue(raw)
-            if issue['category'] == category:
-                findings.append({
-                    'title': issue.get('问题类型') or '未命名问题',
-                    'description': issue.get('详细问题') or '',
-                    'severity': issue['severity'], 'severity_label': issue['severity_label'],
-                })
-        rows.append({
-            'asset': record.computer.computer_name if record.computer_id else '—',
-            'user': (record.computer.user_name if record.computer_id else '') or '—',
-            'issue': ' / '.join('%s：%s' % (f['title'], f['description']) for f in findings),
-            'severity': findings[0]['severity_label'] if findings else '提示',
-            'metrics': (
-                record.report_metrics
-                if record.report_metrics and record.report_metrics != '无可用指标'
-                else '—'
-            ),
-        })
+    rows = _problem_rows(page_obj, category)
     return _problem_rows_response(
-        request, task, category, page_obj, rows, definition, state,
+        request, task, category, page_obj, rows, definition, state, records=records,
     )
 
 

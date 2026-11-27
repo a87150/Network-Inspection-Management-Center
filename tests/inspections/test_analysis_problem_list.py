@@ -39,6 +39,25 @@ class AnalysisProblemListTests(TestCase):
         self.assertNotIn('UNRELATED-HARDWARE', body)
         self.assertNotIn('OLD-TASK-ISSUE', body)
 
+    def test_csv_export_covers_every_page_not_just_the_first(self):
+        """导的是「当前筛选下的整个结果集」，不是当前这一页。
+
+        原先 CSV 分支吃的是 page_obj.object_list（默认 20 行）：21 条问题导出
+        只有 20 条，多出来的那条谁也拿不到，界面上也不报错。
+        """
+        for index in range(21):
+            self.analysis(self.run, [
+                {'analysis_item': 'software', 'severity': 'info',
+                 '问题类型': '软件未采集', '详细问题': 'ROW-%02d' % index},
+            ])
+        response = self.client.get(self.url, {'category': '软件', 'format': 'csv'})
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode('utf-8-sig')
+        self.assertIn('ROW-00', body)
+        # 第 21 条在第 2 页，旧写法丢的就是它。
+        self.assertIn('ROW-20', body)
+        self.assertEqual(body.count('软件未采集'), 21)
+
     def test_guest_cannot_read_details(self):
         self.client.logout()
         response = self.client.get(self.url, {'category': '软件'})

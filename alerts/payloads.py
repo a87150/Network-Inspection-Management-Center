@@ -148,6 +148,9 @@ def alert_detail_payload(event):
     return detail_payload(
         title=title, eyebrow='告警中心', description=description,
         actions=actions, sections=sections,
+        # 这是独立详情页，不是弹窗：返回列表、任务详情、目标执行详情都是页面
+        # 主体的一部分，按弹窗规则过滤会把三个导航入口全丢掉。
+        allow_links=True,
     )
 
 

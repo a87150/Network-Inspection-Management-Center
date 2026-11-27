@@ -64,9 +64,14 @@ export default {
             // 岛内筛选不写地址栏（syncUrl 是空实现），所以按组件当前的筛选状态重新序列化，
             // 否则筛选完点导出还是全量。地址栏里还留着的其它参数（外部入口带来的）保留。
             // apiParams 返回的是普通对象，转成 URLSearchParams 才能拼 query。
-            const params = new URLSearchParams(apiParams(this.draftFilters, {}));
+            // 用 exportUrl 自带的 query 当基线，再把筛选叠上去。整体赋 url.search
+            // 会把服务端拼好的 category / format=csv / task 一并冲掉——问题明细导出
+            // 因此 100% 落到 404，地址栏里的 task 丢失后导出还导错任务。
+            const params = url.searchParams;
+            for (const [key, value] of Object.entries(apiParams(this.draftFilters, {}))) {
+                params.set(key, value);
+            }
             params.delete('page');
-            url.search = params.toString();
             if (this.selectedIds.length) {
                 url.searchParams.set('target_ids', this.selectedIds.join(','));
             }

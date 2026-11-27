@@ -109,16 +109,21 @@ def group_section(heading, summary, groups):
 
 
 def detail_payload(*, title, eyebrow="", description="", actions=(), sections=(),
-                   disclosure=None, csrf=""):
+                   disclosure=None, csrf="", allow_links=False):
+    """详情面板的数据。
+
+    这个函数同时服务弹窗和独立详情页。弹窗里不放跳转按钮（点了会整页跑掉，
+    用户以为点错了），但独立页面上「返回列表」「任务详情」这类导航链接正是
+    页面主体的一部分——统一按弹窗规则过滤会把它们静默丢掉，页面上什么都不剩。
+    所以由调用方用 allow_links 说明自己是谁。
+    """
     return {
         "title": title,
         "eyebrow": eyebrow,
         "description": description,
-        # 弹窗里不放跳转按钮：点了会整页跑掉，用户以为点错了。
-        # 表单类操作（删除等）留在弹窗内，不跳页。
         "actions": [
             action for action in actions
-            if action and action.get("kind") != "link"
+            if action and (allow_links or action.get("kind") != "link")
         ],
         "sections": [section for section in sections if section],
         "disclosure": disclosure,

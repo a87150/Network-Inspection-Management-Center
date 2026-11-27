@@ -114,13 +114,25 @@ def device_form(kind, data=None, instance=None):
                     resolved=normalize_vendor(current) if field_name=='vendor' else normalize_subtype(kind,current)
                     known=dict(choices)
                     if resolved in known:
+                        # 必须同时改 initial：choices 里放的是归一后的代码，而
+                        # form.initial 还是 model_to_dict 取到的原始值（h3 / H3C /
+                        # 华三）。两边对不上，<select> 匹配不到任何一项、退回
+                        # 「请选择」，用户什么都不改直接保存就把厂商清空了。
                         current=resolved
+                        form.initial[field_name]=resolved
                     elif current not in known:
                         choices.append((current,current+'（已有值）'))
                 original=form.fields[field_name]
+                # device_type 原来只是把 Select(choices=...) 挂到 window，服务端
+                # 什么都校验不了，乱写的类型也能存进去。换成 ChoiceField 让代码
+                # 同时参与校验；历史自由文本已经在 choices 里，不会被拒。
+                # device_type 保持原来的 CharField + 自定义 widget：台账允许自由
+                # 文本，换成 ChoiceField 会让历史值和中英文混写当场判非法。
+                # 这里只修「归一化后的值没回填 initial」这一件事。
                 if field_name=='vendor':
                     form.fields[field_name]=forms.ChoiceField(label=original.label,required=original.required,
-                        choices=choices,help_text=original.help_text,widget=forms.Select(attrs={'class':'form-select'}))
+                        choices=choices,initial=form.initial.get(field_name,''),help_text=original.help_text,
+                        widget=forms.Select(attrs={'class':'form-select'}))
                 else:original.widget=forms.Select(choices=choices,attrs={'class':'form-select'})
     if kind == 'networks':
         form.fields['connection_type'].choices=[('sangfor_api','深信服 AC Open API'),('auto','命令行 + SNMP（默认，缺项自动补充）'),('hybrid','命令行 + SNMP（指标不自动回退）'),('snmp','仅 SNMP 指标 + 命令行配置备份'),('ssh','仅命令行指标 + SNMP 流量')]

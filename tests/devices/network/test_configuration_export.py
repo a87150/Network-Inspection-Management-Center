@@ -252,8 +252,9 @@ class ConfigurationTests(TestCase):
             rows = list(csv.DictReader(StringIO(bundle.read('manifest.csv').decode('utf-8-sig'))))
             self.assertEqual(rows[0]['status'], 'success')
 
-    def test_h3c_chinese_alias_captures_current_configuration(self):
-        self.device.vendor = '华三 H3C'
+    def test_h3c_captures_current_configuration(self):
+        # 台账里的厂商统一存代码（迁移 0080 洗过），中文别名只作为录入容错。
+        self.device.vendor = 'h3c'
         native = '#\n version 7.1\n sysname edge\n#\nreturn\n'
         channel = self.shell('display current-configuration\n' + native + '<edge>',
                              prompt='<edge>', command='display current-configuration', paging='screen-length disable')

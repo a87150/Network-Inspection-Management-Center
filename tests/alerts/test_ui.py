@@ -6,6 +6,7 @@ real for disabled channels so the view cannot accidentally initiate a request.
 
 from unittest.mock import patch
 import csv
+from pathlib import Path
 import json
 import re
 
@@ -408,3 +409,36 @@ class AlertUiTests(TestCase):
             list(AlertEvent.objects.order_by('pk').values_list('id', 'event_type', 'status')),
             first,
         )
+
+
+class AlertDetailNavigationTests(TestCase):
+    """告警详情是独立页，不是弹窗：三个导航入口必须真的在 actions 里。
+
+    detail_payload 默认按弹窗规则过滤掉 kind='link'，而告警详情用 link_action
+    组了「返回告警记录 / 任务详情 / 目标执行详情」。以前那条测试断言的是正文
+    散文里出现了「任务详情」，命中的是任务摘要文字，按钮其实一个都没渲染。
+    """
+
+    def setUp(self):
+        from tests.auth import login_admin
+        login_admin(self.client)
+
+    def test_alert_detail_payload_opts_into_navigation_links(self):
+        """告警详情是独立页，必须显式要求保留 link，否则三个导航入口全没。
+
+        这一层用静态契约验：payload 本体要真实 TaskRun/profile 才能构造，
+        而这条 bug 的位置就在「调用方有没有传开关」这一行上。
+        """
+        source = Path('alerts/payloads.py').read_text(encoding='utf-8')
+        self.assertIn('allow_links=True', source,
+                      'alert_detail_payload 要传 allow_links=True，否则导航按钮被过滤掉')
+
+    def test_modal_payloads_still_drop_links(self):
+        """弹窗里照样不放跳转按钮：这条开关不能把它放宽。"""
+        from index.common.detail_payload import detail_payload, link_action
+
+        payload = detail_payload(title='t', actions=[link_action('跳走', '/somewhere/')])
+        self.assertEqual(payload['actions'], [])
+        relaxed = detail_payload(title='t', actions=[link_action('跳走', '/somewhere/')],
+                                 allow_links=True)
+        self.assertEqual([item['label'] for item in relaxed['actions']], ['跳走'])

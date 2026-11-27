@@ -796,3 +796,31 @@ class PcListActionContractTests(TestCase):
         self.assertNotIn('下载 Windows 采集包', html)
         self.assertNotIn('添加设备', html)
         self.assertNotIn('<button', html)
+
+
+class TablePayloadConsumerContractTests(TestCase):
+    """后端算出来的面板，模板里必须真有人渲染。
+
+    device_workspace 的 logs（巡检记录）payload 一直在算，logsView 也在算，
+    但模板里没有消费者——那页签只剩任务栏和统计卡，记录表整块看不到。
+    后端 payload 测试全绿，因为从来没人检查前端有没有用。
+    """
+
+    def vue_component(self, *relative_path):
+        return (Path(__file__).resolve().parents[2] / 'static' / 'app' / 'vue'
+                / Path(*relative_path)).read_text(encoding='utf-8')
+
+    def test_device_workspace_renders_the_logs_table(self):
+        source = self.vue_component('pages', 'device_workspace.mjs')
+        self.assertIn('logsView.endpoint', source,
+                      '巡检记录页签要挂 workspace-table，否则记录表不可达')
+        self.assertIn('url-prefix="logs"', source,
+                      '巡检记录表的参数前缀要和后端 _records_table 的 prefix 一致')
+
+    def test_every_computed_view_has_a_consumer(self):
+        """computed 里算出来的 *View 都是给模板用的，只定义不消费说明接线断了。"""
+        source = self.vue_component('pages', 'device_workspace.mjs')
+        for name in ('logsView', 'accessView'):
+            self.assertGreaterEqual(
+                source.count(name), 2,
+                '%s 只在 computed 里定义了，模板没消费' % name)

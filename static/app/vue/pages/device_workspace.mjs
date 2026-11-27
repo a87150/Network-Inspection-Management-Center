@@ -219,6 +219,10 @@ export default {
                     <p v-else class="text-secondary mb-0">最新任务尚无结果。可进入任务详情查看待处理、运行中或执行失败的目标。</p>
                 </div>
             </section>
+            <!-- 巡检记录表。PC 页同一处有这张表，设备页漏了：logs prop 拿到了、
+                 logsView 也算好了，模板里没有消费者，整页只剩任务栏和统计卡，
+                 记录本身看不到。写法和 pc_workspace 保持一致。 -->
+            <workspace-table v-if="logsView.endpoint" v-bind="logsView" url-prefix="logs"></workspace-table>
         </div>
         <!-- 问题明细弹窗：和 PC 页同一套结构，只是换了个 id 避免和页面上的冲突。 -->
         <div class="modal fade analysis-problems-modal" id="deviceProblemsModal" tabindex="-1"
