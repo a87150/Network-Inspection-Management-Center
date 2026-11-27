@@ -17,12 +17,13 @@ def _read(*parts):
 class TaskStatusContractTests(SimpleTestCase):
     def test_task_center_tabs_control_the_pane_and_leave_the_keyboard_path_open(self):
         source = _read('inspections', 'templates', 'inspections', 'task_center.html')
-        buttons = [line for line in source.splitlines() if 'data-center-tab=' in line]
-        self.assertTrue(buttons)
-        for line in buttons:
-            self.assertIn('role="tab"', line, line)
-        # 每个页签都要指向同一个面板，并且只有一个停在 Tab 序列里。
-        self.assertIn('aria-controls="task-center-pane"', source)
+        # 页签按钮是多行标签，属性分散在几行里：按 data-center-tab 向前取一窗来看。
+        for view in ('tasks', 'errors'):
+            index = source.find('data-center-tab="%s"' % view)
+            self.assertGreater(index, 0, view)
+            window = source[max(0, index - 400):index]
+            self.assertIn('role="tab"', window, view)
+            self.assertIn('aria-controls="task-center-pane"', window, view)
         self.assertEqual(source.count('aria-controls="task-center-pane"'), 2)
         self.assertIn('tabindex="{% if view == \'tasks\' %}0{% else %}-1{% endif %}"', source)
         self.assertIn('tabindex="{% if view == \'errors\' %}0{% else %}-1{% endif %}"', source)

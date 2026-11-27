@@ -105,7 +105,13 @@ export async function mountPages(root = document) {
         app.mount(host);
     }
     // 表格是组件渲染出来的，勾选框在挂载后才存在；让页面上那些按 DOM 抓元素的脚本重绑。
-    document.dispatchEvent(new CustomEvent('app:modal-updated'));
+    //
+    // 带 detail.mount 是因为这个事件同时被 workspace_table 当成「数据变了，重取」的
+    // 信号。挂载本身不是数据变化——组件自己刚加载过，再 reload 一次会把用户已勾选的
+    // 行清空，还会白打一次请求。接收方靠这个标记区分。
+    document.dispatchEvent(new CustomEvent('app:modal-updated', {
+        detail: {mount: true, root: root === document ? null : root},
+    }));
 }
 
 // 换进来一段新 HTML 的页面（Ajax 分页签等）要重新挂岛，普通 script 拿不到模块导出。

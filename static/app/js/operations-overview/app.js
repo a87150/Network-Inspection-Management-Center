@@ -20,6 +20,17 @@ function focusMemory(instance) {
   return memory;
 }
 
+/* 两个 Set 内容一致就返回 true。用来判断 reconcileExpandedIds 的结果是不是
+   真的变了——每次 notify 都换新引用会让所有依赖它的 computed 失效。 */
+function sameIdSet(left, right) {
+  if (left === right) return true;
+  if (!left || !right || left.size !== right.size) return false;
+  for (const id of left) {
+    if (!right.has(id)) return false;
+  }
+  return true;
+}
+
 /* DRF 的字段级错误里只有英文键（cidr/pool_start…），直接拼给用户看等于
    让他去猜是哪个输入框。这里换成模板里显示的中文标签。 */
 const SUBNET_FIELD_LABELS = {
@@ -181,10 +192,18 @@ if (mountElement && bootstrapElement) {
       syncControllerState(next) {
         const previousGeneratedAt = this.snapshot?.generated_at;
         this.snapshot = next.lastSnapshot;
-        this.expandedNodeIds = reconcileExpandedIds(
+        /* 这里每次 notify 都算一遍 reconcileExpandedIds 是对的（快照可能变了），
+           但**不能无条件换新 Set**：expandedNodeIds 参与 visibleTopology 等 computed，
+           换引用就让它们全部失效。滚动、缩放、拖拽每个 tick 都会 notify，于是
+           每个 tick 都跑一次全量 normalize + visible + layout 并重渲染整棵 SVG
+           （实测 80 主干 / 320 终端时 12ms 一次）。内容没变就复用旧引用。 */
+        const reconciled = reconcileExpandedIds(
           this.expandedNodeIds,
           normalizeTopology(this.snapshot.topology || {}),
         );
+        if (!sameIdSet(reconciled, this.expandedNodeIds)) {
+          this.expandedNodeIds = reconciled;
+        }
         this.refreshing = next.refreshing;
         this.stale = next.stale;
         this.error = next.error;
@@ -196,11 +215,23 @@ if (mountElement && bootstrapElement) {
           this.liveStatus = '网络拓扑数据已更新';
         }
       },
+      /* 拖一次窗口能触发上百个 resize 事件，每次都改 topologyWidth/Height
+         就会让布局 computed 全量重算并重渲染。挂上去的 resize 走合帧，
+         首次挂载和 $nextTick 那次走 measureCanvas 直接量。 */
       updateDimensions() {
+        if (this.dimensionsFrame) return;
+        this.dimensionsFrame = window.requestAnimationFrame(() => {
+          this.dimensionsFrame = 0;
+          this.measureCanvas();
+        });
+      },
+      measureCanvas() {
         const shell = mountElement.querySelector('.topology-canvas-shell');
         const width = shell?.clientWidth || window.innerWidth;
-        this.topologyWidth = Math.max(320, Math.min(1400, width));
-        this.topologyHeight = window.innerWidth < 768 ? 1100 : 720;
+        const height = window.innerWidth < 768 ? 1100 : 720;
+        const nextWidth = Math.max(320, Math.min(1400, width));
+        if (this.topologyWidth !== nextWidth) this.topologyWidth = nextWidth;
+        if (this.topologyHeight !== height) this.topologyHeight = height;
       },
       /* 按 IP 定位：命中就把视口平移过去并高亮，没命中只提示，不动视口。 */
       async locateByIp() {
@@ -299,18 +330,39 @@ if (mountElement && bootstrapElement) {
       },
       /* 滚轮缩放：以鼠标所指的点为不动点。
          变换是 translate(x y) scale(s)，屏幕点 p 对应的内容点是 (p - t) / s；
-         缩放后要让同一个内容点还落在 p 上，所以 t' = p - (p - t) * (s'/s)。 */
+         缩放后要让同一个内容点还落在 p 上，所以 t' = p - (p - t) * (s'/s)。
+
+         滚轮事件一秒能来上百次，每次都写 viewport 就是每次都让整棵 SVG 重渲染。
+         拖动平移那条路径早有 rAF 合帧，缩放这条漏了。这里把一帧内的多次事件合成
+         一次：只在第一次时开帧，后续只更新待处理的值。 */
       wheelZoom(event) {
         const canvas = event.currentTarget;
         const rect = canvas.getBoundingClientRect();
         if (!rect.width || !rect.height) return;
-        const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;
+        const pending = this.pendingZoom || (this.pendingZoom = { frame: 0 });
+        pending.deltaY = event.deltaY;
+        pending.clientX = event.clientX;
+        pending.clientY = event.clientY;
+        pending.left = rect.left;
+        pending.top = rect.top;
+        pending.width = rect.width;
+        pending.height = rect.height;
+        pending.viewBoxWidth = canvas.viewBox.baseVal.width;
+        pending.viewBoxHeight = canvas.viewBox.baseVal.height;
+        if (pending.frame) return;
+        pending.frame = window.requestAnimationFrame(() => {
+          pending.frame = 0;
+          this.applyWheelZoom(pending);
+        });
+      },
+      applyWheelZoom(pending) {
+        const factor = pending.deltaY < 0 ? 1.12 : 1 / 1.12;
         const scale = Math.min(2.2, Math.max(0.6, this.viewport.scale * factor));
         if (scale === this.viewport.scale) return;
         const ratio = scale / this.viewport.scale;
         // 鼠标位置换算到 SVG 用户坐标，再换回屏幕像素，避免 viewBox 与 CSS 尺寸不等。
-        const pointX = ((event.clientX - rect.left) / rect.width) * canvas.viewBox.baseVal.width;
-        const pointY = ((event.clientY - rect.top) / rect.height) * canvas.viewBox.baseVal.height;
+        const pointX = ((pending.clientX - pending.left) / pending.width) * pending.viewBoxWidth;
+        const pointY = ((pending.clientY - pending.top) / pending.height) * pending.viewBoxHeight;
         this.viewport = {
           scale: Number(scale.toFixed(3)),
           x: Number((pointX - (pointX - this.viewport.x) * ratio).toFixed(1)),
@@ -775,13 +827,13 @@ if (mountElement && bootstrapElement) {
       });
       this.unsubscribe = this.controller.subscribe(this.syncControllerState);
       this.controller.start();
-      this.$nextTick(this.updateDimensions);
+      this.$nextTick(this.measureCanvas);
       document.addEventListener('visibilitychange', this.handleVisibility);
       // Esc 关闭是最上层浮层的唯一键盘出口，挂在 document 上才不会因为焦点
       // 落在抽屉里的按钮上而失效。
       document.addEventListener('keydown', this.handleKeydown);
       window.addEventListener('resize', this.updateDimensions, { passive: true });
-      this.updateDimensions();
+      this.measureCanvas();
       this.ambientEffects = createAmbientEffects(document.querySelector('[data-overview-ambient]'));
       const field = document.querySelector('[name=csrfmiddlewaretoken]');
       const meta = document.querySelector('meta[name=csrf-token]');
@@ -792,6 +844,11 @@ if (mountElement && bootstrapElement) {
     },
     beforeUnmount() {
       this.requestAbortController?.abort();
+      // 合帧的句柄也要收：卸载后 rAF 还会跑一次并去 measureCanvas 查 DOM。
+      if (this.dimensionsFrame) window.cancelAnimationFrame(this.dimensionsFrame);
+      if (this.pendingZoom && this.pendingZoom.frame) {
+        window.cancelAnimationFrame(this.pendingZoom.frame);
+      }
       this.controller?.stop();
       this.unsubscribe?.();
       this.ambientEffects?.destroy();

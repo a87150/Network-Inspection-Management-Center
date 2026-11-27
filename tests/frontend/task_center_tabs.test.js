@@ -132,3 +132,11 @@ test('a failed pane load says so and drops the half-lit state', async () => {
     assert.equal(fixture.tabs[0].attributes['aria-selected'], 'true');
     assert.equal(fixture.tabs[1].attributes['aria-selected'], 'false');
 });
+test('a failed polling refresh stays silent instead of nagging every cycle', async () => {
+    const fixture = centerFixture({view: 'tasks', responses: ['fail']});
+    await fixture.window.AppTaskCenterTabs.refresh();
+
+    // 轮询每几秒一拍：失败就播报会把真正要说的话盖掉，下一拍成功自己会恢复。
+    assert.equal(fixture.liveRegion.textContent, '');
+    assert.equal(fixture.pane().style.opacity, '');
+});

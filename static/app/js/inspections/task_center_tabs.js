@@ -40,7 +40,20 @@
         return next.toString();
     }
 
-    async function load(view, url) {
+    /* 换进来的表格 DOM 是全新的：列显隐、筛选按钮、每页条数都要重新接线，
+       否则工具栏看着在、点着没反应。refreshTableWorkspaces 会顺手整块重取一次
+       表格，手动切换时正合适；轮询时面板本身就是刚渲染的，只接线。 */
+    function bindTableWorkspaces(root) {
+        let storage = null;
+        try {
+            storage = window.localStorage;
+        } catch (_) {
+            /* 偏好可选。 */
+        }
+        window.AppTableWorkspace?.initializeAll?.(root, storage, window.location);
+    }
+
+    async function load(view, url, {reloadTables = true, announceFailure = true} = {}) {
         const target = pane();
         if (!target) return;
         target.style.opacity = '.45';
@@ -55,18 +68,20 @@
             target.replaceWith(document.importNode(next, true));
             highlight(view);
             // 面板切换是页面内部行为，不写地址栏；URL 只由外部入口决定。
-            // 换进来的表要重新挂一次表格与弹窗行为。
-            window.AppTableWorkspace?.refreshTableWorkspaces?.();
             window.AppModalFeedback?.bind?.(document);
             window.AppModalTransport?.install?.(document);
+            const fresh = pane();
+            if (fresh && reloadTables) window.AppTableWorkspace?.refreshTableWorkspaces?.();
+            else if (fresh) bindTableWorkspaces(fresh);
             // 换进来的表是新的 Vue 岛，必须重新挂载，否则只有表头没有行。
             // 等它挂完：状态轮询要读岛所在的 DOM 判断还有没有运行中的任务。
-            const fresh = pane();
             if (fresh && window.mountPages) await window.mountPages(fresh);
         } catch (error) {
             // 失败要说话：面板停在旧视图而卡片已经高亮成新的，用户会以为看见的是
             // 新视图的内容。顺手把高亮还原回真正显示着的那个视图。
-            announce('切换视图失败，下面显示的仍是原来的内容，请重试。');
+            // 轮询刷新不播报：每几秒念一遍"刷新失败"只会盖掉真正要说的话，
+            // 下一拍成功了自己就恢复。
+            if (announceFailure) announce('切换视图失败，下面显示的仍是原来的内容，请重试。');
             highlight(currentView());
             return;
         } finally {
@@ -80,7 +95,7 @@
     async function refresh() {
         const url = new URL(window.location.href);
         url.searchParams.set('object', currentView());
-        await load(currentView(), url.toString());
+        await load(currentView(), url.toString(), {reloadTables: false, announceFailure: false});
     }
 
     document.addEventListener('click', (event) => {

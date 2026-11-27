@@ -57,6 +57,10 @@ export default {
     methods: {
         badgeClass,
         async sortBy(column) {
+            // load() 在 loading 时早退，而这里已经把 sortKey/sortOrder 改了——
+            // 结果箭头和 aria-sort 变了、数据没重取；再点同一列还会基于已改的状态
+            // 反向，两个方向都拿不到想要的顺序，只能刷新页面。先挡住。
+            if (this.loading) return;
             // 先算方向再记列。反过来的话 nextOrder 里的「同一列」判断恒真，
             // 切到新列会沿用上一列的方向取反，提示文字也跟着说反。
             const order = this.nextOrder(column);
@@ -75,6 +79,8 @@ export default {
             return this.sortOrder === 'asc' ? 'ascending' : 'descending';
         },
         jumpTo() {
+            // 同上：写 jumpPage 之后被 load() 早退，下一页按钮会和实际页对不上。
+            if (this.loading) return;
             const total = this.totalPages || 1;
             const page = Math.min(Math.max(Math.trunc(this.jumpPage || 1), 1), total);
             this.jumpPage = page;

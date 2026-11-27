@@ -94,7 +94,11 @@ export default {
     },
     mounted() {
         // 弹窗保存完不用整页刷新：收到事件自己重取一次。
-        this.onModalUpdated = () => this.reload();
+        // 但挂载本身不是数据变化（组件刚加载过），重取只会白打请求并清空勾选。
+        this.onModalUpdated = (event) => {
+            if (event && event.detail && event.detail.mount) return;
+            this.reload();
+        };
         document.addEventListener('app:modal-updated', this.onModalUpdated);
     },
     beforeUnmount() {
@@ -155,6 +159,11 @@ export default {
         /** 唯一的请求入口：翻页、排序、筛选、换条数都走这里，状态赋值只写一遍。 */
         async request({page = 1, sort = this.sortKey, order = this.sortOrder} = {}) {
             if (!this.endpoint) return;
+            // 连点两个列头、或排序后立刻翻页时，两次请求会并发。谁先回来谁覆盖，
+            // 结果就是表头指向新列、表体还是旧列的排序结果，loading 也被先回来的
+            // 那次提前置 false。只有最后一次发出的请求有权写状态。
+            const ticket = (this.requestTicket || 0) + 1;
+            this.requestTicket = ticket;
             this.loading = true;
             this.error = '';
             try {
@@ -166,6 +175,7 @@ export default {
                     params.order = order;
                 }
                 const payload = await api.get(this.endpoint, params);
+                if (ticket !== this.requestTicket) return;
                 this.items = payload.results || [];
                 this.total = payload.count;
                 this.currentPage = payload.page;
@@ -177,9 +187,11 @@ export default {
                 // 翻页/重筛后表体重新渲染，旧的勾选已经不在 DOM 里，别再拿去导出。
                 this.selectedIds = [];
             } catch (failure) {
+                if (ticket !== this.requestTicket) return;
                 this.error = failure.message || '加载失败';
             } finally {
-                this.loading = false;
+                // 过期请求不许复位置 loading，否则新请求还在飞就显示成已加载。
+                if (ticket === this.requestTicket) this.loading = false;
             }
         },
         goPage(page) {

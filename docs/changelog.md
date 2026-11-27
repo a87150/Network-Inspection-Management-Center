@@ -16,6 +16,26 @@
   测试：一条验返回的父节点正确（含已展开、主干节点、空输入三种边界），一条验展开后
   该终端确实进了可见图。
 
+### 前端专项审查：剩下六条 P1
+
+- **挂载 Vue 岛会清空表格勾选**。`mountPages` 结束时无条件广播 `app:modal-updated`，
+  而 `workspace_table` 把它当成「数据变了，重取」的信号——于是打开问题明细、切任务中心
+  页签、保存任意弹窗，都会让勾选的行被清空、批量按钮回落「请先选择设备」，还白打一次请求。
+  广播带上 `detail.mount`，挂载不再算数据变化。
+- **排序与翻页在请求未返回时点会错位**。`alert_list` 的 `sortBy` 先写 `sortKey/sortOrder`
+  再 `load()`，而 `load()` 开头在 `loading` 时早退——箭头和 `aria-sort` 变了、数据没重取；
+  再点同一列还会基于已改的状态反向，两个方向都拿不到想要的顺序。`jumpTo` 同样。加闸门。
+- **表格请求乱序互相覆盖**。`workspace_table.request()` 没有序号也没有取消，连点两个列头
+  会出现表头指向新列、表体还是旧列的排序结果，`loading` 也被先回来的那次提前置 false。
+  加请求编号，只有最后一次有权写状态。
+- **图表的 `role="img"` 把内部交互元素全吞了**。SVG 根上的 `role="img"` 会让所有节点的
+  `role="button"`/`aria-label` 变成 presentational，读屏读不出；同时每条边都是 `tabindex="0"`，
+  几十到几百个无名 Tab 停靠点。根改成 `role="group"`，边改成 `tabindex="-1"`（点击与读屏仍可用）。
+- **每次刷新都让整棵 SVG 重渲染**。`syncControllerState` 每个 tick 都换新的 `expandedNodeIds`
+  Set，而它参与 `visibleTopology` 等 computed——滚动、缩放、拖拽期间每个 tick 都跑一次
+  全量 normalize + visible + layout（实测 80 主干 / 320 终端时 12ms 一次）。内容没变就复用旧引用。
+- **滚轮与 resize 没有节流**。拖动平移早有 rAF 合帧，这两条漏了：滚轮一秒上百个事件、
+  拖窗口一次上百个 resize，每个都改写状态触发重渲染。都改成合帧一次，卸载时收掉句柄。
 ### 前端专项审查：30 余处 P2 一次清完
 
 **表格与弹窗**
