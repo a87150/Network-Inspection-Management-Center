@@ -162,7 +162,6 @@ class SharedInterfaceContractTests(TestCase):
         self.assertContains(response, 'data-topology-device-card')
         self.assertContains(response, '@click.stop="toggleNode(node)"')
         self.assertContains(response, 'topology-edge--physical')
-        self.assertContains(response, 'topology-edge--inferred')
         self.assertContains(response, '暂无可绘制的主要网络设备')
         self.assertNotContains(response, 'IP 网段归属')
         self.assertNotIn('v-html', html)
@@ -172,6 +171,11 @@ class SharedInterfaceContractTests(TestCase):
         css = Path(finders.find('app/css/operations-overview.css')).read_text(encoding='utf-8')
         self.assertIn("../../../vendor/vue/vue.esm-browser.prod.js", app)
         self.assertIn("delimiters: ['[[', ']]']", app)
+        # 终端按证据分色的三个 class 由 attachmentEdgeClass 在渲染时拼出，
+        # 服务端正文里只有 :class 绑定表达式，所以查这里而不是查 response。
+        for edge_class in ('topology-edge--attachment-physical', 'topology-edge--attachment-mac',
+                           'topology-edge--inferred'):
+            self.assertIn(edge_class, app)
         self.assertIn('operations-overview-bootstrap', app)
         self.assertNotIn('innerHTML', app + effects)
         self.assertNotIn('v-html', app)

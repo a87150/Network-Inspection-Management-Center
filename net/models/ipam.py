@@ -49,7 +49,16 @@ class IpSubnet(models.Model):
         if self.cidr:
             self.cidr = normalize_cidr(self.cidr)
         if self.pool_start and self.pool_end:
-            if ipaddress.ip_address(self.pool_start) > ipaddress.ip_address(self.pool_end):
+            try:
+                start = ipaddress.ip_address(self.pool_start)
+                end = ipaddress.ip_address(self.pool_end)
+            except ValueError as error:
+                raise ValidationError({"pool_start": "地址池端点不是合法 IP。"}) from error
+            # 不同协议族之间比较会抛 TypeError，必须在 clean 里挡成校验错误，
+            # 否则 v4 池配 v6 端会以 500 的形式漏出去。
+            if start.version != end.version:
+                raise ValidationError({"pool_end": "地址池的开始和结束必须是同一协议族。"})
+            if start > end:
                 raise ValidationError({"pool_end": "地址池结束必须大于等于开始。"})
         elif self.pool_start or self.pool_end:
             raise ValidationError({"pool_start": "地址池的开始和结束要一起填。"})
@@ -69,18 +78,16 @@ class IpSubnet(models.Model):
             return 0
         return int(ipaddress.ip_address(self.pool_end)) - int(ipaddress.ip_address(self.pool_start)) + 1
 
-    def contains(self, address):
-        try:
-            return ipaddress.ip_address(str(address)) in self.network
-        except ValueError:
-            return False
-
     def in_pool(self, address):
         if not (self.pool_start and self.pool_end):
             return False
         try:
-            return ipaddress.ip_address(self.pool_start) <= ipaddress.ip_address(str(address)) <= ipaddress.ip_address(self.pool_end)
-        except ValueError:
+            start = ipaddress.ip_address(self.pool_start)
+            end = ipaddress.ip_address(self.pool_end)
+            return start <= ipaddress.ip_address(str(address)) <= end
+        except (TypeError, ValueError):
+            # 登记地址与地址池协议族不同时比较会抛 TypeError（v4 与 v6 不可比），
+            # 按不在池里处理。
             return False
 
 

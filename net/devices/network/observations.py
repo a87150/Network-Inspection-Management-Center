@@ -8,12 +8,12 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+from django.db.models import Exists, OuterRef
 from django.utils import timezone
 
 from net.models import Network_Device_Inspection
 
 LOOKBACK_DAYS = 7
-MAX_RECORDS = 5000
 MAX_MATCHES = 50
 
 _IP_KEYS = ("ip_address", "ip", "address", "ipv4_address")
@@ -49,12 +49,22 @@ def _records(details, item):
 
 
 def latest_inspections(*, lookback_days=LOOKBACK_DAYS):
-    """One successful result per device: the newest inside the lookback window."""
+    """One successful result per device: the newest inside the lookback window.
+
+    在查询里直接排掉"同一设备还有更晚成功记录"的行，每设备只留最新一条。
+    原来是先按 created_at 全局取 [:MAX_RECORDS] 再按设备 setdefault：设备数乘
+    采集轮数一过上限，排在后面的设备一条都不剩，它们的 MAC 证据静默消失。
+    设备表是人工维护的物理清单，每设备恰好一行，行数天然有界，不需要全局预算。
+    """
     since = timezone.now() - timedelta(days=lookback_days)
+    superseded = Network_Device_Inspection.objects.filter(
+        status="success", created_at__gte=since,
+        device_id=OuterRef("device_id"), created_at__gt=OuterRef("created_at"))
     rows = (Network_Device_Inspection.objects
             .select_related("device", "task_target")
             .filter(status="success", created_at__gte=since)
-            .order_by("-created_at")[:MAX_RECORDS])
+            .filter(~Exists(superseded))
+            .order_by("device_id", "-created_at"))
     latest = {}
     for row in rows:
         latest.setdefault(row.device_id, row)
@@ -98,7 +108,9 @@ def mac_locations(*, lookback_days=LOOKBACK_DAYS):
             previous = found.get(mac)
             if previous is None or inspection.created_at > previous[2]:
                 found[mac] = (inspection.device_id, interface, inspection.created_at)
-    return {mac: (device_id, interface) for mac, (device_id, interface, _) in found.items()}
+    # 时间要一起带出去：同一个 MAC 会被级联的上游设备一起学到，
+    # 判断该挂哪台时要看谁学到的时刻最新。
+    return dict(found)
 
 
 def search(query, *, lookback_days=LOOKBACK_DAYS):

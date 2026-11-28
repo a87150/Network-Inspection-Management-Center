@@ -53,6 +53,32 @@
 
 Redis 连接/读取超时均为 0.2 秒，失败回退到真实页面。浏览器仍收到 private/no-store，缓存只在服务端。Redis 不是任务存储，也不是数据库备份。
 
+## 索引与每资产取最新
+
+「每台资产最近一条巡检记录」是总览页、资产卡片和拓扑节点状态共用的查询，出现频率最高。
+三张巡检表各建两条联合索引（迁移 `0083`），字段顺序按实际查询走：
+
+| 表 | 索引 | 支撑的查询 |
+| --- | --- | --- |
+| `Network_Device_Inspection` | `net_netdevinsp_dev_time_idx` `(device, -created_at)` | 按设备取最新一条 |
+| | `net_netdevinsp_stat_time_idx` `(status, -created_at)` | 回看窗口内筛 `status='success'` 再按时间排序 |
+| `Server_Inspection` | `net_serverinsp_dev_time_idx` `(server, -created_at)` | 同上 |
+| | `net_serverinsp_stat_time_idx` `(status, -created_at)` | 同上 |
+| `Monitor_Inspection` | `net_monitorinsp_dev_time_idx` `(monitor, -created_at)` | 同上 |
+| | `net_monitorinsp_stat_time_idx` `(status, -created_at)` | 同上 |
+
+只有单列 `-created_at` 索引时，按设备取最新要靠「全表按时间倒序扫到第一条匹配」，设备越多越慢；
+`(资产, -created_at)` 让数据库直接定位到那台资产的时间倒序第一行。
+
+索引名原来打算写成 `_status_time`，MariaDB 的索引名上限是 30 个字符，超了就建不出来，统一缩成 `_stat_`。
+改索引名要连迁移一起改，单独改 `Meta` 会触发一次无意义的 `RenameIndex`。
+
+拓扑相关表的其余索引在 `net/models/topology.py` 里：发现批次按 `(device, -collected_at)`、
+接口按 `(device, -last_seen_at)` 和 `(mac_address)`、链路按 `(status, -last_seen_at)`。
+MAC 地址表查询靠 `net_topointf_mac_idx`，终端归属的 `mac_learned` 这一档用它。
+
+**取最新时排序键要一致。** 同一时刻可能有多条记录，`('-created_at', '-pk')` 是唯一确定的顺序；
+只写 `-created_at` 时两个后端返回哪一条都可能不同，同一个资产在总览页和拓扑页会显示不同的状态。
 ## 数据迁移与校验
 
 先暂停 Web/Worker并确认无活动任务；保存 SQLite 完整备份和密钥。新建空 MariaDB 库，运行 `manage.py migrate`，再运行：

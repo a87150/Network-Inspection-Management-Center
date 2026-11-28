@@ -1,8 +1,6 @@
 """Compare the written IP plan against what the inspections observed."""
 from __future__ import annotations
 
-import ipaddress
-
 from net.devices.network.observations import normalize_mac, observed_addresses
 from net.models import IpSubnet
 
@@ -86,11 +84,3 @@ def plan_report(*, lookback_days=7):
         "window_days": lookback_days,
     }
 
-
-def classify(address, subnet):
-    """Which subnet an address belongs to, so a form can fill it in."""
-    try:
-        parsed = ipaddress.ip_address(str(address))
-    except ValueError:
-        return None
-    return subnet if parsed in subnet.network else None

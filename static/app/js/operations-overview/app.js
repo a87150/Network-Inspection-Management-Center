@@ -69,9 +69,6 @@ if (mountElement && bootstrapElement) {
         drawerNodeId: '',
         drawerFallback: null,
         csrfToken: '',
-        lookupOpen: false,
-        lookupQuery: '',
-        lookupRows: [],
         ledgerOpen: false,
         subnetFormOpen: false,
         subnetBusy: false,
@@ -127,6 +124,13 @@ if (mountElement && bootstrapElement) {
           ));
         }
         return layoutTopology(graph, { width: this.topologyWidth, height: this.topologyHeight });
+      },
+      /* asset_truncation 里既有计数也有说明性的字符串（链路超上限、端点顶破上限）。
+         计数走 truncationCount，说明文字走这里，两路都要显示，否则那几句永远不出现。 */
+      truncationNotes() {
+        return Object.values(this.snapshot.topology?.asset_truncation || {})
+          .filter((value) => typeof value === 'string' && value.trim())
+          .map((value) => value.trim());
       },
       truncationCount() {
         // asset_truncation 里混着非计数字段（operations.py 会写 links: '...' 之类的字符串）。
@@ -241,8 +245,12 @@ if (mountElement && bootstrapElement) {
         this.liveStatus = '拓扑链路筛选已更新';
       },
       togglePause() {
-        this.controller?.setManualPaused(!this.manualPaused);
-        this.liveStatus = this.manualPaused ? '自动刷新已暂停' : '自动刷新已恢复';
+        // 不能拿 this.manualPaused 判文案：它要等 controller notify 回来才更新，
+        // 这里读到的是旧值，暂停时会显示成已恢复。
+        const next = !this.manualPaused;
+        this.manualPaused = next;
+        this.controller?.setManualPaused(next);
+        this.liveStatus = next ? '自动刷新已暂停' : '自动刷新已恢复';
       },
       async refreshNow() {
         await this.controller?.refresh();
@@ -270,8 +278,12 @@ if (mountElement && bootstrapElement) {
         this.hidden = next.hidden;
         this.filter = next.filter;
         this.viewport = { ...next.viewport };
-        if (previousGeneratedAt !== this.snapshot?.generated_at && !next.refreshing) {
-          this.liveStatus = '网络拓扑数据已更新';
+        if (previousGeneratedAt !== this.snapshot?.generated_at) {
+          // 快照换了，节点详情缓存必须跟着失效：抽屉里显示的是上一轮取到的那份，
+          // 不比对 generated_at 就会一直停在旧数据上，直到用户手动刷新页面。
+          this.nodeDetails = {};
+          this.nodeDetailsErrors = {};
+          if (!next.refreshing) this.liveStatus = '网络拓扑数据已更新';
         }
       },
       /* 拖一次窗口能触发上百个 resize 事件，每次都改 topologyWidth/Height
@@ -287,7 +299,10 @@ if (mountElement && bootstrapElement) {
       measureCanvas() {
         const shell = mountElement.querySelector('.topology-canvas-shell');
         const width = shell?.clientWidth || window.innerWidth;
-        const height = window.innerWidth < 768 ? 1100 : 720;
+        // 量容器实际高度：写死 720 时布局按 720 排，画布比它高就上下留白，
+        // 比它矮就溢出。容器还没尺寸时才退回常量。
+        const measured = shell ? shell.clientHeight : 0;
+        const height = measured > 0 ? measured : (window.innerWidth < 768 ? 1100 : 720);
         const nextWidth = Math.max(320, Math.min(1400, width));
         if (this.topologyWidth !== nextWidth) this.topologyWidth = nextWidth;
         if (this.topologyHeight !== height) this.topologyHeight = height;
@@ -297,7 +312,12 @@ if (mountElement && bootstrapElement) {
         // v-model 在这页没同步，直接以输入框的当前值为准。
         const field = document.getElementById('topology-ip-search');
         const query = String((field && field.value) || this.ipQuery || '').trim().toLowerCase();
-        if (!query) return;
+        if (!query) {
+          // 空输入直接 return 时，点「IP 查询」什么都不发生，用户以为按钮坏了。
+          this.liveStatus = '请输入 IP 或设备名再查询';
+          field?.focus?.();
+          return;
+        }
         // 先在完整图里找。this.topology 是「可见」图，折叠起来的终端根本不在里面，
         // 只查可见图会永远漏掉挂在未展开主干下的设备，然后落到台账兜底——
         // 用户要的是在图上看到它，不是打开一个侧边详情。
@@ -593,13 +613,6 @@ if (mountElement && bootstrapElement) {
         }
         return labels;
       },
-      /* 端口：本地口 → 对端口；任一侧缺失就退化成已有的那一个。 */
-      edgePortLabel(edge) {
-        const local = String(edge.localInterfaceLabel || '').trim();
-        const remote = String(edge.remoteInterfaceLabel || '').trim();
-        if (local && remote) return local + ' → ' + remote;
-        return local || remote || '';
-      },
       /* 终端归属按证据强度分色：物理发现最硬，MAC 表次之，网段推断最软。 */
       attachmentEdgeClass(edge) {
         const source = edge && edge.attachmentSource;
@@ -776,6 +789,13 @@ if (mountElement && bootstrapElement) {
         if (event.key !== 'Escape' && event.key !== 'Esc') return;
         if (this.ledgerOpen) {
           event.preventDefault?.();
+          // 网段表单开着时先收表单：Esc 的本意是退一层，直接关台账会把
+          // 用户填了一半的 cidr / vlan 一起丢掉。
+          if (this.subnetFormOpen) {
+            this.subnetFormOpen = false;
+            this.subnetError = '';
+            return;
+          }
           this.closeLedger();
           return;
         }
@@ -785,7 +805,6 @@ if (mountElement && bootstrapElement) {
         }
       },
     async openIpLedgerModal() {
-      this.lookupOpen = false;
       // 台账已经有 backdrop click，但键盘用户没有对应的关闭方式，也没人把焦点移进去。
       if (!this.ledgerOpen) this.captureFocus('ledger');
       this.ledgerOpen = true;
@@ -822,11 +841,6 @@ if (mountElement && bootstrapElement) {
       };
       this.drawerFallback = node;
       this.openDrawer(node);
-    },
-    closeLookup() {
-      this.lookupOpen = false;
-      this.lookupRows = [];
-      this.lookupQuery = '';
     },
     /* 台账行是 {cells: {key: {text, sub, code, href, muted}}}，不是扁平的 {key: 文本}。
        模板里必须走这里取值——直接写 row[key] 拿到的是对象，插值出来是空的。 */
@@ -948,8 +962,8 @@ if (mountElement && bootstrapElement) {
       const meta = document.querySelector('meta[name=csrf-token]');
       const cookie = document.cookie.split('; ').find((part) => part.startsWith('csrftoken='));
       this.csrfToken = (field && field.value) || (meta && meta.content) || (cookie ? cookie.split('=')[1] : '');
-      // 这页的模板事件在本环境下没有生效，工具栏按钮改用原生监听兜底；
-      // Vue 那层若恢复，两套监听都在，动作是同一份幂等逻辑。
+      // 工具栏额外挂一层 document 委托，和模板上的 @click 并存。
+      // 两套监听跑同一份幂等逻辑，按钮点一次只产生一次动作。
     },
     beforeUnmount() {
       this.requestAbortController?.abort();
@@ -971,8 +985,9 @@ if (mountElement && bootstrapElement) {
   const app = mounted && typeof mounted.zoomBy === 'function'
     ? mounted
     : (application._instance && application._instance.proxy) || mounted || application;
-  // 这页的模板事件在本环境没绑上，工具栏改用 document 级委托。
-  // 放在 mount 之后用返回的实例，不依赖 mounted 是否跑到。
+  // 工具栏的 document 级委托。放在 mount 之后用返回的实例，不依赖 mounted 是否跑到。
+  // 模板上的 @click 本身是生效的；这里多一层是因为按钮在工具栏里最常被连点，
+  // 委托能保证事件落在 document 上、不受浮层遮挡影响。
   //
   // 监听必须幂等：整个脚本在 Vue 岛重挂时会再执行一遍，而 document 上的监听
   // 不会随旧实例消失。不挡住的话点一次按钮会跑两次，而且第二次用的是已经

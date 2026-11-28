@@ -70,8 +70,8 @@
             <div class="topology-legend" aria-label="拓扑图例">
                 <span v-for="item in topology.legend" :key="item.kind" :class="`is-${item.kind}`"><i aria-hidden="true"></i>[[ item.label ]]</span>
             </div>
-            <p v-if="truncationCount" class="topology-limit-note">
-                <span aria-hidden="true">ⓘ</span>为保证交互流畅，另有 [[ truncationCount ]] 个设备未绘制；已采集物理链路的网络设备始终保留。
+            <p v-if="truncationCount || truncationNotes.length" class="topology-limit-note">
+                <span aria-hidden="true">ⓘ</span><span v-if="truncationCount">为保证交互流畅，另有 [[ truncationCount ]] 个设备未绘制；已采集物理链路的网络设备始终保留。</span><span v-for="note in truncationNotes" :key="note">[[ note ]]</span>
             </p>
             <div v-if="snapshot.topology?.mode === 'empty'" class="topology-empty-state" role="status">
                 <strong>暂无可绘制的主要网络设备</strong>

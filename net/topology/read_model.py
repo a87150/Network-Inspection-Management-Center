@@ -1,6 +1,18 @@
 """Explicit field allowlists for current physical topology."""
 from net.models import NetworkTopologyInterface, NetworkTopologyLink
 
+DEFAULT_LIMIT = 1000
+MAX_LIMIT = 5000
+
+
+def _bounded_limit(value, *, default=DEFAULT_LIMIT, maximum=MAX_LIMIT):
+    """把外部传入的 limit 收敛到合法区间；解析不了就回落默认，不让它冒泡成 500。"""
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(1, min(parsed, maximum))
+
 
 def interface_payload(row):
     return {'id':str(row.pk),'device_id':str(row.device_id),'stable_key':row.stable_key,
@@ -28,9 +40,10 @@ def link_payload(row):
             'confidence':str(row.confidence),'last_seen_at':row.last_seen_at.isoformat()}
 
 
-def current_topology_payload(*, include_stale=False, limit=1000):
-    limit=max(1,min(int(limit),5000))
-    interfaces=NetworkTopologyInterface.objects.select_related('device').order_by('device_id','stable_key')[:limit]
+def current_topology_payload(*, include_stale=False, limit=DEFAULT_LIMIT):
+    limit=_bounded_limit(limit)
+    # interface_payload 只读本地 device_id 列，不碰 device 对象，所以这里不 join。
+    interfaces=NetworkTopologyInterface.objects.order_by('device_id','stable_key')[:limit]
     links=NetworkTopologyLink.objects.select_related(
         'local_interface','remote_interface').order_by('-last_seen_at','id')
     if not include_stale:links=links.filter(status='current')

@@ -1,3 +1,59 @@
+## 2.44（2026-11-28）
+
+### 拓扑页全量排查后的修复
+- MAC 归属的归一化正则写成 `r'[,s;]+'`（`s` 而非 `\s`），空格分隔的多个 MAC 整串
+  粘成一个，该终端永远命中不了交换机 MAC 表。改为 `[,;\s]+` 并复用
+  `observations.normalize_mac`，不再各写一份。
+- `_mac_parent` 原来按字典序取第一个命中的交换机。同一个 MAC 会被级联的上游设备
+  一起学到，字典序等于随机。改为同场地优先、其次取学到时刻最新的那台；
+  `mac_locations` 相应把 `created_at` 一起返回。
+- PC 节点的状态恒为 `unknown`：`_reachability` 只遍历 `RECORD_PAGES` 里的
+  networks/servers/weakcurrent，`Computer` 不在其中，那个键永远是 None。改用
+  `Computer.is_active` 判定。
+- `_subnet_parent` 在全体主干里选父节点、不按场地过滤，分支 VPN 复用同一个
+  /24 时终端会挂到外地交换机。改为同场地优先，跨场地只在唯一候选时放行。
+- 画布内所有绑在 SVG 元素上的点击原本被判定为失效，复查后确认是排查方法错误：
+  `hierarchyEdges` 的 path 先渲染且 class 同样含 `topology-edge`，测试点在了这条
+  没有绑定事件的对照元素上。实际点击正常，无代码改动。
+
+### 查询与索引
+- `read_model` 新增 `_bounded_limit()`，`?limit=abc` 原来直接 500，现在回落默认值
+  并钳到 [1, 5000]。
+- 证据列超过 65536 字符时原来对 JSON 字符串直接切片，切在中间就是半截 JSON，
+  前端 `JSON.parse` 必炸。改为返回 `{truncated, sha256, bytes, preview}` 的合法信封。
+- `latest_inspections` 先按 `created_at` 全局取前 5000 条再按设备分组，设备数乘
+  采集次数超过上限时排在后面的设备一条记录都没有，MAC/ARP 证据静默消失。改为在
+  数据库侧每设备取最新。
+- 三张巡检表补 `(资产, -created_at)` 与 `(status, -created_at)` 联合索引（迁移 `0083`）。
+- 接口列表去掉多余的 `select_related('device')`；链路列表的 `qs1 | qs2` 加
+  `distinct()` 生成 `COUNT(*) FROM (SELECT DISTINCT 整行)`，改成单个 `Q()` 后派生表消失。
+
+### 前端
+- 暂停刷新的提示文案取的是旧值：先调 `setManualPaused` 再读还没更新的
+  `this.manualPaused`，点「暂停」状态栏写「已恢复」。改为先算 `next` 再用。
+- 画布高度写死 720，不量容器实际高度，布局按 720 排、画布更高就上下留白。改量
+  `shell.clientHeight`，量不到才退回常量。
+- 节点详情缓存永不失效，快照更新后抽屉仍是旧资料。按 `generated_at` 清空。
+- Esc 关台账时不判断网段表单是否开着，填了一半的 cidr 会被一起关掉。改为先收表单。
+- 「IP 查询」空输入静默返回，按钮看起来坏了。改为给出提示并聚焦输入框。
+- `asset_truncation` 里的说明性字符串（链路超上限、端点顶破上限）被前端丢掉，
+  那几句永远不显示。新增 `truncationNotes`，与计数一起渲染。
+
+### 接口形状与测试断言
+- 节点 `details` 字段恒为数组。省掉首屏的详情计算时给空数组，不是把这个键去掉——
+  接口形状不该随请求方式变，前端 `node.details || []` 掩盖不了契约本身。
+- `tests/frontend/test_ui_design_contracts.py` 里断言服务端正文含 `topology-edge--inferred`，
+  而这三个分色 class 是 `attachmentEdgeClass` 在渲染时拼出来的，模板里只有 `:class` 绑定
+  表达式。这条断言从实现上就不可能成立，改成检查 `app.js` 里的定义。
+
+### 清掉的冗余
+- `net/devices/network/ipam.py` 的 `classify()`、`net/models/ipam.py` 的
+  `IpSubnet.contains()`、`app.js` 的 `edgePortLabel()` 与 `closeLookup()` 及配套的
+  `lookupOpen`/`lookupQuery`/`lookupRows`，全部确认无调用方。
+
+### 测试
+- 后端 70 项（新增 `test_endpoint_mac_attachment.py` 7 项、`test_read_paths.py` 10 项、
+  `test_topology_payload_contracts.py` 12 项），前端 167 项。
 ## 2.43（2026-11-28）
 
 ### 终端归属：从交换机 MAC 地址表算出终端挂在哪台设备下

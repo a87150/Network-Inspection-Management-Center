@@ -309,7 +309,14 @@ class Network_Device_Inspection(InfrastructureRecord):
 
     class Meta:
         ordering = ['-created_at']
-        indexes = [models.Index(fields=['-created_at'], name='net_netdevinsp_created_idx')]
+        # (外键, created_at) 支撑每设备取最新一条；observations.latest_inspections 用它
+        # 排掉同设备的旧记录，不再靠全局 LIMIT。(status, created_at) 支撑成功记录
+        # 加时间窗口的过滤，否则这条过滤只能扫全表。
+        indexes = [
+            models.Index(fields=['-created_at'], name='net_netdevinsp_created_idx'),
+            models.Index(fields=['device', '-created_at'], name='net_netdevinsp_dev_time_idx'),
+            models.Index(fields=['status', '-created_at'], name='net_netdevinsp_stat_time_idx'),
+        ]
 
 
 class Server_Inspection(InfrastructureRecord):
@@ -321,7 +328,11 @@ class Server_Inspection(InfrastructureRecord):
 
     class Meta:
         ordering = ['-created_at']
-        indexes = [models.Index(fields=['-created_at'], name='net_serverinsp_created_idx')]
+        indexes = [
+            models.Index(fields=['-created_at'], name='net_serverinsp_created_idx'),
+            models.Index(fields=['server', '-created_at'], name='net_serverinsp_dev_time_idx'),
+            models.Index(fields=['status', '-created_at'], name='net_serverinsp_stat_time_idx'),
+        ]
 
 
 class Monitor_Inspection(InfrastructureRecord):
@@ -333,7 +344,11 @@ class Monitor_Inspection(InfrastructureRecord):
 
     class Meta:
         ordering = ['-created_at']
-        indexes = [models.Index(fields=['-created_at'], name='net_monitorinsp_created_idx')]
+        indexes = [
+            models.Index(fields=['-created_at'], name='net_monitorinsp_created_idx'),
+            models.Index(fields=['monitor', '-created_at'], name='net_monitorinsp_dev_time_idx'),
+            models.Index(fields=['status', '-created_at'], name='net_monitorinsp_stat_time_idx'),
+        ]
 
 
 class Error_Network_Device(models.Model):

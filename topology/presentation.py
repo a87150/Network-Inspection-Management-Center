@@ -2,14 +2,18 @@
 
 import re
 from collections import Counter, deque
+from datetime import UTC, datetime
 from functools import lru_cache
 from ipaddress import ip_interface
 
 from django.urls import reverse
 
+from net.devices.network.observations import normalize_mac
 from index.common.table_payload import detail_field_payloads
 from index.common.table_registry import get_table_definition
 
+
+EPOCH = datetime.min.replace(tzinfo=UTC)
 
 ROLE_TIERS = {
     'firewall': 0,
@@ -127,23 +131,47 @@ def address_networks(value):
     ))
 
 
-def _subnet_parent(endpoint_networks, backbone_nodes):
+def _subnet_candidates(endpoint, pool):
+    """pool 里网段覆盖终端的主干节点，最优在前。"""
     candidates = []
-    for node in backbone_nodes:
+    for node in pool:
         overlaps = [
-            max(endpoint.prefixlen, backbone.prefixlen)
-            for endpoint in endpoint_networks
-            for backbone in node['_networks']
-            if endpoint.version == backbone.version and endpoint.overlaps(backbone)
+            max(endpoint_network.prefixlen, backbone_network.prefixlen)
+            for endpoint_network in endpoint['_networks']
+            for backbone_network in node['_networks']
+            if endpoint_network.version == backbone_network.version
+            and endpoint_network.overlaps(backbone_network)
         ]
         if overlaps:
             candidates.append((max(overlaps), node))
-    return min(candidates, key=lambda item: (
+    candidates.sort(key=lambda item: (
         -item[0],
         ATTACHMENT_ROLE_PRIORITY[item[1]['role']],
         item[1]['tier'],
         item[1]['id'],
-    ), default=(None, None))[1]
+    ))
+    return [node for _overlap, node in candidates]
+
+
+def _subnet_parent(endpoint, backbone_nodes):
+    """按网段给终端找上级，候选先按终端所在场地过滤。
+
+    分支 VPN 两端常复用同一个 192.168.x.0/24。原来在全体主干里挑最近的，
+    本场地的终端会挂到外地那台交换机上，图上看就是总部 PC 连到了分部。
+    所以只在同场地里挑；同场地没命中时才看外地，且只有唯一候选才认——
+    多个候选分不清谁是谁，留给 _orphan_parent 按场地兜底，不猜。
+    """
+    site = endpoint.get('site') or ''
+    if not site:
+        candidates = _subnet_candidates(endpoint, backbone_nodes)
+        return candidates[0] if candidates else None
+    local = _subnet_candidates(
+        endpoint, [node for node in backbone_nodes if node.get('site') == site])
+    if local:
+        return local[0]
+    remote = _subnet_candidates(
+        endpoint, [node for node in backbone_nodes if node.get('site') != site])
+    return remote[0] if len(remote) == 1 else None
 
 
 @lru_cache(maxsize=None)
@@ -159,8 +187,7 @@ def _details(asset, table_key):
 def _node(*, node_id, kind, role, label, subtitle, ip, vendor='', model='',
           status='unknown', url='', tier=None, parent_id=None,
           attachment_source='', child_count=0, details=(), site=''):
-    return {
-        'details': list(details),
+    node = {
         # 详情按需取：抽屉打开时前端打这个地址，首屏不再背每个节点的明细。
         'detailsUrl': reverse('operations_overview_node', args=[node_id]),
         'id': node_id,
@@ -179,6 +206,9 @@ def _node(*, node_id, kind, role, label, subtitle, ip, vendor='', model='',
         'attachment_source': attachment_source,
         'child_count': child_count,
     }
+    # 恒为列表：首屏不算详情时给空数组，不是省掉这个键。接口形状不随请求方式变。
+    node['details'] = list(details)
+    return node
 
 
 def _node_status(enabled, reachable):
@@ -195,7 +225,8 @@ def _node_status(enabled, reachable):
     return 'normal' if reachable else 'abnormal'
 
 
-def _network_node(device, reachable=None):
+def _network_node(device, reachable=None, with_details=True):
+    """单个网络设备的节点。with_details=False 时不算详情——首屏用不上。"""
     role = network_role(device)
     kind = 'endpoint' if role == 'access_point' else 'backbone'
     node = _node(
@@ -211,7 +242,7 @@ def _network_node(device, reachable=None):
         # 停用画灰不可点、异常标红，两者必须能分开：前者是人为下架，后者是连不上。
         status=_node_status(device.is_enabled, reachable),
         url=reverse('asset_detail', args=['networks', device.pk]),
-        details=_details(device, 'networks'),
+        details=_details(device, 'networks') if with_details else (),
         site=_site_hint(device),
     )
     node['_subnet'] = _subnet_hint(device)
@@ -223,10 +254,13 @@ def _mac_set(value):
     """把「AA-BB, 11:22:33」这种多 MAC 字段拆成可比较的集合。
 
     终端在台账里的 MAC 是自由文本：分隔符有横杠、冒号、空格、逗号，大小写不定。
-    归一化之后才能拿去和交换机 MAC 表里的写法对上。
+    归一化之后才能拿去和交换机 MAC 表里的写法对上。归一化必须和
+    observations.normalize_mac 同一套，否则两边算出不同的串，永远匹配不上。
     """
-    parts = re.split(r'[,s;]+', str(value or ''))
-    return {''.join(char for char in part.lower() if char.isalnum()) for part in parts} - {''}
+    # 分隔符要含空白：原来写成 r'[,s;]+'，s 是普通字符不是 \s，
+    # 空格分隔的多个 MAC 会整串粘成一个，该终端永远命中不了 MAC 表。
+    parts = re.split(r'[,;\s]+', str(value or ''))
+    return {mac for mac in (normalize_mac(part) for part in parts) if mac}
 
 
 def _endpoint_nodes(computers, servers, weak_current, with_details=True, reachability=None):
@@ -236,9 +270,11 @@ def _endpoint_nodes(computers, servers, weak_current, with_details=True, reachab
             node_id=f'computers:{computer.pk}', kind='endpoint', role='computer',
             label=computer.computer_name, subtitle='PC', ip=computer.ip_addresses or '',
             vendor=computer.manufacturer, model=computer.model,
-            status=_node_status(
-                computer.is_active,
-                (reachability or {}).get('computers:%s' % computer.pk)),
+            # Computer 不在巡检 RECORD_PAGES 里（只有网络设备/服务器/弱电），
+            # reachability 里没有 computers:* 的键，查出来恒为 None——用它判定
+            # 会让每台 PC 永远显示「状态未知」。PC 在线的唯一凭据是自己的
+            # is_active（客户端上报过即为 True），停用和失联在这里是同一件事。
+            status='normal' if computer.is_active else 'disabled',
             url=reverse('asset_detail', args=['computers', computer.pk]),
             details=_details(computer, 'computers') if with_details else (),
             site=_site_hint(computer),
@@ -474,14 +510,24 @@ def _mac_parent(endpoint, backbone_by_id, mac_locations):
     MAC 出现在某台设备的某个口下，那台就是它的上级。这比按网段猜准得多：
     同一个 /24 下挂十台接入交换机时，网段推断分不清终端到底接在哪一台。
     """
+    site = endpoint.get('site') or ''
+    candidates = []
     for mac in sorted(endpoint.get('_macs') or ()):
         hit = mac_locations.get(mac)
         if not hit:
             continue
         parent = backbone_by_id.get(f'networks:{hit[0]}')
-        if parent is not None:
-            return parent
-    return None
+        if parent is None:
+            continue
+        # 同一个 MAC 会被级联的上游交换机一起学到，按字典序取第一个等于随机取。
+        # 先看场地是否一致，再看哪台设备学到的时刻最新——最新的更可能是它直连的。
+        same_site = bool(site) and parent.get('site') == site
+        learned_at = hit[2] if len(hit) > 2 else None
+        candidates.append((same_site, learned_at or EPOCH, parent))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    return candidates[0][2]
 
 
 def attach_endpoints(backbone_nodes, endpoint_nodes, physical_edges, mac_locations=None):
@@ -495,7 +541,7 @@ def attach_endpoints(backbone_nodes, endpoint_nodes, physical_edges, mac_locatio
             parent = _mac_parent(endpoint, backbone_by_id, mac_locations)
             source = 'mac_learned' if parent is not None else ''
         if parent is None:
-            parent = _subnet_parent(endpoint['_networks'], backbone_nodes)
+            parent = _subnet_parent(endpoint, backbone_nodes)
             source = 'inferred_subnet' if parent is not None else ''
         if parent is None:
             # 既没有物理发现、IP 也落不进任何主干设备的 /24（比如没填 IP 的 PC），
@@ -535,15 +581,11 @@ def build_enterprise_topology(*, network_devices, computers, servers, weak_curre
     # 线还插着」，摘掉就跟断线看不出区别了。
     network_nodes = [
         node for node in (
-            _network_node(device, reachability.get('networks:%s' % device.pk))
+            _network_node(device, reachability.get('networks:%s' % device.pk),
+                          with_details=with_details)
             for device in network_devices)
         if node['status'] != 'disabled' or node['id'] in linked_ids
     ]
-    # 首屏只要名称/IP/型号这些一眼要看的字段；每个节点 400 多字节的
-    # details 合计 67 KB，等抽屉打开再单独取。
-    if not with_details:
-        for node in network_nodes:
-            node['details'] = []
     backbone_nodes = [node for node in network_nodes if node['kind'] == 'backbone']
     endpoint_nodes = [
         *[node for node in network_nodes if node['kind'] == 'endpoint'],

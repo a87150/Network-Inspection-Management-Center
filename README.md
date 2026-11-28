@@ -129,7 +129,7 @@ mariadb-tzinfo-to-sql /usr/share/zoneinfo | mysql mysql
 | 设备资料 | 网络/服务器/安防列表 → 添加、导入或单行“修改配置”；硬件资料由有效采集结果补充 |
 | 巡检方法与报警 | 设备列表 → 配置模板，按项目设采集方式、命令/OID、解析、阈值和等级；单行“巡检设置”覆盖差异 |
 | 单台巡检 | 设备行 → 手动巡检；只创建该设备目标，切换配置不改变目标 |
-| 物理拓扑 | 网络巡检项目选择“拓扑发现（LLDP/CDP）”；SNMP 读标准 LLDP-MIB，SSH 解析厂商 LLDP/CDP；登录用户可读拓扑，原始证据需单独权限 |
+| 物理拓扑 | 网络巡检项目选择“拓扑发现（LLDP/CDP）”；SNMP 读标准 LLDP-MIB，SSH 解析厂商 LLDP/CDP；登录用户可读拓扑，原始证据需单独权限。终端挂在哪台接入交换机下由 MAC 地址表定位，四档证据见[设备巡检](docs/device-inspection.md#终端挂在哪个设备下) |
 | 批量与定时巡检 | 巡检配置 → 先选设备，再选适用项目 → 保存计划或执行 |
 | 原始配置下载 | 设备列表勾选设备 → 下载；单台原文件、多台 ZIP；详情可查历史版本 |
 | AD 管理 | 连接设置 → 测试/同步 → 域账户、计算机及所属分组；入组/移动 OU 从已同步目录选择，分组列表通过“成员管理”弹窗批量添加、移除成员；计算机行按需获取 BitLocker 密钥 |
@@ -224,7 +224,8 @@ Worker 同时承担到期计划检查、任务领取、租约续期和告警处�
 | 网络 Ping 通但部分失败 | 按项目查 SNMP 视图/OID、SSH 命令/解析；在模板窗口用实际回显预览 |
 | 深信服吞吐量 401 | 查 Worker 出口白名单、开放接口和共享密钥，确保 Worker 已更新；吞吐量使用 POST JSON 签名 |
 | 配置下载为空或无法解密 | 先看备份支持范围/成功版本，再核对原备份密钥；下载不会即时连接设备 |
-| 拓扑没有链路 | 确认巡检配置勾选“拓扑发现（LLDP/CDP）”，设备启用 LLDP/CDP，SNMP 可读 LLDP-MIB 或 SSH 模板能解析回显；Ping、ARP、MAC 表和名称相似不会生成物理链路 |
+| 拓扑没有链路 | 确认巡检配置勾选“拓扑发现（LLDP/CDP）”，设备启用 LLDP/CDP，SNMP 可读 LLDP-MIB 或 SSH 模板能解析回显；Ping、ARP、MAC 表和名称相似不会生成**设备之间的**物理链路 |
+| 终端挂不上去 | 看终端的 `mac_addresses` 是否填了、接入交换机有没有采集 MAC 地址表（回看 7 天）；对不上时拓扑会退到网段推断，再不行落到兜底挂接，线型依次变弱。详见[终端挂在哪个设备下](docs/device-inspection.md#终端挂在哪个设备下) |
 | 域控 636 / BitLocker 失败 | 按 [CA 指南](docs/operations.md#windows-内部-ca-与-ldaps-排障) 查 DNS、证书链、端口及目录权限；项目 BitLocker 读取要求 LDAPS |
 | MariaDB W003 / W036 | **W036 只说明带条件的唯一约束需要变通，不代表互斥不存在**。task 级的活动范围互斥靠 `active_scope_key` 上的普通唯一索引；`TaskTargetRun` 的目标级互斥由 `0040_mariadb_active_target_scope` 用 `STORED` 生成列 `net_active_execution_scope`（活跃态取 `execution_scope_key`、终态为 NULL）加唯一索引 `net_target_active_scope_mysql` 实现，**数据库层真实生效**。核对实际迁移和索引，不截断 DN、不重置表，详见[数据库说明](docs/architecture.md) |
 | 启动报 `DB_ENGINE must be ...` | 配置里的引擎值拼错了。**这是刻意的**：早前拼错会静默连上根目录的 SQLite 空库，看起来像数据全没了。改回 `mysql` 或 `sqlite` 即可 |
