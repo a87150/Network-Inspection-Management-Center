@@ -78,6 +78,29 @@ def observed_addresses(*, lookback_days=LOOKBACK_DAYS):
     return {"addresses": seen, "devices": len(latest)}
 
 
+def mac_locations(*, lookback_days=LOOKBACK_DAYS):
+    """每个 MAC 最后出现在哪台设备的哪个口。
+
+    交换机的 MAC 地址表是终端位置的真凭据：PC 和服务器不发 LLDP，拓扑里看不到
+    它们，但它们的 MAC 一定会在某一台接入交换机的某个口上被学到。同一个 MAC
+    可能同时出现在级联的多台设备上（上游设备也会学到），取巡检时间最新的那台。
+
+    返回 {归一化 MAC: (设备 pk, 接口名)}。
+    """
+    latest = latest_inspections(lookback_days=lookback_days)
+    found = {}
+    for inspection in latest.values():
+        for record in _records(inspection.details or {}, "mac_table"):
+            mac = normalize_mac(_first(record, _MAC_KEYS))
+            interface = _first(record, _INTERFACE_KEYS)
+            if not mac or not interface:
+                continue
+            previous = found.get(mac)
+            if previous is None or inspection.created_at > previous[2]:
+                found[mac] = (inspection.device_id, interface, inspection.created_at)
+    return {mac: (device_id, interface) for mac, (device_id, interface, _) in found.items()}
+
+
 def search(query, *, lookback_days=LOOKBACK_DAYS):
     """Match one IP or MAC against each device's latest successful result."""
     needle = (query or "").strip()

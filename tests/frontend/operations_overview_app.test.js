@@ -525,3 +525,111 @@ test('只有一条边时仍走正中，不引入无谓偏移', async () => {
   const lanes = options.computed.edgeLanes.call(context);
   assert.equal(lanes.has('only'), false, '单条边不分配车道，按旧逻辑取中');
 });
+
+test('24 台同层兄弟的边分到 24 个不同车道', async () => {
+  const { options } = await loadComponent();
+  const nodes = new Map([
+    ['agg', { id: 'agg', kind: 'backbone', x: 600, y: 200 }],
+  ]);
+  const edges = [];
+  for (let index = 0; index < 24; index += 1) {
+    const id = 'sw-' + index;
+    nodes.set(id, { id, kind: 'backbone', x: 100 + index * 60, y: 400 });
+    edges.push({ id: 'e' + index, source: 'agg', target: id });
+  }
+  const context = Object.create(options.methods || {});
+  context.topology = { physicalEdges: edges };
+  context.topologyNodes = nodes;
+  const lanes = options.computed.edgeLanes.call(context);
+  const values = edges.map((edge) => lanes.get(edge.id));
+
+  assert.equal(values.filter((value) => value !== undefined).length, 24, '每条边都要有车道');
+  assert.equal(new Set(values).size, 24, '24 条边应各占一条车道');
+  const span = Math.max(...values) - Math.min(...values);
+  assert.ok(span >= 60, '车道总跨度应足够，实际 ' + span);
+});
+
+test('折线两端的端口标签按上下两端分开，方向跟着线的画法翻', async () => {
+  const { options } = await loadComponent();
+  const nodes = new Map([
+    ['up', { id: 'up', kind: 'backbone', x: 500, y: 100 }],
+    ['down', { id: 'down', kind: 'backbone', x: 500, y: 400 }],
+  ]);
+  const context = Object.create(options.methods || {});
+  context.topologyNodes = nodes;
+  context.edgeLanes = new Map();
+  context.edgeAnchors = new Map();
+  context.viewport = { scale: 1, x: 0, y: 0 };
+  context.topology = { physicalEdges: [] };
+
+  // source 在上：上端标 local，下端标 remote。
+  const forward = options.methods.edgePortLabels.call(context, {
+    id: 'e1', source: 'up', target: 'down',
+    localInterfaceLabel: 'GE0/0/1', remoteInterfaceLabel: 'GE0/0/2',
+  });
+  assert.equal(forward.length, 2);
+  assert.equal(forward[0].text, 'GE0/0/1');
+  assert.equal(forward[1].text, 'GE0/0/2');
+  assert.ok(forward[0].y < forward[1].y, '上端的标签在更靠上的位置');
+
+  // source 在下：方向要翻过来，下端才是 local。
+  const reverse = options.methods.edgePortLabels.call(context, {
+    id: 'e2', source: 'down', target: 'up',
+    localInterfaceLabel: 'XGE1/0/24', remoteInterfaceLabel: 'XGE1/0/1',
+  });
+  assert.equal(reverse[0].text, 'XGE1/0/1');
+  assert.equal(reverse[1].text, 'XGE1/0/24');
+});
+
+test('边多时不常驻标注，放大后才显示', async () => {
+  const { options } = await loadComponent();
+  const context = Object.create(options.methods || {});
+  context.selectedEdgeId = '';
+  context.hoveredEdgeId = '';
+  context.topology = { physicalEdges: Array.from({ length: 40 }, (_, i) => ({ id: 'e' + i })) };
+
+  context.viewport = { scale: 1, x: 0, y: 0 };
+  assert.equal(options.methods.edgeLabelVisible.call(context, { id: 'zzz' }), false);
+
+  context.viewport = { scale: 1.3, x: 0, y: 0 };
+  assert.equal(options.methods.edgeLabelVisible.call(context, { id: 'zzz' }), true);
+});
+
+test('双上联的两条线在接入这端错开引出，不收成同一个点', async () => {
+  const { options } = await loadComponent();
+  const nodes = new Map([
+    ['coreA', { id: 'coreA', kind: 'backbone', x: 300, y: 100 }],
+    ['coreB', { id: 'coreB', kind: 'backbone', x: 900, y: 100 }],
+    ['poe1', { id: 'poe1', kind: 'backbone', x: 600, y: 400 }],
+  ]);
+  const physicalEdges = [
+    { id: 'e1', source: 'poe1', target: 'coreA' },
+    { id: 'e2', source: 'poe1', target: 'coreB' },
+  ];
+  const context = Object.create(options.methods || {});
+  context.topologyNodes = nodes;
+  context.topology = { physicalEdges, hierarchyEdges: [] };
+
+  const anchors = options.computed.edgeAnchors.call(context);
+  const left = anchors.get('e1@poe1');
+  const right = anchors.get('e2@poe1');
+
+  assert.ok(left !== undefined && right !== undefined, '两条边在接入这端都要有锚位');
+  assert.ok(left < 0, '对端在左边的应该往左引，实际 ' + left);
+  assert.ok(right > 0, '对端在右边的应该往右引，实际 ' + right);
+  assert.notEqual(Math.round(left), Math.round(right));
+});
+
+test('单条上行不偏移，仍从卡片中心引出', async () => {
+  const { options } = await loadComponent();
+  const nodes = new Map([
+    ['core', { id: 'core', kind: 'backbone', x: 600, y: 100 }],
+    ['poe1', { id: 'poe1', kind: 'backbone', x: 600, y: 400 }],
+  ]);
+  const context = Object.create(options.methods || {});
+  context.topologyNodes = nodes;
+  context.topology = { physicalEdges: [{ id: 'e1', source: 'poe1', target: 'core' }], hierarchyEdges: [] };
+
+  const anchors = options.computed.edgeAnchors.call(context);
+  assert.equal(anchors.get('e1@poe1'), undefined);
+});

@@ -219,6 +219,16 @@ def _network_node(device, reachable=None):
     return node
 
 
+def _mac_set(value):
+    """把「AA-BB, 11:22:33」这种多 MAC 字段拆成可比较的集合。
+
+    终端在台账里的 MAC 是自由文本：分隔符有横杠、冒号、空格、逗号，大小写不定。
+    归一化之后才能拿去和交换机 MAC 表里的写法对上。
+    """
+    parts = re.split(r'[,s;]+', str(value or ''))
+    return {''.join(char for char in part.lower() if char.isalnum()) for part in parts} - {''}
+
+
 def _endpoint_nodes(computers, servers, weak_current, with_details=True, reachability=None):
     nodes = []
     for computer in computers:
@@ -234,6 +244,9 @@ def _endpoint_nodes(computers, servers, weak_current, with_details=True, reachab
             site=_site_hint(computer),
         )
         node['_networks'] = address_networks(computer.ip_addresses)
+        # 终端的 MAC 是把它挂到接入交换机下面的唯一真凭据：PC 不发 LLDP，
+        # 只能靠交换机 MAC 表里「谁在哪个口学到」来定位。
+        node['_macs'] = _mac_set(computer.mac_addresses)
         nodes.append(node)
     for server in servers:
         node = _node(
@@ -247,6 +260,7 @@ def _endpoint_nodes(computers, servers, weak_current, with_details=True, reachab
             site=_site_hint(server),
         )
         node['_networks'] = address_networks(server.ip)
+        node['_macs'] = _mac_set(server.mac_addresses)
         nodes.append(node)
     for monitor in weak_current:
         node = _node(
@@ -389,13 +403,22 @@ def site_components(backbone_nodes, physical_edges, hints):
     return components, component_of
 
 
+def _tier_of(node):
+    return node['tier'] if node['tier'] is not None else 99
+
+
 def backbone_parents(backbone_nodes, physical_edges):
     """把已解析链路收成树：从最靠近出口的设备出发做 BFS。
 
     链路本身是网状的，树只是一种呈现。先访问的一定更靠近出口（tier 更小），
     所以父节点的层号永远不大于子节点，画出来就是从出口往下走。
+
+    同层之间直连（堆叠、冗余备份、或两台接入交换机对连）不算上下级。BFS 只
+    知道访问顺序，不知道谁在谁上面：不加层级约束的话，先访问到的那台会凭空
+    变成另一台的父节点，图上多出一条竖线，看起来像两台设备串成了一条链路。
     """
     by_pk = {node['id'].split(':', 1)[1]: node for node in backbone_nodes}
+    by_id = {node['id']: node for node in backbone_nodes}
     adjacency = {node['id']: set() for node in backbone_nodes}
     for edge in physical_edges:
         if edge.get('resolution_status') != 'resolved':
@@ -414,7 +437,7 @@ def backbone_parents(backbone_nodes, physical_edges):
     parent = {}
     visited = set()
     for root in sorted(backbone_nodes, key=lambda node: (
-            node['tier'] if node['tier'] is not None else 99, node['label'], node['id'])):
+            _tier_of(node), node['label'], node['id'])):
         if root['id'] in visited:
             continue
         visited.add(root['id'])
@@ -425,7 +448,8 @@ def backbone_parents(backbone_nodes, physical_edges):
                 if neighbour in visited:
                     continue
                 visited.add(neighbour)
-                parent[neighbour] = current
+                if _tier_of(by_id[neighbour]) > _tier_of(by_id[current]):
+                    parent[neighbour] = current
                 queue.append(neighbour)
     return parent
 
@@ -444,12 +468,32 @@ def _orphan_parent(endpoint, backbone_nodes):
     ))
 
 
-def attach_endpoints(backbone_nodes, endpoint_nodes, physical_edges):
+def _mac_parent(endpoint, backbone_by_id, mac_locations):
+    """终端挂在哪个口上，问交换机的 MAC 地址表。
+
+    MAC 出现在某台设备的某个口下，那台就是它的上级。这比按网段猜准得多：
+    同一个 /24 下挂十台接入交换机时，网段推断分不清终端到底接在哪一台。
+    """
+    for mac in sorted(endpoint.get('_macs') or ()):
+        hit = mac_locations.get(mac)
+        if not hit:
+            continue
+        parent = backbone_by_id.get(f'networks:{hit[0]}')
+        if parent is not None:
+            return parent
+    return None
+
+
+def attach_endpoints(backbone_nodes, endpoint_nodes, physical_edges, mac_locations=None):
     backbone_by_id = {node['id']: node for node in backbone_nodes}
+    mac_locations = mac_locations or {}
     edges = []
     for endpoint in endpoint_nodes:
         parent = _physical_parent(endpoint, backbone_by_id, physical_edges)
         source = 'physical_discovered' if parent is not None else ''
+        if parent is None:
+            parent = _mac_parent(endpoint, backbone_by_id, mac_locations)
+            source = 'mac_learned' if parent is not None else ''
         if parent is None:
             parent = _subnet_parent(endpoint['_networks'], backbone_nodes)
             source = 'inferred_subnet' if parent is not None else ''
@@ -477,7 +521,7 @@ def attach_endpoints(backbone_nodes, endpoint_nodes, physical_edges):
 
 def build_enterprise_topology(*, network_devices, computers, servers, weak_current,
                               physical, asset_truncation=None, with_details=True,
-                              reachability=None):
+                              reachability=None, mac_locations=None):
     reachability = reachability or {}
     physical_edges = list(physical.get('links', []))
     linked_ids = set()
@@ -530,7 +574,9 @@ def build_enterprise_topology(*, network_devices, computers, servers, weak_curre
             'source': parent_id,
             'target': node['id'],
         })
-    attachment_edges = attach_endpoints(backbone_nodes, endpoint_nodes, physical_edges)
+    attachment_edges = attach_endpoints(
+        backbone_nodes, endpoint_nodes, physical_edges, mac_locations,
+    )
     nodes = backbone_nodes + endpoint_nodes
     # 终端跟随上级的场地，别再按自己的 IP 猜一次。
     by_id = {node['id']: node for node in nodes}
@@ -555,6 +601,7 @@ def build_enterprise_topology(*, network_devices, computers, servers, weak_curre
     has_physical_links = bool(physical_edges)
     for node in nodes:
         node.pop('_networks', None)
+        node.pop('_macs', None)
     return {
         'mode': 'empty' if not backbone_count else ('hybrid' if has_physical_links else 'backbone'),
         'nodes': nodes,

@@ -263,6 +263,9 @@ class Server(models.Model):
     manufacturer = models.CharField(max_length=255, blank=True, null=True)
     model = models.CharField(max_length=255, blank=True, null=True)
     serial_number = models.CharField(max_length=255, blank=True, null=True)
+    # 服务器和 PC 一样不发 LLDP，拓扑上只能靠交换机 MAC 表定位。
+    # 和 Computer.mac_addresses 同宽：多网卡时是逗号分隔的一串。
+    mac_addresses = models.CharField(max_length=1024, blank=True, null=True)
     architecture = models.CharField(max_length=255, blank=True, null=True)
     cpu_model = models.CharField(max_length=255, blank=True, null=True)
     cpu_physical_core_count = models.PositiveIntegerField(null=True, blank=True)

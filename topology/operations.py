@@ -6,6 +6,7 @@ from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.http import require_GET
 
+from net.devices.network import observations
 from net.models import Computer, Network_Device, WeakCurrentDevice, Server
 from net.topology.read_model import current_topology_payload
 from topology.presentation import build_enterprise_topology
@@ -119,6 +120,8 @@ def _build_topology():
         asset_truncation=truncation,
         with_details=False,
         reachability=_safe_region('reachability', _reachability) or {},
+        # 终端不发 LLDP，只能靠交换机 MAC 表里「谁在哪个口学到」定位。
+        mac_locations=_safe_region('mac_locations', observations.mac_locations) or {},
     )
 
 

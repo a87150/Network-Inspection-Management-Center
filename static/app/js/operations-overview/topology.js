@@ -243,15 +243,20 @@ export function cardWidthFor(node) {
   return Math.max(minimum, Math.round(64 + textWidth(node.label)));
 }
 
-/* 一行内按真实宽度均分剩余空间，卡片之间至少留 40px。 */
-function distribute(nodes, minX, maxX, y) {
+/* 一行内按真实宽度均分剩余空间，卡片之间至少留 40px。
+   align='left' 时从左边排起而不是居中：一层折成两行时，居中的第二行会把第一个
+   节点摆在第一行某个节点的正下方，那根竖线看上去就像一条串联连线。左对齐让每行
+   的起点固定在列首，折行不再制造「垂直对齐」的假象。 */
+function distribute(nodes, minX, maxX, y, align = 'center') {
   if (!nodes.length) return [];
   const widths = nodes.map(cardWidthFor);
   const total = widths.reduce((sum, value) => sum + value, 0);
   const span = maxX - minX;
   const gap = nodes.length > 1 ? Math.max(40, (span - total) / (nodes.length - 1)) : 0;
   const rowWidth = total + (gap * (nodes.length - 1));
-  const start = minX + Math.max(0, (span - rowWidth) / 2);
+  const start = align === 'left'
+    ? minX
+    : minX + Math.max(0, (span - rowWidth) / 2);
   let cursor = start;
   return nodes.map((node, index) => {
     const cardWidth = widths[index];
@@ -320,15 +325,52 @@ function layoutEndpointLayers(positionedBackbone, endpoints, box) {
 }
 
 
+/* 端口名的自然序：XGE4/0/10 排在 XGE4/0/9 后面。直接比字符串会把 10 放到 2 前面。 */
+function portSegments(name) {
+  return String(name || '').match(/\d+|\D+/g) || [];
+}
+
+function comparePortNames(left, right) {
+  const a = portSegments(left);
+  const b = portSegments(right);
+  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+    if (a[index] === undefined) return -1;
+    if (b[index] === undefined) return 1;
+    const x = a[index];
+    const y = b[index];
+    if (/^\d+$/.test(x) && /^\d+$/.test(y)) {
+      if (Number(x) !== Number(y)) return Number(x) - Number(y);
+    } else if (x !== y) {
+      return x < y ? -1 : 1;
+    }
+  }
+  return 0;
+}
+
 /* 同层的子设备按父设备在上一层的左右位置排序，同一棵子树因此挨在一起，
-   顺着连线往下读不会左右跳。没有父的（多站点各自出口）排在本层最前。 */
-function orderByParent(nodes, placed) {
+   顺着连线往下读不会左右跳。没有父的（多站点各自出口）排在本层最前。
+
+   同一个父下面挂着好几台时，再按「父设备那一侧的端口号」排：1 号口在最左、
+   24 号口在最右。不排的话左右顺序由设备名决定，端口 1 和 24 可能被摆到相邻位，
+   连线横着交叉，看不出谁接谁。 */
+function orderByParent(nodes, placed, edges = []) {
   const parentX = new Map(placed.map((node) => [node.id, node.x]));
+  const portOf = new Map();
+  for (const edge of edges) {
+    if (!edge || !edge.source || !edge.target) continue;
+    // localInterfaceLabel 已经是 source 这一侧的口，reverseResolved 在归一化时处理过。
+    if (!portOf.has(edge.target)) portOf.set(edge.target, edge.localInterfaceLabel || '');
+    if (!portOf.has(edge.source)) portOf.set(edge.source, edge.remoteInterfaceLabel || '');
+  }
   return [...nodes].sort((left, right) => {
     const leftX = parentX.has(left.parentId) ? parentX.get(left.parentId) : -1;
     const rightX = parentX.has(right.parentId) ? parentX.get(right.parentId) : -1;
-    return leftX - rightX
-      || compareText(left.parentId || '', right.parentId || '')
+    if (leftX !== rightX) return leftX - rightX;
+    if (left.parentId && left.parentId === right.parentId) {
+      const byPort = comparePortNames(portOf.get(left.id), portOf.get(right.id));
+      if (byPort) return byPort;
+    }
+    return compareText(left.parentId || '', right.parentId || '')
       || compareText(left.label, right.label)
       || compareText(left.id, right.id);
   });
@@ -414,12 +456,29 @@ export function layoutTopology(graph, viewport = {}) {
       const layerNodes = orderByParent(
         members.filter((node) => Number(node.tier ?? 3) === tier),
         positionedBackbone,
+        graph.physicalEdges,
       );
+      // 折行时每一行相对上一行横移，几行的节点不会落在同一条竖线上。
+      // 只靠左对齐不够：每行都从列首起，第一张卡仍然上下对齐，各自到核心的
+      // 上联就叠在同一条竖线上，看上去像一根线穿过中间那台。按行递增错开，
+      // 封顶在列宽的四分之一，免得后面的行被挤出列外。
+      let rowIndex = 0;
       for (const row of packRows(layerNodes, column.width)) {
+        const shift = Math.min(rowIndex * 28, column.width * 0.4);
         positionedBackbone.push(
-          ...distribute(row, column.left, column.left + column.width, columnY),
+          ...distribute(
+            row,
+            column.left + shift,
+            column.left + column.width - shift,
+            columnY,
+            'left',
+          ),
         );
-        columnY += 118;
+        // 行距要撑得住上下两层之间的车道：卡片上下各占 45px，剩下的才是连线能用的
+        // 带宽。原来是 118，扣除卡片只剩 28px，24 条线每条只能隔 3px，放大也分不开。
+        // 撑到 170 之后可用带宽到 80px，间隔能到 5px 以上。
+        columnY += 170;
+        rowIndex += 1;
       }
       columnY += 35;
     }
@@ -486,6 +545,7 @@ export function layoutTopology(graph, viewport = {}) {
     legend: [
       { kind: 'physical', label: 'LLDP/CDP 物理链路' },
       { kind: 'vpn', label: '场地间 VPN' },
+      { kind: 'mac', label: 'MAC 表定位终端' },
       { kind: 'inferred', label: '网段推断终端' },
       { kind: 'external', label: '未解析邻居' },
     ],

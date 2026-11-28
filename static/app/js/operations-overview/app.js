@@ -173,6 +173,30 @@ if (mountElement && bootstrapElement) {
         }
         return lanes;
       },
+      /* 同一台设备上的多条边从卡片边缘的不同位置引出。双上联的两条线如果都从
+         卡片中心出发，绕一大圈之后又收成同一个点，缩小时并成一根看不出是两条。
+         按对端设备的横向位置排开：对端在左的走左，在右的走右，最多偏 8px。 */
+      edgeAnchors() {
+        const anchors = new Map();
+        const grouped = new Map();
+        for (const edge of this.topology.physicalEdges || []) {
+          const source = this.topologyNodes.get(edge.source);
+          const target = this.topologyNodes.get(edge.target);
+          if (!source || !target) continue;
+          for (const [selfId, otherX] of [[edge.source, target.x], [edge.target, source.x]]) {
+            if (!grouped.has(selfId)) grouped.set(selfId, []);
+            grouped.get(selfId).push({ key: edge.id + '@' + selfId, otherX });
+          }
+        }
+        for (const list of grouped.values()) {
+          if (list.length < 2) continue;
+          list.sort((left, right) => left.otherX - right.otherX);
+          const step = Math.min(8, 32 / (list.length - 1));
+          const origin = -((list.length - 1) * step) / 2;
+          list.forEach((item, index) => anchors.set(item.key, origin + index * step));
+        }
+        return anchors;
+      },
       topologyNodes() {
         return new Map(this.topology.nodes.map((node) => [node.id, node]));
       },
@@ -510,7 +534,9 @@ if (mountElement && bootstrapElement) {
             source.y + this.nodeBottom(source),
             target.y + this.nodeBottom(target),
           ) + 20;
-          return `M ${source.x} ${source.y + this.nodeBottom(source)} V ${dip} H ${target.x} V ${target.y + this.nodeBottom(target)}`;
+          const sourceDx = this.edgeAnchors.get(edge.id + '@' + edge.source) || 0;
+        const targetDx = this.edgeAnchors.get(edge.id + '@' + edge.target) || 0;
+        return `M ${source.x + sourceDx} ${source.y + this.nodeBottom(source)} V ${dip} H ${target.x + targetDx} V ${target.y + this.nodeBottom(target)}`;
         }
         const upper = source.y < target.y ? source : target;
         const lower = source.y < target.y ? target : source;
@@ -519,7 +545,9 @@ if (mountElement && bootstrapElement) {
         // 同一层间带上有多条边时走分配好的车道，只有一条时仍取正中。
         const lane = this.edgeLanes.get(edge.id);
         const mid = lane === undefined ? from + Math.max(14, (to - from) / 2) : lane;
-        return `M ${upper.x} ${from} V ${mid} H ${lower.x} V ${to}`;
+        const upperDx = this.edgeAnchors.get(edge.id + '@' + upper.id) || 0;
+        const lowerDx = this.edgeAnchors.get(edge.id + '@' + lower.id) || 0;
+        return `M ${upper.x + upperDx} ${from} V ${mid} H ${lower.x + lowerDx} V ${to}`;
       },
       edgePath(edge) {
         return this.elbowPath(edge);
@@ -537,6 +565,34 @@ if (mountElement && bootstrapElement) {
         const mid = lane === undefined ? from + Math.max(14, (to - from) / 2) : lane;
         return { x: (source.x + target.x) / 2, y: mid };
       },
+      /* 两端各标自己的端口，而不是把两侧拼成一行挂在中间。
+         网络模拟器的连线就是这么标的：靠近哪个设备就是哪个设备的口。 */
+      edgePortLabels(edge) {
+        const source = this.topologyNodes.get(edge.source);
+        const target = this.topologyNodes.get(edge.target);
+        if (!source || !target) return [];
+        const upper = source.y < target.y ? source : target;
+        const lower = source.y < target.y ? target : source;
+        const upperIsSource = upper.id === edge.source;
+        const upperLabel = String((upperIsSource ? edge.localInterfaceLabel : edge.remoteInterfaceLabel) || '').trim();
+        const lowerLabel = String((upperIsSource ? edge.remoteInterfaceLabel : edge.localInterfaceLabel) || '').trim();
+        const labels = [];
+        if (upperLabel) {
+          labels.push({
+            key: 'up', text: upperLabel,
+            x: upper.x + (this.edgeAnchors.get(edge.id + '@' + upper.id) || 0),
+            y: upper.y + this.nodeBottom(upper) + 12,
+          });
+        }
+        if (lowerLabel) {
+          labels.push({
+            key: 'down', text: lowerLabel,
+            x: lower.x + (this.edgeAnchors.get(edge.id + '@' + lower.id) || 0),
+            y: lower.y + this.nodeTop(lower) - 6,
+          });
+        }
+        return labels;
+      },
       /* 端口：本地口 → 对端口；任一侧缺失就退化成已有的那一个。 */
       edgePortLabel(edge) {
         const local = String(edge.localInterfaceLabel || '').trim();
@@ -544,13 +600,28 @@ if (mountElement && bootstrapElement) {
         if (local && remote) return local + ' → ' + remote;
         return local || remote || '';
       },
+      /* 终端归属按证据强度分色：物理发现最硬，MAC 表次之，网段推断最软。 */
+      attachmentEdgeClass(edge) {
+        const source = edge && edge.attachmentSource;
+        if (source === 'physical_discovered') return 'topology-edge--attachment-physical';
+        if (source === 'mac_learned') return 'topology-edge--attachment-mac';
+        return 'topology-edge--inferred';
+      },
+      attachmentSourceLabel(source) {
+        if (source === 'physical_discovered') return '设备物理发现（LLDP/CDP）';
+        if (source === 'mac_learned') return 'MAC 地址表定位';
+        if (source === 'inferred_subnet') return '相同 IP 网段推断';
+        return '未知';
+      },
       edgeVlanLabel(edge) {
         const ids = Array.isArray(edge.vlanIds) ? edge.vlanIds : [];
         return ids.length ? 'VLAN ' + ids.join(',') : '';
       },
       /* 只给选中和悬停的边显示标签：221 条链路全铺文字会糊成一片。 */
       edgeLabelVisible(edge) {
-        return edge.id === this.selectedEdgeId || edge.id === this.hoveredEdgeId;
+        if (edge.id === this.selectedEdgeId || edge.id === this.hoveredEdgeId) return true;
+        const scale = (this.viewport && this.viewport.scale) || 1;
+        return scale >= 1.2;
       },
       hoverEdge(edge) {
         this.hoveredEdgeId = edge ? edge.id : '';
