@@ -113,6 +113,19 @@
 .operations-overview button:hover { border-color: rgba(85, 222, 246, .65); background: rgba(35, 97, 117, .35); }
 .operations-overview button:focus-visible,
 .topology-node a:focus-visible { outline: 3px solid rgba(85, 222, 246, .42); outline-offset: 3px; }
+/* 停用的设备画出来但呈灰、不接收指针：停用是人为下架，掉线是故障，两者在图上的
+   表现必须能分开——直接摘掉的话两种情况都成了「这里什么都没有」。
+   pointer-events:none 一次性挡掉卡片、详情按钮和展开按钮三处交互。 */
+.topology-node.is-disabled { opacity: .42; pointer-events: none; }
+.topology-node.is-disabled .topology-device-card__surface { stroke-dasharray: 5 4; }
+/* 异常 = 连着但连不上，和停用必须一眼分开：停用是灰到底、点不动，异常是红的、
+   能点开看记录。两者的虚线疏密也不同，黑白打印出来也分得清。 */
+.topology-node.is-abnormal .topology-device-card__surface {
+  stroke: var(--overview-red);
+  stroke-dasharray: 9 3;
+}
+.topology-node.is-abnormal .topology-device-card__status { fill: var(--overview-red); }
+.topology-node.is-unknown .topology-device-card__status { fill: var(--overview-muted); }
 .operations-overview button:disabled { cursor: wait; opacity: .58; }
 .operations-overview__stale { display: flex; align-items: center; gap: .65rem; margin-bottom: 1rem; padding: .8rem 1rem; border: 1px solid rgba(255, 198, 109, .36); border-radius: .8rem; background: rgba(104, 66, 18, .32); color: #ffe5b9; }
 .operations-overview__panel { position: relative; }

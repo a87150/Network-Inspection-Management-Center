@@ -29,18 +29,44 @@ def _asset_sources():
     deferred 字段就回查一次 —— 1500 台设备乘十几次就是一个量级的 SQL 放大。
     这几个模型都没有 TextField/JSONField 大字段，所以只排掉凭据列，其余一次取回。
     """
-    # 停用表示这台设备已经不在用了：拆机、下架、报废。它还留在台账里是为了保住
-    # 历史记录和配置备份，但它不该再出现在拓扑图上——画出来会让人以为链路还在。
-    # Computer 用 is_active 表达另一件事（主机是否上报过），不在这里过滤。
+    # 停用的设备仍然取出来，由 presentation 标成 disabled：图上画灰、不可点。
+    # 直接不画会让「停用」和「掉线/拆线」长得一样——前者是人为下架，后者是故障，
+    # 都断在图上就分不清了。Computer 用 is_active 表达另一件事（主机是否上报过），
+    # 不在停用口径里。
     return (
         ('computers', Computer.objects.defer('login_account')),
-        ('networks', Network_Device.objects.filter(is_enabled=True).defer(
+        ('networks', Network_Device.objects.defer(
             'password', 'snmp_auth_password', 'snmp_priv_password', 'api_shared_secret',
         )),
-        ('servers', Server.objects.filter(is_enabled=True).defer('password', 'api_token')),
-        ('weakcurrent', WeakCurrentDevice.objects.filter(
-            is_enabled=True).defer('api_password', 'api_token')),
+        ('servers', Server.objects.defer('password', 'api_token')),
+        ('weakcurrent', WeakCurrentDevice.objects.defer('api_password', 'api_token')),
     )
+
+
+def _reachability():
+    """每台资产最近一次巡检到底连不连得上。键是拓扑节点 id。
+
+    拓扑上「异常」和「停用」是两件事：停用是人为下架，异常是连不上。以前两者
+    都只有一个 unknown，图上完全看不出设备是不是已经失联了。
+
+    只取每台资产的最后一条记录，用 Subquery 让数据库做，不把历史记录拉回内存。
+    """
+    from django.db.models import OuterRef, Subquery
+
+    from inspections.records import RECORD_PAGES
+
+    snapshot = {}
+    for kind, page in RECORD_PAGES.items():
+        field = page.asset_field
+        latest = page.model.objects.filter(
+            **{field: OuterRef('pk')},
+        ).order_by('-created_at', '-id').values('is_reachable')[:1]
+        asset_model = page.model._meta.get_field(field).related_model
+        rows = asset_model.objects.annotate(_latest_reachable=Subquery(latest)).values_list(
+            'pk', '_latest_reachable')
+        for pk, reachable in rows:
+            snapshot['%s:%s' % (kind, pk)] = reachable
+    return snapshot
 
 
 def _selected_rows(key, queryset, required_network_ids):
@@ -92,6 +118,7 @@ def _build_topology():
         physical=physical,
         asset_truncation=truncation,
         with_details=False,
+        reachability=_safe_region('reachability', _reachability) or {},
     )
 
 

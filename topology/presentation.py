@@ -181,7 +181,21 @@ def _node(*, node_id, kind, role, label, subtitle, ip, vendor='', model='',
     }
 
 
-def _network_node(device):
+def _node_status(enabled, reachable):
+    """节点状态：停用优先，其次看最近一次巡检连不连得上。
+
+    四种状态各自有明确含义，图上要能分开：
+    停用 = 人为下架；异常 = 连着但连不上；正常 = 最近一次巡检成功；未知 = 还没查过。
+    reachable 为 None 表示这台设备从来没有巡检记录。
+    """
+    if not enabled:
+        return 'disabled'
+    if reachable is None:
+        return 'unknown'
+    return 'normal' if reachable else 'abnormal'
+
+
+def _network_node(device, reachable=None):
     role = network_role(device)
     kind = 'endpoint' if role == 'access_point' else 'backbone'
     node = _node(
@@ -194,6 +208,8 @@ def _network_node(device):
         ip=device.ip,
         vendor=device.vendor,
         model=device.model,
+        # 停用画灰不可点、异常标红，两者必须能分开：前者是人为下架，后者是连不上。
+        status=_node_status(device.is_enabled, reachable),
         url=reverse('asset_detail', args=['networks', device.pk]),
         details=_details(device, 'networks'),
         site=_site_hint(device),
@@ -203,14 +219,16 @@ def _network_node(device):
     return node
 
 
-def _endpoint_nodes(computers, servers, weak_current, with_details=True):
+def _endpoint_nodes(computers, servers, weak_current, with_details=True, reachability=None):
     nodes = []
     for computer in computers:
         node = _node(
             node_id=f'computers:{computer.pk}', kind='endpoint', role='computer',
             label=computer.computer_name, subtitle='PC', ip=computer.ip_addresses or '',
             vendor=computer.manufacturer, model=computer.model,
-            status='normal' if computer.is_active else 'disabled',
+            status=_node_status(
+                computer.is_active,
+                (reachability or {}).get('computers:%s' % computer.pk)),
             url=reverse('asset_detail', args=['computers', computer.pk]),
             details=_details(computer, 'computers') if with_details else (),
             site=_site_hint(computer),
@@ -222,6 +240,8 @@ def _endpoint_nodes(computers, servers, weak_current, with_details=True):
             node_id=f'servers:{server.pk}', kind='endpoint', role='server',
             label=server.name or server.ip, subtitle=server.get_server_type_display(),
             ip=server.ip, vendor=server.manufacturer, model=server.model,
+            status=_node_status(
+                server.is_enabled, (reachability or {}).get('servers:%s' % server.pk)),
             url=reverse('asset_detail', args=['servers', server.pk]),
             details=_details(server, 'servers') if with_details else (),
             site=_site_hint(server),
@@ -234,6 +254,8 @@ def _endpoint_nodes(computers, servers, weak_current, with_details=True):
             label=monitor.device_name or monitor.ip,
             subtitle=monitor.device_type or '弱电设备', ip=monitor.ip,
             vendor=monitor.vendor, model=monitor.model,
+            status=_node_status(
+                monitor.is_enabled, (reachability or {}).get('weakcurrent:%s' % monitor.pk)),
             url=reverse('asset_detail', args=['weakcurrent', monitor.pk]),
             details=_details(monitor, 'weakcurrent') if with_details else (),
             site=_site_hint(monitor),
@@ -454,8 +476,25 @@ def attach_endpoints(backbone_nodes, endpoint_nodes, physical_edges):
 
 
 def build_enterprise_topology(*, network_devices, computers, servers, weak_current,
-                              physical, asset_truncation=None, with_details=True):
-    network_nodes = [_network_node(device) for device in network_devices]
+                              physical, asset_truncation=None, with_details=True,
+                              reachability=None):
+    reachability = reachability or {}
+    physical_edges = list(physical.get('links', []))
+    linked_ids = set()
+    for edge in physical_edges:
+        for side in ('local_device_id', 'remote_device_id'):
+            value = edge.get(side)
+            if value:
+                linked_ids.add('networks:%s' % value)
+    # 停用且一条链路都不沾的设备不画：既不在用，也不在任何链路端点，画出来只剩
+    # 噪音。停用但还有链路的仍要画（见下面的 disabled 状态）——那是「机器下架了、
+    # 线还插着」，摘掉就跟断线看不出区别了。
+    network_nodes = [
+        node for node in (
+            _network_node(device, reachability.get('networks:%s' % device.pk))
+            for device in network_devices)
+        if node['status'] != 'disabled' or node['id'] in linked_ids
+    ]
     # 首屏只要名称/IP/型号这些一眼要看的字段；每个节点 400 多字节的
     # details 合计 67 KB，等抽屉打开再单独取。
     if not with_details:
@@ -464,9 +503,9 @@ def build_enterprise_topology(*, network_devices, computers, servers, weak_curre
     backbone_nodes = [node for node in network_nodes if node['kind'] == 'backbone']
     endpoint_nodes = [
         *[node for node in network_nodes if node['kind'] == 'endpoint'],
-        *_endpoint_nodes(computers, servers, weak_current, with_details=with_details),
+        *_endpoint_nodes(computers, servers, weak_current, with_details=with_details,
+                         reachability=reachability),
     ]
-    physical_edges = list(physical.get('links', []))
     hints = {node['id']: node.get('site', '') for node in backbone_nodes}
     components, component_of = site_components(backbone_nodes, physical_edges, hints)
     site_id_of = {node['id'].split(':', 1)[1]: node.get('site_id') for node in backbone_nodes}
